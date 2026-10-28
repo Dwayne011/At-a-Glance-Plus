@@ -15,6 +15,7 @@ import android.os.Looper
 import android.provider.CalendarContract
 import android.service.smartspace.SmartspaceService
 import android.util.Log
+import com.ataglanceplus.CrashLog
 import com.ataglanceplus.Prefs
 import com.ataglanceplus.cards.CardData
 import com.ataglanceplus.cards.CardDeck
@@ -103,7 +104,11 @@ class AtAGlanceService : SmartspaceService() {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED)
         })
-        engine.start()
+        try {
+            engine.start()
+        } catch (e: Exception) {
+            CrashLog.record(this, "Starting the chips", e)
+        }
         runCatching { contentResolver.registerContentObserver(CalendarContract.CONTENT_URI, true, calendarObserver) }
         refreshCalendar()
         // Media sessions are visible once notification access is on; start (again) when it is.
@@ -244,10 +249,22 @@ class AtAGlanceService : SmartspaceService() {
     private fun push(sessionId: SmartspaceSessionId) {
         val config = sessions[sessionId] ?: return
         val aod = config.uiSurface == SURFACE_LOCKSCREEN && (screenOff || Prefs.aodPreview(this))
-        val data = cardData()
-        val targets = CardDeck.build(this, config.uiSurface, config.smartspaceTargetCount, aod, data)
-        Prefs.pruneDismissed(this, CardDeck.activeInstances(this, data))
-        updateSmartspaceTargets(sessionId, targets)
+        // A card that fails to build must not take the whole app down: log it and show weather alone.
+        val targets = try {
+            val data = cardData()
+            CardDeck.build(this, config.uiSurface, config.smartspaceTargetCount, aod, data).also {
+                Prefs.pruneDismissed(this, CardDeck.activeInstances(this, data))
+            }
+        } catch (e: Exception) {
+            CrashLog.record(this, "Building cards for ${config.uiSurface}", e)
+            listOf(WeatherCard.build(this, config.uiSurface, aod, WeatherRepository.weather.value, WeatherRepository.status.value))
+        }
+        try {
+            updateSmartspaceTargets(sessionId, targets)
+        } catch (e: Exception) {
+            CrashLog.record(this, "Sending cards to ${config.uiSurface}", e)
+            return
+        }
         ServiceState.sessionPushed(sessionId.id, System.currentTimeMillis())
         Log.d(TAG, "pushed ${targets.size} target(s) to ${config.uiSurface}")
     }

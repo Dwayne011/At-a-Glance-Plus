@@ -146,6 +146,8 @@ private fun StatusScreen() {
                 0 -> CardPreviewSection(maxCards = sessions.values.maxOfOrNull { it.targetCount } ?: 0)
                 1 -> ChipsSection()
                 else -> {
+                    ProblemsSection()
+
                     Section("Device checks") {
                         CheckRow("Android 16 or newer", Build.VERSION.SDK_INT >= 36, "API ${Build.VERSION.SDK_INT}")
                         CheckRow("Pixel Launcher installed", Commands.isPixelLauncherInstalled(context), Commands.PIXEL_LAUNCHER)
@@ -325,4 +327,48 @@ private fun CommandBlock(command: String) {
             Text("Copy command")
         }
     }
+}
+
+/** The app's own error log, and the phone's crash log read over wireless debugging, ready to copy. */
+@Composable
+private fun ProblemsSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val busy by Wadb.busy.collectAsStateWithLifecycle()
+    val wadbLog by Wadb.log.collectAsStateWithLifecycle()
+    var log by remember { mutableStateOf(com.ataglanceplus.CrashLog.read(context)) }
+    var reading by remember { mutableStateOf(false) }
+
+    Section("Problems") {
+        if (log.isEmpty()) {
+            Text("No errors recorded by this app.", style = MaterialTheme.typography.bodySmall)
+        } else {
+            Text("Errors this app recorded, newest first:", style = MaterialTheme.typography.bodySmall)
+            Text(log.take(4000), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = { copy(context, "At a Glance Plus errors", log) }) { Text("Copy errors") }
+                OutlinedButton(onClick = {
+                    com.ataglanceplus.CrashLog.clear(context)
+                    log = ""
+                }) { Text("Clear") }
+            }
+        }
+        Text(
+            "If the launcher or System UI crashed rather than this app, read the phone's crash log (uses wireless debugging).",
+            style = MaterialTheme.typography.bodySmall
+        )
+        OutlinedButton(enabled = !busy && Prefs.isPaired(context), onClick = {
+            reading = true
+            scope.launch { com.ataglanceplus.wadb.Activator.readCrashLog(context) }
+        }) { Text("Read the phone's crash log") }
+        if (reading && wadbLog.isNotEmpty()) {
+            Button(onClick = { copy(context, "Crash log", wadbLog) }) { Text("Copy the phone's crash log") }
+            Text(wadbLog.takeLast(4000), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+private fun copy(context: Context, label: String, text: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
 }

@@ -90,7 +90,7 @@ object NotificationHub {
         val usable = active.filter { it.packageName != own && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
 
         val timer = usable.firstNotNullOfOrNull { timerFrom(it) }
-        val nav = usable.firstOrNull { it.notification.category == Notification.CATEGORY_NAVIGATION && it.isOngoing }?.let { navFrom(it) }
+        val nav = usable.firstOrNull { it.notification.category == Notification.CATEGORY_NAVIGATION && it.isOngoing }?.let { navFrom(context, it) }
         val live = usable
             .filter { it.key != timer?.key && it.key != nav?.key && isLiveUpdate(it.notification) }
             .sortedByDescending { it.postTime }
@@ -153,13 +153,29 @@ object NotificationHub {
             text = text(n),
             chip = n.shortCriticalText?.takeIf { it.isNotBlank() },
             filled = filled,
-            icon = n.smallIcon,
+            icon = shrink(context, n.smallIcon),
             open = n.contentIntent,
         )
     }
 
+    /**
+     * Notification images can be large, and each card update must fit in one hand-off to the
+     * launcher, so anything that is not a small resource icon is redrawn at 96 px.
+     */
+    private fun shrink(context: Context, icon: Icon?): Icon? {
+        if (icon == null || icon.type == Icon.TYPE_RESOURCE) return icon
+        return runCatching {
+            val drawable = icon.loadDrawable(context) ?: return null
+            val bitmap = android.graphics.Bitmap.createBitmap(96, 96, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            drawable.setBounds(0, 0, 96, 96)
+            drawable.draw(canvas)
+            Icon.createWithBitmap(bitmap)
+        }.getOrNull()
+    }
+
     /** Splits a leading distance ("350 m Turn left…") from the instruction when the app puts both in one line. */
-    private fun navFrom(sbn: StatusBarNotification): NavNow {
+    private fun navFrom(context: Context, sbn: StatusBarNotification): NavNow {
         val n = sbn.notification
         val title = title(n)
         val text = text(n)
@@ -175,7 +191,7 @@ object NotificationHub {
             distance = distance,
             instruction = instruction.ifEmpty { title },
             detail = detail.filter { it.isNotEmpty() }.joinToString(" · "),
-            icon = n.getLargeIcon(),
+            icon = shrink(context, n.getLargeIcon()),
             open = n.contentIntent,
         )
     }

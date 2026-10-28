@@ -41,7 +41,11 @@ class NotificationCounter : NotificationListenerService() {
             .filter { counts(it.notification) }
             .groupBy { it.packageName }
             .mapValues { (_, list) -> list.sumOf { messages(it.notification) } }
-        NotificationHub.update(this, active, posted)
+        try {
+            NotificationHub.update(this, active, posted)
+        } catch (e: Exception) {
+            com.ataglanceplus.CrashLog.record(this, "Reading notifications", e)
+        }
     }
 
     companion object {

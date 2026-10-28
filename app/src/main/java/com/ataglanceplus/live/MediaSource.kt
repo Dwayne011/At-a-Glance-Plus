@@ -69,6 +69,8 @@ class MediaSource(private val context: Context) {
             started = true
         } catch (e: SecurityException) {
             Log.i(TAG, "no notification access yet; media card waits for it")
+        } catch (e: Exception) {
+            com.ataglanceplus.CrashLog.record(context, "Starting the media card", e)
         }
     }
 
@@ -91,6 +93,14 @@ class MediaSource(private val context: Context) {
     }
 
     private fun recompute() {
+        try {
+            recomputeUnsafe()
+        } catch (e: Exception) {
+            com.ataglanceplus.CrashLog.record(context, "Reading the media session", e)
+        }
+    }
+
+    private fun recomputeUnsafe() {
         val now = System.currentTimeMillis()
         controllers.forEach { c ->
             if (c.playbackState?.state == PlaybackState.STATE_PLAYING) pausedAt.remove(c.packageName)

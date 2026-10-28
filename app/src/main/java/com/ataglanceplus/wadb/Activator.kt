@@ -42,6 +42,10 @@ object Activator {
     suspend fun grant(context: Context, steps: List<String>): Outcome =
         execute(context, steps, working = "Granting chip permissions", done = "Permissions granted.")
 
+    /** Reads the phone's crash log (this app, the launcher and SystemUI) into the command log. */
+    suspend fun readCrashLog(context: Context): Outcome =
+        execute(context, listOf("logcat -d -b crash -t 300"), working = "Reading the crash log", done = "Crash log read; it is below.")
+
     private suspend fun execute(context: Context, steps: List<String>, working: String, done: String): Outcome = withContext(Dispatchers.IO) {
         if (!Prefs.isPaired(context)) return@withContext fail("Not paired yet")
         Wadb.setBusy(true)
