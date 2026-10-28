@@ -132,7 +132,10 @@ class ComplicationEngine(private val context: Context) {
         set(Complication.TEXTS, sms?.let { counts[it] }?.takeIf { it > 0 }?.let { ChipValues.Value(SimpleSources.cap(it)) })
         selected().filter { it.kind == Complication.APP_NOTIFICATIONS && it.arg != null }.forEach { spec ->
             val count = counts[spec.arg] ?: 0
-            ChipValues.set(spec.key, if (count > 0) ChipValues.Value(SimpleSources.cap(count)) else null)
+            ChipValues.set(
+                spec.key,
+                if (count > 0) ChipValues.Value(SimpleSources.cap(count), appIcon = NotificationCounter.icons.value[spec.arg]) else null
+            )
         }
     }
 

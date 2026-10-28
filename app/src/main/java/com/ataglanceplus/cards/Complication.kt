@@ -137,6 +137,42 @@ object Chips {
     const val MAX_CHOSEN = 50
 
     /**
+     * A chip shape: its layout and the sizes inside the pill, used to check that a chip's text
+     * fits. [maxPillDp] is the most room the pill has (null when the row decides); [maxTextDp]
+     * mirrors the text's maxWidth in the layout.
+     */
+    data class ChipStyle(
+        val layout: Int,
+        val textSp: Float,
+        val iconDp: Int,
+        val padDp: Int,
+        val maxPillDp: Int?,
+        val maxTextDp: Int,
+        /** Space after the zone, for working out how many fit in a row. */
+        val gapDp: Int = 6,
+    ) {
+        /** The pill's natural width for [text] with its icon, in dp. */
+        fun widthDp(context: Context, text: String): Float = 2 * padDp + iconDp + 4 + textWidthDp(context, text, textSp).coerceAtMost(maxTextDp.toFloat())
+    }
+
+    val DEFAULT_RIGHT = ChipStyle(R.layout.include_complication_chip, 12.5f, 16, 8, 84, 44)
+    val DEFAULT_STRIP = ChipStyle(R.layout.include_complication_chip_strip, 12.5f, 16, 8, 80, 44)
+    val ANCHOR = ChipStyle(R.layout.include_chip_anchor, 11.5f, 13, 8, null, 56)
+    val COLUMN = ChipStyle(R.layout.include_chip_column, 12f, 14, 6, 72, 56)
+    val WIDE = ChipStyle(R.layout.include_chip_wide, 12f, 14, 6, 84, 56)
+    val GRID = ChipStyle(R.layout.include_chip_grid, 11f, 13, 5, 48, 56)
+
+    /** The width of [text] in dp at [sp], in the chip font, at the phone's current text size. */
+    fun textWidthDp(context: Context, text: String, sp: Float): Float {
+        val metrics = context.resources.displayMetrics
+        val paint = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, sp, metrics)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+        }
+        return paint.measureText(text) / metrics.density
+    }
+
+    /**
      * Adds the chips that have something to show, up to the layout's maximum. A chip with no
      * value (nothing to report, no permission yet, or not set up) is left out rather than drawn
      * as "0" (spec 7.2). With none left, the container is hidden so the card's text gets the
@@ -155,30 +191,29 @@ object Chips {
             return
         }
         val bottom = layout == ComplicationLayout.BOTTOM
-        addStyled(
-            context, views, specs, if (bottom) MAX_BOTTOM else MAX_RIGHT,
-            if (bottom) R.layout.include_complication_chip_strip else R.layout.include_complication_chip, aod, container
-        )
+        addStyled(context, views, specs, if (bottom) MAX_BOTTOM else MAX_RIGHT, if (bottom) DEFAULT_STRIP else DEFAULT_RIGHT, aod, container)
     }
 
     /**
-     * Adds up to [max] chips with something to show into [container], each drawn from
-     * [chipLayout] (any layout with chip_zone, chip_pill, chip_icon and chip_text). Returns how
-     * many were added; with none, the container is hidden.
+     * Adds up to [max] chips with something to show into [container], in [style]. Each chip's
+     * text is measured at the phone's text size; when it does not fit the pill, the text shrinks
+     * a little, then the icon is dropped, then the text shrinks the rest of the way (to 8sp at
+     * least). Returns how many were added; with none, the container is hidden.
      */
     fun addStyled(
         context: Context,
         views: RemoteViews,
         specs: List<ChipSpec>,
         max: Int,
-        chipLayout: Int,
+        style: ChipStyle,
         aod: Boolean,
         container: Int,
     ): Int {
         val shown = withValues(specs).take(max)
         views.setViewVisibility(container, if (shown.isEmpty()) View.GONE else View.VISIBLE)
+        val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
         shown.forEach { (spec, value) ->
-            val child = RemoteViews(context.packageName, chipLayout)
+            val child = RemoteViews(context.packageName, style.layout)
             if (value.parts.size > 1) {
                 // Several values (Bluetooth devices): take turns inside the pill.
                 child.setViewVisibility(R.id.chip_icon, View.GONE)
@@ -212,11 +247,35 @@ object Chips {
                     }
                     else -> child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.icon)
                 }
+                // The app's own status-bar icon, tinted like the chip's text.
+                if (value.appIcon != null && !value.attention) {
+                    child.setImageViewIcon(R.id.chip_icon, value.appIcon)
+                    child.setInt(R.id.chip_icon, "setColorFilter", textColour)
+                }
+                fit(context, child, style, value.text)
             }
             child.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
             views.addView(container, child)
         }
         return shown.size
+    }
+
+    /** Makes [text] fit the pill (see [addStyled]). */
+    private fun fit(context: Context, chip: RemoteViews, style: ChipStyle, text: String) {
+        val width = textWidthDp(context, text, style.textSp)
+        val room = (style.maxPillDp?.let { it - 2 * style.padDp } ?: Int.MAX_VALUE).toFloat()
+        val withIcon = minOf(room - style.iconDp - 4, style.maxTextDp.toFloat())
+        if (width <= withIcon) return
+        val scale = withIcon / width
+        if (scale >= 0.85f) {
+            chip.setTextViewTextSize(R.id.chip_text, android.util.TypedValue.COMPLEX_UNIT_SP, style.textSp * scale)
+            return
+        }
+        chip.setViewVisibility(R.id.chip_icon, View.GONE)
+        val alone = minOf(room, style.maxTextDp.toFloat())
+        if (width > alone) {
+            chip.setTextViewTextSize(R.id.chip_text, android.util.TypedValue.COMPLEX_UNIT_SP, maxOf(8f, style.textSp * alone / width))
+        }
     }
 
     /** The chips that currently have something to show, with their values. */
@@ -229,5 +288,6 @@ object Chips {
     }
 
     private const val ATTENTION_ICON = 0xFFFF8A80.toInt()
+    private const val CHIP_TEXT = 0xFFE2E2E6.toInt()
     private const val ATTENTION_TEXT = 0xFFFFDAD6.toInt()
 }

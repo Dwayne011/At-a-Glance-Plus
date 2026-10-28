@@ -37,6 +37,14 @@ class NotificationCounter : NotificationListenerService() {
 
     private fun recount(posted: StatusBarNotification?) {
         val active = runCatching { activeNotifications }.getOrNull()?.toList() ?: return
+        // Each app's status-bar icon, from its newest notification. The same icon keeps the same
+        // object, so chip values only change when the icon really does.
+        val previous = _icons.value
+        _icons.value = active.groupBy { it.packageName }.mapNotNull { (pkg, list) ->
+            val icon = list.maxByOrNull { it.postTime }?.notification?.smallIcon ?: return@mapNotNull null
+            val old = previous[pkg]
+            pkg to if (old != null && sameIcon(old, icon)) old else icon
+        }.toMap()
         _counts.value = active
             .filter { counts(it.notification) }
             .groupBy { it.packageName }
@@ -52,6 +60,14 @@ class NotificationCounter : NotificationListenerService() {
         private val _counts = MutableStateFlow<Map<String, Int>>(emptyMap())
         /** Unread count by package. */
         val counts: StateFlow<Map<String, Int>> = _counts.asStateFlow()
+
+        private val _icons = MutableStateFlow<Map<String, android.graphics.drawable.Icon>>(emptyMap())
+        /** Status-bar icon by package, for the app-notification chips. */
+        val icons: StateFlow<Map<String, android.graphics.drawable.Icon>> = _icons.asStateFlow()
+
+        private fun sameIcon(a: android.graphics.drawable.Icon, b: android.graphics.drawable.Icon): Boolean =
+            a.type == android.graphics.drawable.Icon.TYPE_RESOURCE && b.type == android.graphics.drawable.Icon.TYPE_RESOURCE &&
+                a.resPackage == b.resPackage && a.resId == b.resId
 
         private val _connected = MutableStateFlow(false)
         /** True while the system has the listener bound (access granted and running). */
