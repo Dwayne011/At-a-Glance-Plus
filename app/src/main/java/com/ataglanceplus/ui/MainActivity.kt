@@ -98,7 +98,7 @@ private fun StatusScreen() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val paired = remember(refresh, wadbStatus) { Prefs.isPaired(context) }
-    val wirelessOn = remember(refresh, wadbStatus) { Wadb.isWirelessDebuggingEnabled(context) }
+    val wirelessOn = remember(refresh, wadbStatus) { Wadb.wirelessDebuggingState(context) }
     val canSelfEnable = remember(refresh, wadbStatus) { Wadb.canWriteSecureSettings(context) }
     val wifi = remember(refresh, wadbStatus) { Wadb.isWifiConnected(context) }
 
@@ -147,7 +147,17 @@ private fun StatusScreen() {
 
             Section("Wireless debugging") {
                 CheckRow("Paired with this phone", paired, if (paired) "The phone trusts this app's key" else "Pair once; no computer needed")
-                CheckRow("Wireless debugging on", wirelessOn, if (canSelfEnable) "The app can switch it on itself" else "Developer options › Wireless debugging")
+                when (wirelessOn) {
+                    true -> CheckRow("Wireless debugging on", true, "Developer options › Wireless debugging")
+                    else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("--", style = MaterialTheme.typography.labelLarge)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Wireless debugging")
+                            Text("Android hides this setting from apps. Activate checks it directly.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
                 CheckRow("Can switch it on after a restart", canSelfEnable, if (canSelfEnable) "Secure-settings permission held" else "Granted automatically during the first activation")
                 CheckRow("Wi-Fi connected", wifi, "Wireless debugging only works on Wi-Fi")
 

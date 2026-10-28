@@ -20,7 +20,7 @@
     <string name="pairing_activating">Paired. Switching At a Glance to this app…</string>
     <string name="pairing_done">Paired</string>
     <string name="pairing_done_text">At a Glance is now served by this app. The launcher and SystemUI restarted.</string>
-    <string name="pairing_done_but">Pairing worked, but activation did not: %1$s. Open the app and tap Activate.</string>
+    <string name="pairing_done_but">Pairing worked, but activation did not. %1$s Then open the app and tap Activate.</string>
     <string name="pairing_failed">Pairing failed</string>
     <string name="pairing_code_invalid">The code must be six digits.</string>
     <string name="pairing_code_wrong">Wrong pairing code. Start pairing again.</string>

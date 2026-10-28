@@ -43,8 +43,16 @@ object Wadb {
 
     fun key(context: Context): AdbKey = AdbKey(PreferenceAdbKeyStore(Prefs.get(context)), KEY_NAME)
 
-    fun isWirelessDebuggingEnabled(context: Context): Boolean =
-        Settings.Global.getInt(context.contentResolver, SETTING_WIRELESS_DEBUGGING, 0) == 1
+    /**
+     * Whether wireless debugging is on, or null when Android will not tell us. From Android 12
+     * apps cannot read hidden settings such as this one, so a null (or even a false) here is not
+     * proof that it is off. The reliable test is whether adbd advertises its port.
+     */
+    fun wirelessDebuggingState(context: Context): Boolean? = try {
+        Settings.Global.getString(context.contentResolver, SETTING_WIRELESS_DEBUGGING)?.let { it == "1" }
+    } catch (e: SecurityException) {
+        null
+    }
 
     fun canWriteSecureSettings(context: Context): Boolean =
         context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
