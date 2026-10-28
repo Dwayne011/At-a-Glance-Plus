@@ -16,6 +16,7 @@ import com.ataglanceplus.Prefs
 import com.ataglanceplus.R
 import com.ataglanceplus.service.AtAGlanceService
 import com.ataglanceplus.ui.MainActivity
+import com.ataglanceplus.ui.UnlockGateActivity
 import android.app.smartspace.uitemplatedata.Icon as TemplateIcon
 
 /**
@@ -61,7 +62,8 @@ object TestCards {
                     .setTapAction(
                         TapAction.Builder("aagp_test_tap_$surface")
                             .setPendingIntent(tap)
-                            .setShouldShowOnLockscreen(true)
+                            // Never act straight from the lock screen; the gate asks for an unlock.
+                            .setShouldShowOnLockscreen(false)
                             .build()
                     )
                     .build()
@@ -102,14 +104,18 @@ object TestCards {
         }
     }
 
+    /** Opens the app, but only after the phone is unlocked. */
     private fun openAppIntent(context: Context): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        return PendingIntent.getActivity(
+        val target = PendingIntent.getActivity(
             context,
             0,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        return UnlockGateActivity.wrap(context, target, REQUEST_OPEN_APP)
     }
+
+    private const val REQUEST_OPEN_APP = 100
 }

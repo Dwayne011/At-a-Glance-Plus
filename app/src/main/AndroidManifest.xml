@@ -40,6 +40,19 @@
         </activity>
 
         <!--
+            Every card tap goes through this invisible gate. It may appear over the lock screen
+            only so it can ask for an unlock; the real target opens after a successful unlock.
+        -->
+        <activity
+            android:name=".ui.UnlockGateActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:showWhenLocked="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!--
             The At a Glance content provider. The system binds to it (and only the system can,
             because of the MANAGE_SMARTSPACE permission) once it has been made the active
             Smartspace service with:
