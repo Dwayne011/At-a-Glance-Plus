@@ -1,5 +1,6 @@
 package com.ataglanceplus.service
 
+import android.app.AlarmManager
 import android.app.smartspace.SmartspaceConfig
 import android.app.smartspace.SmartspaceSessionId
 import android.app.smartspace.SmartspaceTargetEvent
@@ -8,14 +9,26 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.CalendarContract
 import android.service.smartspace.SmartspaceService
 import android.util.Log
 import com.ataglanceplus.Prefs
+import com.ataglanceplus.cards.CardData
 import com.ataglanceplus.cards.CardDeck
-import com.ataglanceplus.cards.PreviewCards
+import com.ataglanceplus.cards.CardType
+import com.ataglanceplus.cards.LiveCards
 import com.ataglanceplus.cards.WeatherCard
 import com.ataglanceplus.complications.ChipValues
 import com.ataglanceplus.complications.ComplicationEngine
+import com.ataglanceplus.complications.NotificationCounter
+import com.ataglanceplus.live.CalendarNow
+import com.ataglanceplus.live.CalendarSource
+import com.ataglanceplus.live.IncomingMessage
+import com.ataglanceplus.live.MediaSource
+import com.ataglanceplus.live.NotificationHub
 import com.ataglanceplus.weather.WeatherRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +39,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The At a Glance content provider.
@@ -35,8 +49,8 @@ import kotlinx.coroutines.launch
  * Pixel Launcher for the home screen, SystemUI for the lock screen and always-on display, and a
  * few internal surfaces. For each session we answer with a list of targets (cards).
  *
- * The weather card is real; the other cards show the design spec's sample content (preview mode)
- * until their data sources are built.
+ * Weather is always shown; every other card comes from real data on the phone (media sessions,
+ * notifications, the calendar, alarms) and appears only while it has something to show.
  */
 class AtAGlanceService : SmartspaceService() {
 
@@ -45,10 +59,8 @@ class AtAGlanceService : SmartspaceService() {
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key in Prefs.NON_CARD_KEYS) return@OnSharedPreferenceChangeListener
         if (Prefs.isChipSettingKey(key)) engine.settingsChanged()
-        when (key) {
-            Prefs.KEY_ISLAND_UNTIL -> runIsland()
-            Prefs.KEY_TIMER_END -> watchTimer()
-        }
+        // Calendar options or permission may have changed.
+        refreshCalendar()
         pushAll()
     }
 
@@ -60,15 +72,26 @@ class AtAGlanceService : SmartspaceService() {
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            screenOff = intent.action == Intent.ACTION_SCREEN_OFF
+            if (intent.action == Intent.ACTION_SCREEN_OFF || intent.action == Intent.ACTION_SCREEN_ON) {
+                screenOff = intent.action == Intent.ACTION_SCREEN_OFF
+            }
             pushAll()
         }
     }
 
     private val engine by lazy { ComplicationEngine(this) }
 
+    private val media by lazy { MediaSource(this) }
+
+    private var calendar: CalendarNow? = null
+    private val calendarObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) = refreshCalendar()
+    }
+
+    /** The message toast on show, and when it ends. */
+    private var message: IncomingMessage? = null
+    private var messageUntil = 0L
     private var islandJob: Job? = null
-    private var timerJob: Job? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -78,10 +101,29 @@ class AtAGlanceService : SmartspaceService() {
         registerReceiver(screenReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
+            addAction(AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED)
         })
-        runIsland()
-        watchTimer()
         engine.start()
+        runCatching { contentResolver.registerContentObserver(CalendarContract.CONTENT_URI, true, calendarObserver) }
+        refreshCalendar()
+        // Media sessions are visible once notification access is on; start (again) when it is.
+        media.start()
+        scope.launch {
+            NotificationCounter.connected.collect { if (it) media.start() }
+        }
+        // Real cards: redraw when what they show changes.
+        scope.launch { MediaSource.now.drop(1).collect { pushAll() } }
+        scope.launch { NotificationHub.timer.drop(1).distinctUntilChanged().collect { pushAll() } }
+        scope.launch { NotificationHub.live.drop(1).distinctUntilChanged().collect { pushAll() } }
+        scope.launch { NotificationHub.nav.drop(1).distinctUntilChanged().collect { pushAll() } }
+        scope.launch { NotificationHub.messages.collect { showMessage(it) } }
+        // The media track bar cannot move by itself; nudge it while playing.
+        scope.launch {
+            while (true) {
+                delay(TRACK_BAR_MS)
+                if (MediaSource.now.value?.playing == true && !Prefs.mediaWave(this@AtAGlanceService)) pushAll()
+            }
+        }
         // A chip value changed: redraw.
         scope.launch {
             ChipValues.values.drop(1).distinctUntilChanged().collect { pushAll() }
@@ -113,7 +155,10 @@ class AtAGlanceService : SmartspaceService() {
                 delay(DATE_CHECK_MS)
                 val now = WeatherCard.dateText()
                 val day = WeatherRepository.weather.value?.isDayAt()
-                if (now != shownDate || day != shownDay) {
+                // The calendar card counts down ("in 25 min") and the alarm card appears 12 hours
+                // ahead, so those redraw each minute too.
+                refreshCalendar()
+                if (now != shownDate || day != shownDay || calendar != null || LiveCards.upcomingAlarm(this@AtAGlanceService) != null) {
                     shownDate = now
                     shownDay = day
                     pushAll()
@@ -127,6 +172,8 @@ class AtAGlanceService : SmartspaceService() {
     override fun onDestroy() {
         Prefs.get(this).unregisterOnSharedPreferenceChangeListener(prefsListener)
         unregisterReceiver(screenReceiver)
+        contentResolver.unregisterContentObserver(calendarObserver)
+        media.stop()
         engine.stop()
         scope.cancel()
         sessions.keys.forEach { ServiceState.sessionDestroyed(it.id) }
@@ -173,8 +220,8 @@ class AtAGlanceService : SmartspaceService() {
         if (event.eventType == SmartspaceTargetEvent.EVENT_TARGET_DISMISS || event.eventType == SmartspaceTargetEvent.EVENT_TARGET_BLOCK) {
             val targetId = event.smartspaceTarget?.smartspaceTargetId
             when {
-                targetId == PreviewCards.ISLAND_TARGET_ID -> Prefs.endIsland(this)
-                targetId != null -> CardDeck.dismissibleId(targetId)?.let { Prefs.dismiss(this, it) } ?: pushAll()
+                targetId == LiveCards.ISLAND_TARGET_ID -> endMessage()
+                targetId != null -> LiveCards.instanceKey(targetId)?.let { Prefs.dismiss(this, it) } ?: pushAll()
             }
         }
         Log.d(TAG, "event: $name session=${sessionId.id} target=${event.smartspaceTarget?.smartspaceTargetId}")
@@ -197,42 +244,61 @@ class AtAGlanceService : SmartspaceService() {
     private fun push(sessionId: SmartspaceSessionId) {
         val config = sessions[sessionId] ?: return
         val aod = config.uiSurface == SURFACE_LOCKSCREEN && (screenOff || Prefs.aodPreview(this))
-        val island = (Prefs.islandUntil(this) - System.currentTimeMillis()).coerceAtLeast(0L)
-        val targets = CardDeck.build(
-            this, config.uiSurface, config.smartspaceTargetCount, aod,
-            WeatherRepository.weather.value, WeatherRepository.status.value, island
-        )
+        val data = cardData()
+        val targets = CardDeck.build(this, config.uiSurface, config.smartspaceTargetCount, aod, data)
+        Prefs.pruneDismissed(this, CardDeck.activeInstances(this, data))
         updateSmartspaceTargets(sessionId, targets)
         ServiceState.sessionPushed(sessionId.id, System.currentTimeMillis())
         Log.d(TAG, "pushed ${targets.size} target(s) to ${config.uiSurface}")
     }
 
-    /** While a message toast is showing, redraw every half second to step its countdown bar, then end it. */
-    private fun runIsland() {
-        islandJob?.cancel()
-        if (Prefs.islandUntil(this) <= System.currentTimeMillis()) return
-        islandJob = scope.launch {
-            while (true) {
-                val left = Prefs.islandUntil(this@AtAGlanceService) - System.currentTimeMillis()
-                if (left <= 0) {
-                    Prefs.endIsland(this@AtAGlanceService)
-                    break
-                }
-                delay(minOf(ISLAND_STEP_MS, left))
+    private fun cardData() = CardData(
+        weather = WeatherRepository.weather.value,
+        weatherStatus = WeatherRepository.status.value,
+        nav = NotificationHub.nav.value,
+        live = NotificationHub.live.value,
+        timer = NotificationHub.timer.value,
+        media = MediaSource.now.value,
+        calendar = calendar,
+        message = message,
+        messageRemainingMs = (messageUntil - System.currentTimeMillis()).coerceAtLeast(0L),
+    )
+
+    private fun refreshCalendar() {
+        scope.launch {
+            val next = withContext(Dispatchers.IO) { CalendarSource.next(this@AtAGlanceService) }
+            if (next != calendar) {
+                calendar = next
                 pushAll()
             }
         }
     }
 
-    /** Redraw when the preview timer reaches zero, so it shows "Timer finished". */
-    private fun watchTimer() {
-        timerJob?.cancel()
-        val left = Prefs.timerEnd(this) - System.currentTimeMillis()
-        if (left <= 0) return
-        timerJob = scope.launch {
-            delay(left)
-            pushAll()
+    /**
+     * A new message: show the toast in first place for 4.5 seconds, redrawing every half second to
+     * step its countdown bar. A newer message replaces it and restarts the countdown.
+     */
+    private fun showMessage(incoming: IncomingMessage) {
+        if (!Prefs.cardEnabled(this, CardType.MESSAGES) || screenOff) return
+        message = incoming
+        messageUntil = System.currentTimeMillis() + LiveCards.ISLAND_MS
+        islandJob?.cancel()
+        islandJob = scope.launch {
+            while (true) {
+                pushAll()
+                val left = messageUntil - System.currentTimeMillis()
+                if (left <= 0) break
+                delay(minOf(ISLAND_STEP_MS, left))
+            }
+            endMessage()
         }
+    }
+
+    private fun endMessage() {
+        islandJob?.cancel()
+        message = null
+        messageUntil = 0L
+        pushAll()
     }
 
     companion object {
@@ -244,5 +310,6 @@ class AtAGlanceService : SmartspaceService() {
         private const val WEATHER_CHECK_MS = 5 * 60 * 1000L
         private const val DATE_CHECK_MS = 60 * 1000L
         private const val ISLAND_STEP_MS = 500L
+        private const val TRACK_BAR_MS = 30_000L
     }
 }

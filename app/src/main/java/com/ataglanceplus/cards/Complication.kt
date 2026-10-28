@@ -38,7 +38,7 @@ enum class Complication(
     SLEEP("sleep", "Sleep last night", "7h 40m", R.drawable.ic_comp_sleep, R.drawable.ic_comp_sleep_aod),
     SUNSET("sunset", "Next sunrise or sunset", "16:42", R.drawable.ic_comp_sunset, R.drawable.ic_comp_sunset_aod),
     BATTERY("battery", "Phone battery", "67%", R.drawable.ic_comp_battery, R.drawable.ic_comp_battery_aod),
-    BUDS("buds", "Earbuds battery", "100%", R.drawable.ic_comp_buds, R.drawable.ic_comp_buds_aod),
+    BUDS("buds", "Bluetooth battery", "100%", R.drawable.ic_comp_bluetooth, R.drawable.ic_comp_bluetooth_aod),
     COUNTDOWN("count", "Date countdown", "12d", R.drawable.ic_comp_countdown, R.drawable.ic_comp_countdown_aod),
     APP_NOTIFICATIONS("notif", "App notifications", "5", R.drawable.ic_comp_bell, R.drawable.ic_comp_bell_aod, needsArg = true),
     RAIL_TICKET("ticket", "Rail ticket", "Ticket", R.drawable.ic_comp_ticket, R.drawable.ic_comp_ticket_aod, pickable = false);
@@ -129,16 +129,21 @@ object Chips {
             return
         }
         views.setViewVisibility(R.id.complications, View.VISIBLE)
-        val chipLayout = if (layout == ComplicationLayout.BOTTOM) R.layout.include_complication_chip_strip
-        else R.layout.include_complication_chip
+        val bottom = layout == ComplicationLayout.BOTTOM
+        val chipLayout = if (bottom) R.layout.include_complication_chip_strip else R.layout.include_complication_chip
         shown.forEach { (spec, value) ->
+            if (value.parts.size > 1) {
+                views.addView(R.id.complications, flipping(context, spec, value, bottom, aod))
+                return@forEach
+            }
+            val icon = value.parts.singleOrNull()?.let { if (aod) it.aodIcon else it.icon }
             val child = RemoteViews(context.packageName, chipLayout)
             child.setTextViewText(R.id.chip_text, value.text)
             child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: ${value.text}")
             when {
                 aod -> {
                     child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
-                    child.setImageViewResource(R.id.chip_icon, spec.kind.aodIcon)
+                    child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.aodIcon)
                     child.setTextColor(R.id.chip_text, Style.AOD_TEXT)
                 }
                 value.attention -> {
@@ -147,11 +152,30 @@ object Chips {
                     child.setInt(R.id.chip_icon, "setColorFilter", ATTENTION_ICON)
                     child.setTextColor(R.id.chip_text, ATTENTION_TEXT)
                 }
-                else -> child.setImageViewResource(R.id.chip_icon, spec.kind.icon)
+                else -> child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.icon)
             }
             child.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
             views.addView(R.id.complications, child)
         }
+    }
+
+    /** A chip that takes turns between its parts (several Bluetooth devices). */
+    private fun flipping(context: Context, spec: ChipSpec, value: ChipValues.Value, bottom: Boolean, aod: Boolean): RemoteViews {
+        val chip = RemoteViews(
+            context.packageName,
+            if (bottom) R.layout.include_complication_chip_flipper_strip else R.layout.include_complication_chip_flipper
+        )
+        if (aod) chip.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
+        chip.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + value.parts.joinToString(", ") { it.text })
+        value.parts.forEach { part ->
+            val row = RemoteViews(context.packageName, R.layout.include_chip_part)
+            row.setImageViewResource(R.id.chip_icon, if (aod) part.aodIcon else part.icon)
+            row.setTextViewText(R.id.chip_text, part.text)
+            if (aod) row.setTextColor(R.id.chip_text, Style.AOD_TEXT)
+            chip.addView(R.id.chip_flipper, row)
+        }
+        chip.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
+        return chip
     }
 
     /** The chips that currently have something to show, with their values. */

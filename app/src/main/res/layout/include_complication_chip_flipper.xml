@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A chip for the right column that takes turns between several values (Bluetooth devices): the
+    ViewFlipper switches every 3 seconds by itself, without the app redrawing the card.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chip_zone"
+    android:layout_width="84dp"
+    android:layout_height="38dp">
+
+    <LinearLayout
+        android:id="@+id/chip_pill"
+        android:layout_width="wrap_content"
+        android:layout_height="24dp"
+        android:layout_gravity="end|center_vertical"
+        android:background="@drawable/chip_selector_normal"
+        android:duplicateParentState="true"
+        android:gravity="center"
+        android:minWidth="64dp"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <ViewFlipper
+            android:id="@+id/chip_flipper"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:autoStart="true"
+            android:flipInterval="3000"
+            android:inAnimation="@android:anim/fade_in"
+            android:outAnimation="@android:anim/fade_out" />
+    </LinearLayout>
+</FrameLayout>

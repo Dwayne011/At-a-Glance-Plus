@@ -13,7 +13,6 @@ import com.ataglanceplus.R
 import com.ataglanceplus.service.AtAGlanceService
 import com.ataglanceplus.ui.MainActivity
 import com.ataglanceplus.weather.Weather
-import com.ataglanceplus.weather.WeatherCondition
 import com.ataglanceplus.weather.WeatherRepository
 import java.util.Date
 import java.util.Locale
@@ -31,18 +30,6 @@ object WeatherCard {
     private const val REQUEST_WEATHER = 201
     private const val REQUEST_SETUP = 202
     private const val PIXEL_WEATHER = "com.google.android.apps.weather"
-
-    /** Sample conditions from the spec, selectable in the app's preview section. */
-    val SAMPLES = listOf(
-        "live" to "Live data",
-        "cloudy" to "Cloudy",
-        "clear_day" to "Clear day",
-        "clear_night" to "Clear night",
-        "rain" to "Light rain",
-        "snow" to "Snow",
-        "thunder" to "Thunderstorm",
-        "needed" to "Location needed",
-    )
 
     /** The spec's default chips for each layout (8.1), used until the user picks their own. */
     private val DEFAULT_RIGHT = listOf(Complication.GMAIL, Complication.ALARM).map { ChipSpec(it) }
@@ -63,9 +50,8 @@ object WeatherCard {
         DateFormat.format(DateFormat.getBestDateTimePattern(locale, "EEEdMMM"), Date()).toString()
 
     fun build(context: Context, surface: String, aod: Boolean, weather: Weather?, status: String): SmartspaceTarget {
-        val sample = Prefs.weatherSample(context)
-        val reading = if (sample == "live") weather?.let { live(it) } else sample(sample)
-        if (reading == null) return needed(context, aod, sample == "needed" || !WeatherRepository.hasLocationPermission(context), status)
+        val reading = weather?.let { live(it) }
+            ?: return needed(context, aod, !WeatherRepository.hasLocationPermission(context), status)
 
         val showDate = surface == AtAGlanceService.SURFACE_HOME
         val title = if (showDate) "${dateText()} · ${reading.condition}" else reading.condition
@@ -103,7 +89,7 @@ object WeatherCard {
         Chips.add(context, views, chips, if (bottom) ComplicationLayout.BOTTOM else ComplicationLayout.RIGHT, aod)
         Style.holdBar(views, pinned = true, aod = aod)
 
-        val tap = if (sample == "live") weatherIntent(context) else Style.gatedApp(context, PIXEL_WEATHER, REQUEST_WEATHER)
+        val tap = weatherIntent(context)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, TARGET_ID, views, "${reading.temp} $title", reading.detail, reading.icon, tap, 2f)
     }
@@ -120,21 +106,6 @@ object WeatherCard {
             background = condition.background(isDay),
             peek = null,
         )
-    }
-
-    /** Spec 8.1 sample sub-states. Clear night has no detail line in the spec, so it shows none. */
-    private fun sample(id: String): Reading? {
-        fun r(temp: String, label: String, detail: String, c: WeatherCondition, day: Boolean) =
-            Reading(temp, label, detail, c.icon(day), c.aodIcon(day), c.background(day), "Next: Gym at 18:00")
-        return when (id) {
-            "cloudy" -> r("13°", "Cloudy", "H 14° · L 8° · Feels 11°", WeatherCondition.CLOUDY, true)
-            "clear_day" -> r("22°", "Clear", "H 24° · L 14° · Feels 23°", WeatherCondition.CLEAR, true)
-            "clear_night" -> r("9°", "Clear", "", WeatherCondition.CLEAR, false)
-            "rain" -> r("11°", "Light Rain", "H 12° · L 7° · Feels 9°", WeatherCondition.RAIN, true)
-            "snow" -> r("-2°", "Snow Showers", "H 0° · L -5° · Feels -6°", WeatherCondition.SNOW, true)
-            "thunder" -> r("15°", "Thunderstorm", "H 17° · L 11° · Severe", WeatherCondition.THUNDER, true)
-            else -> null
-        }
     }
 
     /** Empty state: location permission missing, or still waiting for the first reading. */

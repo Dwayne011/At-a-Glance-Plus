@@ -17,6 +17,8 @@
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- The calendar card: the next event from the phone's calendars. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Complication chips. Each is asked for only when the chip that needs it is added. -->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="com.google.android.gm.permission.READ_CONTENT_PROVIDER" />
@@ -73,7 +75,7 @@
             </intent-filter>
         </service>
 
-        <!-- In-card buttons (dismiss, play/pause, timer, reply). Only our own cards can send these. -->
+        <!-- In-card buttons (dismiss, media controls). Only our own cards can send these. -->
         <receiver
             android:name=".cards.CardActionReceiver"
             android:exported="false" />

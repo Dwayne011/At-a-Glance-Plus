@@ -23,15 +23,19 @@ or the way At a Glance is hosted, does not allow the spec exactly, and what was 
   always-on look when the screen turns off. The "Always-on look on the lock screen" switch shows
   the look with the screen on.
 
-## Preview content
+## Where each card's data comes from
 
-The weather card and the complication chips have live data (the rail-ticket chip on the
-navigation preview stays a sample). The other cards show the spec's sample content until their
-data sources are built. Where the spec gives a sub-state
-without full text, the build reuses the spec's other sample text:
+Every card except weather appears only while it has something real to show.
 
-- Calendar "Happening now" and "All day" keep the sample title; only the time line and bar
-  colour change.
-- Navigation "Walking" and "Arriving" keep the sample destination line.
-- Weather "Clear night" has no detail line, since the spec gives only the temperature.
-- The media previous and next buttons reset the sample time to 0:00, so a tap visibly works.
+| Card | Source | Shown |
+|---|---|---|
+| Message pop-up | New conversation notifications (any app) | 4.5 s in first place. On the lock screen only the sender shows, unless Android confirms private content is allowed there. |
+| Navigation | Ongoing navigation notification (Google Maps or another maps app) | While navigating |
+| Live update | Android 16 Live Updates (promoted ongoing or progress-style notifications) from any app | While the app keeps it up, two at most |
+| Timer / alarm | A countdown timer notification from a clock app; otherwise the next alarm | Timer while it exists; alarm within 12 h |
+| Media | The playing media session | While playing, and 5 min after pausing |
+| Calendar | The phone's visible calendars | From a chosen lead time (1 h by default) until the end, for events of 4 h or less; all-day events optional |
+| Wallet | None yet (needs the place rules engine) | Never, for now |
+
+Card text and layout read notification contents as each app posts them, so wording can differ
+between apps (for example the split between a distance and an instruction on navigation).

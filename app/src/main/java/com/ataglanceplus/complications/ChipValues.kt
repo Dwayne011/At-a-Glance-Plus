@@ -11,7 +11,13 @@ import kotlinx.coroutines.flow.update
  */
 object ChipValues {
 
-    data class Value(val text: String, val attention: Boolean = false)
+    /**
+     * A chip's value. [parts], when there is more than one, are shown in turn (one per connected
+     * Bluetooth device); a single part's icon replaces the chip's usual icon.
+     */
+    data class Value(val text: String, val attention: Boolean = false, val parts: List<Part> = emptyList())
+
+    data class Part(val icon: Int, val aodIcon: Int, val text: String)
 
     private val _values = MutableStateFlow<Map<String, Value>>(emptyMap())
     val values: StateFlow<Map<String, Value>> = _values.asStateFlow()

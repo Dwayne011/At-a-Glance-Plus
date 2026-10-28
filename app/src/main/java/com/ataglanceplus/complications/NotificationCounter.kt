@@ -6,39 +6,52 @@ import android.content.ComponentName
 import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.ataglanceplus.live.NotificationHub
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Counts unread messages per app from the notifications on screen. Used by the unread-texts
- * chip (the default SMS app) and the app-notification chips.
+ * The app's notification listener. It reads the notifications on screen for:
+ * - unread counts per app (texts and app-notification chips),
+ * - the timer, live-update and navigation cards, and new messages for the message toast
+ *   (see [NotificationHub]).
  *
- * A conversation notification counts each message it holds; any other notification counts as
- * one. Group summaries and ongoing notifications (uploads, calls, music) are not counted.
+ * Its access also lets the media card find the playing app's media session.
  */
 class NotificationCounter : NotificationListenerService() {
 
-    override fun onListenerConnected() = recount()
-    override fun onListenerDisconnected() {
-        _counts.value = emptyMap()
+    override fun onListenerConnected() {
+        _connected.value = true
+        recount(null)
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification?) = recount()
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) = recount()
+    override fun onListenerDisconnected() {
+        _connected.value = false
+        _counts.value = emptyMap()
+        NotificationHub.update(this, emptyList(), null)
+    }
 
-    private fun recount() {
-        val active = runCatching { activeNotifications }.getOrNull() ?: return
+    override fun onNotificationPosted(sbn: StatusBarNotification?) = recount(sbn)
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) = recount(null)
+
+    private fun recount(posted: StatusBarNotification?) {
+        val active = runCatching { activeNotifications }.getOrNull()?.toList() ?: return
         _counts.value = active
             .filter { counts(it.notification) }
             .groupBy { it.packageName }
             .mapValues { (_, list) -> list.sumOf { messages(it.notification) } }
+        NotificationHub.update(this, active, posted)
     }
 
     companion object {
         private val _counts = MutableStateFlow<Map<String, Int>>(emptyMap())
         /** Unread count by package. */
         val counts: StateFlow<Map<String, Int>> = _counts.asStateFlow()
+
+        private val _connected = MutableStateFlow(false)
+        /** True while the system has the listener bound (access granted and running). */
+        val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
         fun component(context: Context) = ComponentName(context, NotificationCounter::class.java)
 

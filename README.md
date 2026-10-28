@@ -49,9 +49,9 @@ Needs the Android SDK; Gradle fetches platform 37 (needed by the current Compose
    and keep that dialog open. A notification from the app asks for the six-digit code; type it
    there. The app pairs, grants itself the secure-settings permission, and activates: SystemUI and
    the launcher restart.
-4. The home screen and lock screen now show the weather card, followed by the preview cards.
-   The "Cards" section of the app switches each preview card on or off, picks its sample state,
-   picks the complication layout and chips, and can simulate an incoming message.
+4. The home screen and lock screen now show the weather card, plus a card for whatever is going
+   on (music, a timer, the next event, a delivery, directions) while it is going on. The Cards
+   tab chooses which kinds may appear; the Chips tab sets up the complication chips.
 5. "Back to Google" restores the stock provider. "Activate" switches back.
 6. After a reboot the app waits for Wi-Fi, switches wireless debugging on and re-activates by
    itself (switch in the app).
@@ -91,7 +91,9 @@ after a reboot.
    content; complication chips; always-on display look. See docs/spec-deviations.md.
 5. Live complication chips: Gmail per account, missed calls, texts, alarm, screen time, steps and
    sleep (Health Connect), sunrise or sunset, battery, earbuds (experimental), countdown, app
-   notifications; each chip's tap target can be changed (this).
-6. Generic sources: Live Updates from any app, media from any player, Wallet passes.
-7. Rules engine: show a card when near a place, when navigating somewhere, at a time, on a network.
-8. Place categories from OpenStreetMap.
+   notifications; each chip's tap target can be changed.
+6. Real, contextual cards: media, calendar, timers and alarms, Live Updates, navigation, and a
+   pop-up for new messages (this).
+7. Wallet passes by place.
+8. Rules engine: show a card when near a place, when navigating somewhere, at a time, on a network.
+9. Place categories from OpenStreetMap.

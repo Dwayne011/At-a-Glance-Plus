@@ -210,7 +210,7 @@ internal fun ChipsSection() {
                     ?: "Nothing to report right now"
                 Text("$status · Opens $opens", style = MaterialTheme.typography.bodySmall)
                 if (spec.kind == Complication.BUDS) {
-                    Text("Experimental: depends on your earbuds reporting their battery over Bluetooth.", style = MaterialTheme.typography.bodySmall)
+                    Text("Experimental: shows each connected Bluetooth device that reports its battery (earbuds, headphones, watch), taking turns.", style = MaterialTheme.typography.bodySmall)
                 }
                 if (spec.kind == Complication.STEPS || spec.kind == Complication.SLEEP) {
                     Text("Reads Health Connect. Turn on Health Connect sync in Google Health or Fitbit.", style = MaterialTheme.typography.bodySmall)
