@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AtAGlancePlus">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            The At a Glance content provider. The system binds to it (and only the system can,
+            because of the MANAGE_SMARTSPACE permission) once it has been made the active
+            Smartspace service with:
+              cmd smartspace set temporary-service <userId> <this component> <durationMs>
+        -->
+        <service
+            android:name=".service.AtAGlanceService"
+            android:exported="true"
+            android:permission="android.permission.MANAGE_SMARTSPACE"
+            tools:ignore="ExportedService">
+            <intent-filter>
+                <action android:name="android.service.smartspace.SmartspaceService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
