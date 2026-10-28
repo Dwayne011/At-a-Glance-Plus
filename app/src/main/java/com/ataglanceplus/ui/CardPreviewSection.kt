@@ -151,7 +151,8 @@ internal fun CardPreviewSection(maxCards: Int) {
                 }
             }
             if (type == CardType.FINANCE && Prefs.cardEnabled(context, type)) {
-                FinanceSettings()
+                // Passing the settings version makes it redraw when any option changes.
+                FinanceSettings(version)
             }
             if (type == CardType.MEDIA && Prefs.cardEnabled(context, type)) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -191,7 +192,7 @@ private fun SwitchRow(title: String, detail: String, checked: Boolean, onChange:
 /** Tickers, how often prices refresh, and when the finance card shows. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FinanceSettings() {
+private fun FinanceSettings(@Suppress("UNUSED_PARAMETER") settingsVersion: Int) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val status by FinanceSource.status.collectAsStateWithLifecycle()
