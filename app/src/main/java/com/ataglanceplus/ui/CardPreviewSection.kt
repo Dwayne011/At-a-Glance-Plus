@@ -38,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -197,6 +198,8 @@ private fun FinanceSettings(@Suppress("UNUSED_PARAMETER") settingsVersion: Int) 
     val scope = rememberCoroutineScope()
     val status by FinanceSource.status.collectAsStateWithLifecycle()
     val quotes by FinanceSource.quotes.collectAsStateWithLifecycle()
+    // The screen's locale, read so the prices redraw if the phone's language changes.
+    val locale = LocalConfiguration.current.locales[0]
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<FinanceSource.Match>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
@@ -223,7 +226,7 @@ private fun FinanceSettings(@Suppress("UNUSED_PARAMETER") settingsVersion: Int) 
                 Text(ticker + (quote?.let { " · ${it.name}" } ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 quote?.let {
                     Text(
-                        String.format(java.util.Locale.getDefault(), "%.2f %s · %+.2f%% today", it.price, it.currency, it.changePercent),
+                        String.format(locale, "%.2f %s · %+.2f%% today", it.price, it.currency, it.changePercent),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -251,7 +254,7 @@ private fun FinanceSettings(@Suppress("UNUSED_PARAMETER") settingsVersion: Int) 
                         } else {
                             Prefs.setFinanceTickers(context, Prefs.financeTickers(context) + quote.symbol)
                             message = String.format(
-                                java.util.Locale.getDefault(), "Added %s · %s · %.2f %s", quote.symbol, quote.name, quote.price, quote.currency
+                                locale, "Added %s · %s · %.2f %s", quote.symbol, quote.name, quote.price, quote.currency
                             )
                             query = ""
                         }
