@@ -84,31 +84,32 @@ class AdbClient(private val host: String, private val port: Int, private val key
         return out.toString()
     }
 
-    fun shellCommand(command: String, listener: ((ByteArray) -> Unit)?) {
-        val localId = 1
-        write(A_OPEN, localId, 0, "shell:$command")
+    /** Each stream gets its own id, so late messages for an earlier stream cannot be mistaken for this one. */
+    private var nextLocalId = 1
 
-        var message = read()
-        when (message.command) {
-            A_OKAY -> {
-                while (true) {
-                    message = read()
-                    val remoteId = message.arg0
-                    when (message.command) {
-                        A_WRTE -> {
-                            if (message.dataLength > 0) listener?.invoke(message.data!!)
-                            write(A_OKAY, localId, remoteId)
-                        }
-                        A_CLSE -> {
-                            write(A_CLSE, localId, remoteId)
-                            break
-                        }
-                        else -> adbError("expected A_WRTE or A_CLSE")
-                    }
-                }
+    fun shellCommand(command: String, listener: ((ByteArray) -> Unit)?) {
+        val localId = nextLocalId++
+        write(A_OPEN, localId, 0, "shell:$command")
+        while (true) {
+            val message = read()
+            // arg1 is our id on every stream message; anything else belongs to an earlier stream.
+            if (message.arg1 != localId) {
+                Log.d(TAG, "ignoring message for stream ${message.arg1}: ${message.toStringShort()}")
+                continue
             }
-            A_CLSE -> write(A_CLSE, localId, message.arg0)
-            else -> adbError("expected A_OKAY or A_CLSE")
+            when (message.command) {
+                // Stream opened, or a flow-control acknowledgement: nothing to do.
+                A_OKAY -> Unit
+                A_WRTE -> {
+                    if (message.dataLength > 0) listener?.invoke(message.data!!)
+                    write(A_OKAY, localId, message.arg0)
+                }
+                A_CLSE -> {
+                    write(A_CLSE, localId, message.arg0)
+                    return
+                }
+                else -> adbError("unexpected ${message.toStringShort()} on stream $localId")
+            }
         }
     }
 

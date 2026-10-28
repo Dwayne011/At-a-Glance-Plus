@@ -78,8 +78,17 @@ object Activator {
     }
 
     /** Runs one command (stderr folded into the output) and appends it to the log. */
+    /**
+     * Runs one command and appends it to the log. A failing step is logged and the next steps
+     * still run, so for example the launcher is restarted even if restarting SystemUI misbehaves.
+     */
     private fun runStep(client: AdbClient, command: String, log: StringBuilder) {
-        val out = client.shell("$command 2>&1; echo \"exit=$?\"").trim()
+        val out = try {
+            client.shell("$command 2>&1; echo \"exit=$?\"").trim()
+        } catch (e: Exception) {
+            Log.w(TAG, "step failed: $command", e)
+            "failed: ${e.message ?: e.javaClass.simpleName}"
+        }
         Log.i(TAG, "$command -> $out")
         log.append("$ ").append(command).append('\n').append(out).append("\n\n")
         Wadb.setLog(log.toString().trim())
