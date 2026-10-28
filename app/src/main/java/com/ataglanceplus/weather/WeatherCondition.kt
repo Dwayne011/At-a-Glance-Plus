@@ -16,6 +16,17 @@ enum class WeatherCondition(val label: String, @DrawableRes val dayIcon: Int, @D
 
     fun icon(isDay: Boolean): Int = if (isDay) dayIcon else nightIcon
 
+    /** Card background for these conditions. */
+    @DrawableRes
+    fun background(isDay: Boolean): Int = when (this) {
+        CLEAR, PARTLY_CLOUDY -> if (isDay) R.drawable.card_weather_bg_clear_day else R.drawable.card_weather_bg_clear_night
+        CLOUDY -> R.drawable.card_weather_bg_cloudy
+        FOG -> R.drawable.card_weather_bg_fog
+        DRIZZLE, RAIN -> R.drawable.card_weather_bg_rain
+        SNOW -> R.drawable.card_weather_bg_snow
+        THUNDER -> R.drawable.card_weather_bg_thunder
+    }
+
     companion object {
         fun fromWmo(code: Int): WeatherCondition = when (code) {
             0, 1 -> CLEAR

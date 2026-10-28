@@ -27,6 +27,9 @@ import kotlin.math.roundToInt
 /** Current conditions for the date line. */
 data class Weather(
     val temperature: Double,
+    val feelsLike: Double?,
+    val high: Double?,
+    val low: Double?,
     val unit: TemperatureUnit,
     val code: Int,
     val isDay: Boolean,
@@ -34,6 +37,14 @@ data class Weather(
 ) {
     val condition: WeatherCondition get() = WeatherCondition.fromWmo(code)
     val temperatureText: String get() = "${temperature.roundToInt()}${unit.symbol}"
+
+    /** "H 15° · L 8° · Feels 9°", leaving out anything the service did not return. */
+    val detailText: String
+        get() = listOfNotNull(
+            high?.let { "H ${it.roundToInt()}°" },
+            low?.let { "L ${it.roundToInt()}°" },
+            feelsLike?.let { "Feels ${it.roundToInt()}°" }
+        ).joinToString(" · ")
 }
 
 enum class TemperatureUnit(val apiValue: String, val symbol: String) {
@@ -82,6 +93,9 @@ object WeatherRepository {
             val json = JSONObject(raw)
             _weather.value = Weather(
                 temperature = json.getDouble("t"),
+                feelsLike = json.optDoubleOrNull("fl"),
+                high = json.optDoubleOrNull("hi"),
+                low = json.optDoubleOrNull("lo"),
                 unit = TemperatureUnit.valueOf(json.getString("u")),
                 code = json.getInt("c"),
                 isDay = json.getBoolean("d"),
@@ -126,7 +140,9 @@ object WeatherRepository {
             String.format(
                 Locale.ROOT,
                 "https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f" +
-                    "&current=temperature_2m,weather_code,is_day&temperature_unit=%s&timezone=auto",
+                    "&current=temperature_2m,apparent_temperature,weather_code,is_day" +
+                    "&daily=temperature_2m_max,temperature_2m_min&forecast_days=1" +
+                    "&temperature_unit=%s&timezone=auto",
                 lat, lon, unit.apiValue
             )
         )
@@ -138,9 +154,14 @@ object WeatherRepository {
         try {
             if (connection.responseCode != 200) error("HTTP ${connection.responseCode}")
             val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val current = JSONObject(body).getJSONObject("current")
+            val root = JSONObject(body)
+            val current = root.getJSONObject("current")
+            val daily = root.optJSONObject("daily")
             return Weather(
                 temperature = current.getDouble("temperature_2m"),
+                feelsLike = current.optDoubleOrNull("apparent_temperature"),
+                high = daily?.optJSONArray("temperature_2m_max")?.optDoubleOrNull(0),
+                low = daily?.optJSONArray("temperature_2m_min")?.optDoubleOrNull(0),
                 unit = unit,
                 code = current.getInt("weather_code"),
                 isDay = current.optInt("is_day", 1) == 1,
@@ -186,6 +207,9 @@ object WeatherRepository {
     private fun save(context: Context, weather: Weather) {
         val json = JSONObject()
             .put("t", weather.temperature)
+            .put("fl", weather.feelsLike)
+            .put("hi", weather.high)
+            .put("lo", weather.low)
             .put("u", weather.unit.name)
             .put("c", weather.code)
             .put("d", weather.isDay)
@@ -193,3 +217,9 @@ object WeatherRepository {
         Prefs.get(context).edit().putString(KEY_CACHE, json.toString()).apply()
     }
 }
+
+private fun JSONObject.optDoubleOrNull(name: String): Double? =
+    if (has(name) && !isNull(name)) optDouble(name).takeUnless { it.isNaN() } else null
+
+private fun org.json.JSONArray.optDoubleOrNull(index: Int): Double? =
+    if (length() > index && !isNull(index)) optDouble(index).takeUnless { it.isNaN() } else null

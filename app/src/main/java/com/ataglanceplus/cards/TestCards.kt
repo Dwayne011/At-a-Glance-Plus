@@ -29,12 +29,12 @@ import android.app.smartspace.uitemplatedata.Icon as TemplateIcon
  */
 object TestCards {
 
-    /** Everything shown on a surface, in order: the date and weather line first, then cards. */
-    fun build(context: Context, surface: String, style: Prefs.CardStyle, weather: Weather?): List<SmartspaceTarget> {
+    /** Everything shown on a surface, in order: the weather card first, then the rest. */
+    fun build(context: Context, surface: String, style: Prefs.CardStyle, weather: Weather?, weatherStatus: String): List<SmartspaceTarget> {
         return when (surface) {
             AtAGlanceService.SURFACE_HOME,
             AtAGlanceService.SURFACE_LOCKSCREEN -> buildList {
-                add(DateWeatherCard.build(context, weather))
+                add(WeatherCard.build(context, surface, weather, weatherStatus))
                 if (Prefs.showTestCard(context)) add(testCard(context, surface, style))
             }
             // Media, glanceable hub, screensaver and ambient surfaces: nothing yet.

@@ -132,7 +132,7 @@ private fun StatusScreen() {
         ) {
             Text("At a Glance Plus", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Takes over the native At a Glance slot over wireless debugging. Now with the date and weather line.",
+                "Takes over the native At a Glance slot over wireless debugging. Now with its own weather card.",
                 style = MaterialTheme.typography.bodyMedium
             )
 
@@ -223,7 +223,7 @@ private fun StatusScreen() {
                 }
             }
 
-            Section("Date and weather") {
+            Section("Weather") {
                 Text(
                     "Weather from Open-Meteo, worldwide, using each country's own forecast model where one exists. Only your approximate location is sent.",
                     style = MaterialTheme.typography.bodySmall
@@ -247,7 +247,7 @@ private fun StatusScreen() {
                 val current = weather
                 if (current != null) {
                     val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(current.fetchedAt))
-                    Text("Now: ${current.condition.label}, ${current.temperatureText} · updated $time")
+                    Text("Now: ${current.condition.label}, ${current.temperatureText}. ${current.detailText}. Updated $time")
                 } else {
                     Text("No weather yet.")
                 }
@@ -263,7 +263,7 @@ private fun StatusScreen() {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Show the test card")
-                        Text("Off leaves just the date and weather line.", style = MaterialTheme.typography.bodySmall)
+                        Text("Off leaves just the weather card.", style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(checked = showTestCard, onCheckedChange = {
                         showTestCard = it

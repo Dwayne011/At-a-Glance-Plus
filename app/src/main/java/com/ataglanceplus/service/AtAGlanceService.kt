@@ -7,7 +7,7 @@ import android.content.SharedPreferences
 import android.service.smartspace.SmartspaceService
 import android.util.Log
 import com.ataglanceplus.Prefs
-import com.ataglanceplus.cards.DateWeatherCard
+import com.ataglanceplus.cards.WeatherCard
 import com.ataglanceplus.cards.TestCards
 import com.ataglanceplus.weather.WeatherRepository
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +47,12 @@ class AtAGlanceService : SmartspaceService() {
         scope.launch {
             WeatherRepository.weather.drop(1).distinctUntilChanged().collect { pushAll() }
         }
+        // While there is no weather, the card shows the reason; redraw when it changes.
+        scope.launch {
+            WeatherRepository.status.drop(1).distinctUntilChanged().collect {
+                if (WeatherRepository.weather.value == null) pushAll()
+            }
+        }
         // Keep weather fresh while At a Glance is connected (the repository skips recent readings).
         scope.launch {
             while (true) {
@@ -56,10 +62,10 @@ class AtAGlanceService : SmartspaceService() {
         }
         // Roll the date over at midnight (checked every minute; cheap, and survives time-zone changes).
         scope.launch {
-            var shownDate = DateWeatherCard.dateText()
+            var shownDate = WeatherCard.dateText()
             while (true) {
                 delay(DATE_CHECK_MS)
-                val now = DateWeatherCard.dateText()
+                val now = WeatherCard.dateText()
                 if (now != shownDate) {
                     shownDate = now
                     pushAll()
@@ -132,7 +138,7 @@ class AtAGlanceService : SmartspaceService() {
 
     private fun push(sessionId: SmartspaceSessionId) {
         val config = sessions[sessionId] ?: return
-        val targets = TestCards.build(this, config.uiSurface, Prefs.cardStyle(this), WeatherRepository.weather.value)
+        val targets = TestCards.build(this, config.uiSurface, Prefs.cardStyle(this), WeatherRepository.weather.value, WeatherRepository.status.value)
         updateSmartspaceTargets(sessionId, targets)
         ServiceState.sessionPushed(sessionId.id, System.currentTimeMillis())
         Log.d(TAG, "pushed ${targets.size} target(s) to ${config.uiSurface}")
