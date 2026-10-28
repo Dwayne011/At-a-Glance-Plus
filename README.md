@@ -64,14 +64,20 @@ certificate, and the app can connect to `127.0.0.1` on the port adbd advertises 
 DNS and run shell commands. Wireless debugging only runs on Wi-Fi, so activation needs a Wi-Fi
 connection.
 
-## What to look for on the phone
+## Verified on a device
 
-These are the things that cannot be verified without a device:
+Pixel on Android 17 (API 37), Pixel Launcher:
 
-- Does the launcher scale, crop or wrap the custom layout card, and at what size?
-- Does the lock screen draw the custom layout, and does the always-on display?
-- Does tapping the card open the app from the lock screen without an unlock?
-- Does the card survive a launcher restart and a screen rotation?
+- Pairing and activation over wireless debugging work with no computer.
+- The custom RemoteViews layout renders in the native slot on the home screen and the lock screen.
+- SystemUI opens five sessions with the provider, all asking for up to five targets:
+  `home` (Pixel Launcher), `lockscreen`, `ambientcue`, `glanceable_hub` and `dream` (SystemUI).
+  The app currently answers only `home` and `lockscreen`.
+- Replacing Google's provider also removes Google's date and weather line, so the app has to
+  supply its own.
+
+Still to check: the always-on display, tapping the card from the lock screen, and re-activation
+after a reboot.
 
 ## Roadmap
 
