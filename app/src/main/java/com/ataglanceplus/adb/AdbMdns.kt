@@ -29,6 +29,14 @@ object AdbMdns {
     const val TLS_PAIRING = "_adb-tls-pairing._tcp"
     private const val TAG = "AdbMdns"
 
+    /**
+     * Where Android delivers lookup results. It is shared and never shut down: Android can still
+     * deliver a late result (or the "unregistered" notice) after a search has stopped, and
+     * delivering to a shut-down executor crashes the app (RejectedExecutionException on
+     * ConnectivityThread).
+     */
+    private val executor = Executors.newSingleThreadExecutor()
+
     /** Waits up to [timeoutMs] for this device's adbd service of [serviceType]; returns its port. */
     suspend fun discover(context: Context, serviceType: String, timeoutMs: Long): Int? =
         withTimeoutOrNull(timeoutMs) { ports(context, serviceType).first { it > 0 } }
@@ -36,8 +44,9 @@ object AdbMdns {
     /** Emits a port whenever a matching local service is resolved; -1 when it goes away. */
     fun ports(context: Context, serviceType: String) = callbackFlow {
         val nsdManager = context.getSystemService(NsdManager::class.java)
-        val executor = Executors.newSingleThreadExecutor()
         var serviceName: String? = null
+        // Lookups still waiting for an answer, so they can be cancelled when the search stops.
+        val pending = java.util.Collections.synchronizedSet(mutableSetOf<NsdManager.ServiceInfoCallback>())
 
         val discoveryListener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(serviceType: String) {}
@@ -49,18 +58,23 @@ object AdbMdns {
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
                 Log.v(TAG, "found ${serviceInfo.serviceName}")
-                nsdManager.registerServiceInfoCallback(serviceInfo, executor, object : NsdManager.ServiceInfoCallback {
-                    override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {}
+                val callback = object : NsdManager.ServiceInfoCallback {
+                    override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
+                        pending.remove(this)
+                    }
                     override fun onServiceUpdated(resolved: NsdServiceInfo) {
                         if (isLocal(resolved) && isPortInUse(resolved.port)) {
                             serviceName = resolved.serviceName
                             trySend(resolved.port)
                         }
-                        nsdManager.unregisterServiceInfoCallback(this)
+                        if (pending.remove(this)) runCatching { nsdManager.unregisterServiceInfoCallback(this) }
                     }
                     override fun onServiceLost() {}
                     override fun onServiceInfoCallbackUnregistered() {}
-                })
+                }
+                pending.add(callback)
+                runCatching { nsdManager.registerServiceInfoCallback(serviceInfo, executor, callback) }
+                    .onFailure { pending.remove(callback) }
             }
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
                 if (serviceInfo.serviceName == serviceName) trySend(-1)
@@ -69,7 +83,8 @@ object AdbMdns {
         nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
         awaitClose {
             runCatching { nsdManager.stopServiceDiscovery(discoveryListener) }
-            executor.shutdown()
+            pending.toList().forEach { runCatching { nsdManager.unregisterServiceInfoCallback(it) } }
+            pending.clear()
         }
     }
 
