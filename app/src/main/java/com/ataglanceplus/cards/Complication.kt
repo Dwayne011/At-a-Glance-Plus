@@ -109,6 +109,25 @@ data class ChipSpec(val kind: Complication, val arg: String? = null) {
 /** Where a card's complications sit (spec 7.1). */
 enum class ComplicationLayout { RIGHT, BOTTOM, NONE }
 
+/**
+ * The weather card's arrangement (A+C hybrid spec): 3-hour columns + 2 stacked chips, a compact
+ * 3-hour row over 2 wide chips, a 2-hour box + 2 x 2 chip grid, or no chips (forecast only).
+ */
+enum class WeatherLayout(val label: String) {
+    COLUMNS("Columns"),
+    SPLIT("Split"),
+    GRID("Grid"),
+    NONE("No chips");
+
+    /** The matching chip arrangement for the other cards. */
+    val others: ComplicationLayout
+        get() = when (this) {
+            SPLIT -> ComplicationLayout.BOTTOM
+            NONE -> ComplicationLayout.NONE
+            else -> ComplicationLayout.RIGHT
+        }
+}
+
 /** Adds complication chips to a card's `complications` container. */
 object Chips {
 
@@ -131,60 +150,73 @@ object Chips {
         aod: Boolean,
         container: Int = R.id.complications,
     ) {
-        val max = if (layout == ComplicationLayout.BOTTOM) MAX_BOTTOM else MAX_RIGHT
-        val shown = withValues(specs).take(max)
-        if (shown.isEmpty() || layout == ComplicationLayout.NONE) {
+        if (layout == ComplicationLayout.NONE) {
             views.setViewVisibility(container, View.GONE)
             return
         }
-        views.setViewVisibility(container, View.VISIBLE)
         val bottom = layout == ComplicationLayout.BOTTOM
-        val chipLayout = if (bottom) R.layout.include_complication_chip_strip else R.layout.include_complication_chip
+        addStyled(
+            context, views, specs, if (bottom) MAX_BOTTOM else MAX_RIGHT,
+            if (bottom) R.layout.include_complication_chip_strip else R.layout.include_complication_chip, aod, container
+        )
+    }
+
+    /**
+     * Adds up to [max] chips with something to show into [container], each drawn from
+     * [chipLayout] (any layout with chip_zone, chip_pill, chip_icon and chip_text). Returns how
+     * many were added; with none, the container is hidden.
+     */
+    fun addStyled(
+        context: Context,
+        views: RemoteViews,
+        specs: List<ChipSpec>,
+        max: Int,
+        chipLayout: Int,
+        aod: Boolean,
+        container: Int,
+    ): Int {
+        val shown = withValues(specs).take(max)
+        views.setViewVisibility(container, if (shown.isEmpty()) View.GONE else View.VISIBLE)
         shown.forEach { (spec, value) ->
-            if (value.parts.size > 1) {
-                views.addView(container, flipping(context, spec, value, bottom, aod))
-                return@forEach
-            }
-            val icon = value.parts.singleOrNull()?.let { if (aod) it.aodIcon else it.icon }
             val child = RemoteViews(context.packageName, chipLayout)
-            child.setTextViewText(R.id.chip_text, value.text)
-            child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: ${value.text}")
-            when {
-                aod -> {
-                    child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
-                    child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.aodIcon)
-                    child.setTextColor(R.id.chip_text, Style.AOD_TEXT)
+            if (value.parts.size > 1) {
+                // Several values (Bluetooth devices): take turns inside the pill.
+                child.setViewVisibility(R.id.chip_icon, View.GONE)
+                child.setViewVisibility(R.id.chip_text, View.GONE)
+                val flipper = RemoteViews(context.packageName, R.layout.include_chip_flipper_inner)
+                value.parts.forEach { part ->
+                    val row = RemoteViews(context.packageName, R.layout.include_chip_part)
+                    row.setImageViewResource(R.id.chip_icon, if (aod) part.aodIcon else part.icon)
+                    row.setTextViewText(R.id.chip_text, part.text)
+                    if (aod) row.setTextColor(R.id.chip_text, Style.AOD_TEXT)
+                    flipper.addView(R.id.chip_flipper_inner, row)
                 }
-                value.attention -> {
-                    child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_selector_attention)
-                    child.setImageViewResource(R.id.chip_icon, spec.kind.icon)
-                    child.setInt(R.id.chip_icon, "setColorFilter", ATTENTION_ICON)
-                    child.setTextColor(R.id.chip_text, ATTENTION_TEXT)
+                child.addView(R.id.chip_pill, flipper)
+                child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + value.parts.joinToString(", ") { it.text })
+                if (aod) child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
+            } else {
+                val icon = value.parts.singleOrNull()?.let { if (aod) it.aodIcon else it.icon }
+                child.setTextViewText(R.id.chip_text, value.text)
+                child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: ${value.text}")
+                when {
+                    aod -> {
+                        child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
+                        child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.aodIcon)
+                        child.setTextColor(R.id.chip_text, Style.AOD_TEXT)
+                    }
+                    value.attention -> {
+                        child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_selector_attention)
+                        child.setImageViewResource(R.id.chip_icon, spec.kind.icon)
+                        child.setInt(R.id.chip_icon, "setColorFilter", ATTENTION_ICON)
+                        child.setTextColor(R.id.chip_text, ATTENTION_TEXT)
+                    }
+                    else -> child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.icon)
                 }
-                else -> child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.icon)
             }
             child.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
             views.addView(container, child)
         }
-    }
-
-    /** A chip that takes turns between its parts (several Bluetooth devices). */
-    private fun flipping(context: Context, spec: ChipSpec, value: ChipValues.Value, bottom: Boolean, aod: Boolean): RemoteViews {
-        val chip = RemoteViews(
-            context.packageName,
-            if (bottom) R.layout.include_complication_chip_flipper_strip else R.layout.include_complication_chip_flipper
-        )
-        if (aod) chip.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
-        chip.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + value.parts.joinToString(", ") { it.text })
-        value.parts.forEach { part ->
-            val row = RemoteViews(context.packageName, R.layout.include_chip_part)
-            row.setImageViewResource(R.id.chip_icon, if (aod) part.aodIcon else part.icon)
-            row.setTextViewText(R.id.chip_text, part.text)
-            if (aod) row.setTextColor(R.id.chip_text, Style.AOD_TEXT)
-            chip.addView(R.id.chip_flipper, row)
-        }
-        chip.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
-        return chip
+        return shown.size
     }
 
     /** The chips that currently have something to show, with their values. */

@@ -24,6 +24,11 @@ import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
+/** One hour of forecast. */
+data class HourForecast(val time: Long, val temperature: Double, val code: Int, val isDay: Boolean) {
+    val condition: WeatherCondition get() = WeatherCondition.fromWmo(code)
+}
+
 /** Current conditions for the date line. */
 data class Weather(
     val temperature: Double,
@@ -37,7 +42,13 @@ data class Weather(
     /** Today's and tomorrow's sunrises and sunsets, epoch milliseconds; empty in old cached readings. */
     val sunrises: List<Long> = emptyList(),
     val sunsets: List<Long> = emptyList(),
+    /** The next few hours, oldest first; empty in old cached readings. */
+    val hourly: List<HourForecast> = emptyList(),
 ) {
+    /** The next [count] whole hours after now. */
+    fun nextHours(count: Int, now: Long = System.currentTimeMillis()): List<HourForecast> =
+        hourly.filter { it.time > now }.take(count)
+
     val condition: WeatherCondition get() = WeatherCondition.fromWmo(code)
     val temperatureText: String get() = "${temperature.roundToInt()}${unit.symbol}"
 
@@ -122,6 +133,12 @@ object WeatherRepository {
                 fetchedAt = json.getLong("f"),
                 sunrises = json.optJSONArray("sr").toLongList(),
                 sunsets = json.optJSONArray("ss").toLongList(),
+                hourly = json.optJSONArray("h")?.let { array ->
+                    (0 until array.length()).map { i ->
+                        val h = array.getJSONObject(i)
+                        HourForecast(h.getLong("t"), h.getDouble("v"), h.getInt("c"), h.getBoolean("d"))
+                    }
+                }.orEmpty(),
             )
         }
     }
@@ -164,6 +181,7 @@ object WeatherRepository {
                 "https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f" +
                     "&current=temperature_2m,apparent_temperature,weather_code,is_day" +
                     "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&forecast_days=2" +
+                    "&hourly=temperature_2m,weather_code,is_day&forecast_hours=6" +
                     "&temperature_unit=%s&timezone=auto",
                 lat, lon, unit.apiValue
             )
@@ -199,6 +217,7 @@ object WeatherRepository {
                 fetchedAt = System.currentTimeMillis(),
                 sunrises = times("sunrise"),
                 sunsets = times("sunset"),
+                hourly = hours(root.optJSONObject("hourly"), offset),
             )
         } finally {
             connection.disconnect()
@@ -249,12 +268,30 @@ object WeatherRepository {
             .put("f", weather.fetchedAt)
             .put("sr", org.json.JSONArray(weather.sunrises))
             .put("ss", org.json.JSONArray(weather.sunsets))
+            .put("h", org.json.JSONArray(weather.hourly.map {
+                JSONObject().put("t", it.time).put("v", it.temperature).put("c", it.code).put("d", it.isDay)
+            }))
         Prefs.get(context).edit().putString(KEY_CACHE, json.toString()).apply()
     }
 }
 
 private fun JSONObject.optDoubleOrNull(name: String): Double? =
     if (has(name) && !isNull(name)) optDouble(name).takeUnless { it.isNaN() } else null
+
+/** Hourly forecast entries; times come in the location's local time, like the sun times. */
+private fun hours(hourly: JSONObject?, offset: java.time.ZoneOffset): List<HourForecast> {
+    if (hourly == null) return emptyList()
+    val times = hourly.optJSONArray("time") ?: return emptyList()
+    val temps = hourly.optJSONArray("temperature_2m") ?: return emptyList()
+    val codes = hourly.optJSONArray("weather_code") ?: return emptyList()
+    val days = hourly.optJSONArray("is_day")
+    return (0 until times.length()).mapNotNull { i ->
+        if (temps.isNull(i) || codes.isNull(i)) return@mapNotNull null
+        val time = runCatching { java.time.LocalDateTime.parse(times.getString(i)).toInstant(offset).toEpochMilli() }.getOrNull()
+            ?: return@mapNotNull null
+        HourForecast(time, temps.getDouble(i), codes.getInt(i), days?.optInt(i, 1) != 0)
+    }
+}
 
 private fun org.json.JSONArray?.toLongList(): List<Long> =
     if (this == null) emptyList() else (0 until length()).map { getLong(it) }

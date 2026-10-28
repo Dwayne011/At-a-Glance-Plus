@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    8.1 Weather, hybrid variant 2: compact 3-hour row over 2 horizontal chips.
+    Weather A+C hybrid spec: 16dp left, 14dp right and 8dp top/bottom padding (350 x 60dp inside).
+    The background follows the weather (set in code).
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_root"
+    style="@style/AagCardRoot">
+
+    <LinearLayout
+        android:id="@+id/card_body"
+        style="@style/AagCardBody"
+        android:background="@drawable/card_bg_weather_cloudy"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingTop="8dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="8dp">
+
+        <!-- Shared left block: icon, temperature, date and high/low/feels, then the anchor chip. -->
+        <LinearLayout
+            android:id="@+id/weather_left"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="34dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/weather_icon"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_weather_cloudy" />
+
+                <TextView
+                    android:id="@+id/weather_temp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:includeFontPadding="false"
+                    android:singleLine="true"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="28sp" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/weather_title"
+                        style="@style/AagText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:textSize="15sp" />
+
+                    <TextView
+                        android:id="@+id/weather_detail"
+                        style="@style/AagText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif"
+                        android:textColor="#FFC4C6D0"
+                        android:textSize="11.5sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/complications_anchor"
+                android:layout_width="match_parent"
+                android:layout_height="22dp"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal" />
+        </LinearLayout>
+
+        <!-- Variant 2: compact 3-hour row over 2 side-by-side chips. -->
+        <LinearLayout
+            android:layout_width="174dp"
+            android:layout_height="60dp"
+            android:layout_marginStart="8dp"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:id="@+id/forecast"
+                android:layout_width="match_parent"
+                android:layout_height="28dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <TextView
+                android:id="@+id/f1_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="#FFC4C6D0"
+                android:textSize="10sp" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:id="@+id/f1_icon"
+                        android:layout_width="13dp"
+                        android:layout_height="13dp"
+                        android:contentDescription="@null" />
+
+                    <TextView
+                android:id="@+id/f1_temp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="#FFFFFFFF"
+                android:textSize="12sp"
+                    android:layout_marginStart="3dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+                <ImageView
+                android:layout_width="1dp"
+                android:layout_height="22dp"
+                android:contentDescription="@null"
+                android:scaleType="fitXY"
+                android:src="@drawable/forecast_divider" />
+
+                <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <TextView
+                android:id="@+id/f2_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="#FFC4C6D0"
+                android:textSize="10sp" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:id="@+id/f2_icon"
+                        android:layout_width="13dp"
+                        android:layout_height="13dp"
+                        android:contentDescription="@null" />
+
+                    <TextView
+                android:id="@+id/f2_temp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="#FFFFFFFF"
+                android:textSize="12sp"
+                    android:layout_marginStart="3dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+                <ImageView
+                android:layout_width="1dp"
+                android:layout_height="22dp"
+                android:contentDescription="@null"
+                android:scaleType="fitXY"
+                android:src="@drawable/forecast_divider" />
+
+                <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <TextView
+                android:id="@+id/f3_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="#FFC4C6D0"
+                android:textSize="10sp" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:id="@+id/f3_icon"
+                        android:layout_width="13dp"
+                        android:layout_height="13dp"
+                        android:contentDescription="@null" />
+
+                    <TextView
+                android:id="@+id/f3_temp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="#FFFFFFFF"
+                android:textSize="12sp"
+                    android:layout_marginStart="3dp" />
+                </LinearLayout>
+            </LinearLayout>
+            </LinearLayout>
+
+            <ImageView
+                android:id="@+id/forecast_rule"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="3dp"
+                android:layout_marginBottom="3dp"
+                android:contentDescription="@null"
+                android:scaleType="fitXY"
+                android:src="@drawable/forecast_divider" />
+
+            <LinearLayout
+                android:id="@+id/complications"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:orientation="horizontal" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Hold ring (spec 6.3): traces the card's edge while it is held, until the launcher's menu opens. -->
+    <ImageView
+        android:id="@+id/hold_bar"
+        android:layout_width="match_parent"
+        android:layout_height="76dp"
+        android:layout_gravity="center_vertical"
+        android:contentDescription="@null"
+        android:duplicateParentState="true"
+        android:scaleType="fitXY"
+        android:src="@drawable/hold_bar_amber_400" />
+</FrameLayout>

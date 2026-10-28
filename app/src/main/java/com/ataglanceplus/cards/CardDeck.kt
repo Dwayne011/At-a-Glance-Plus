@@ -71,7 +71,7 @@ object CardDeck {
             ?.let { chosen -> Chips.withValues(chosen).map { it.first }.toMutableList() }
         fun take(room: Int): List<ChipSpec>? = pool?.let { p -> List(minOf(room, p.size)) { p.removeAt(0) } }
         val bottom = layout == ComplicationLayout.BOTTOM
-        val weatherChips = take(if (bottom) Chips.MAX_BOTTOM else Chips.MAX_RIGHT)
+        val weatherChips = take(WeatherCard.room(Prefs.weatherLayout(context)))
         val navChips = if (nav != null) take(Chips.MAX_RIGHT) else null
         val timerChips = if ((timer != null || alarm != null) && layout == ComplicationLayout.RIGHT) take(Chips.MAX_RIGHT) else null
         val calendarChips = if (calendar != null) take(if (bottom) Chips.MAX_BOTTOM else Chips.MAX_RIGHT) else null

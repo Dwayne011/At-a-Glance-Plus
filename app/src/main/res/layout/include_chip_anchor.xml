@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Weather hybrid spec: the left anchor pill under the temperature (22dp, first chip in the list).
+    Added into a card with RemoteViews.addView, so ids are local to each chip.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chip_zone"
+    android:layout_width="wrap_content"
+    android:layout_height="22dp">
+
+    <LinearLayout
+        android:id="@+id/chip_pill"
+        android:layout_width="wrap_content"
+        android:layout_height="22dp"
+        android:layout_gravity="start|center_vertical"
+        android:background="@drawable/chip_selector_anchor"
+        android:duplicateParentState="true"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <ImageView
+            android:id="@+id/chip_icon"
+            android:layout_width="13dp"
+            android:layout_height="13dp"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/chip_text"
+            style="@style/AagText.Chip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:maxWidth="56dp"
+            android:textColor="#FFE2E2E6"
+            android:textSize="11.5sp" />
+    </LinearLayout>
+</FrameLayout>

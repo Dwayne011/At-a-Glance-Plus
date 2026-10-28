@@ -21,8 +21,10 @@ import kotlin.math.roundToInt
 /**
  * The weather card (spec 8.1): the pinned base card that replaces Google's date and weather line.
  *
- * The date is in the title on the home screen only; the lock screen already shows it beside the
- * clock. With no weather yet, the card says why instead of staying blank.
+ * Laid out per the A+C hybrid spec: current weather and a chip on the left, and on the right one
+ * of three arrangements of the next hours' forecast and chips. The date shows on the home screen
+ * only; the lock screen already shows it beside the clock. With no weather yet, the card says
+ * why instead of staying blank.
  */
 object WeatherCard {
 
@@ -31,9 +33,12 @@ object WeatherCard {
     private const val REQUEST_SETUP = 202
     private const val PIXEL_WEATHER = "com.google.android.apps.weather"
 
-    /** The spec's default chips for each layout (8.1), used until the user picks their own. */
-    private val DEFAULT_RIGHT = listOf(Complication.GMAIL, Complication.ALARM).map { ChipSpec(it) }
-    private val DEFAULT_BOTTOM = listOf(Complication.GMAIL, Complication.MISSED_CALLS, Complication.ALARM, Complication.BATTERY).map { ChipSpec(it) }
+    /** The hybrid spec's example chips for each variant, used until the user picks their own. */
+    private val DEFAULTS = mapOf(
+        WeatherLayout.COLUMNS to listOf(Complication.STEPS, Complication.BATTERY, Complication.ALARM),
+        WeatherLayout.SPLIT to listOf(Complication.STEPS, Complication.SCREEN_TIME, Complication.ALARM),
+        WeatherLayout.GRID to listOf(Complication.STEPS, Complication.MISSED_CALLS, Complication.BATTERY, Complication.SCREEN_TIME, Complication.ALARM),
+    ).mapValues { (_, kinds) -> kinds.map { ChipSpec(it) } }
 
     private class Reading(
         val temp: String,
@@ -42,7 +47,6 @@ object WeatherCard {
         @DrawableRes val icon: Int,
         @DrawableRes val aodIcon: Int,
         @DrawableRes val background: Int,
-        val peek: String?,
     )
 
     /** The date in the phone's locale, e.g. "Wed 28 Oct" in the UK, "Wed, Oct 28" in the US. */
@@ -54,45 +58,85 @@ object WeatherCard {
         val reading = weather?.let { live(it) }
             ?: return needed(context, aod, !WeatherRepository.hasLocationPermission(context), status)
 
-        val showDate = surface == AtAGlanceService.SURFACE_HOME
-        val title = if (showDate) "${dateText()} · ${reading.condition}" else reading.condition
-        val layout = Prefs.complicationLayout(context)
-        val chosen = chips ?: Prefs.chips(context)
-        val shown = when (layout) {
-            ComplicationLayout.RIGHT -> chosen ?: DEFAULT_RIGHT
-            ComplicationLayout.BOTTOM -> chosen ?: DEFAULT_BOTTOM
-            ComplicationLayout.NONE -> emptyList()
-        }
-        // The bottom strip is only used when there is something to put in it (spec 7.1).
-        val bottom = layout == ComplicationLayout.BOTTOM && Chips.withValues(shown).isNotEmpty()
-        val views = RemoteViews(context.packageName, if (bottom) R.layout.card_weather_bottom else R.layout.card_weather_right)
-
+        // Line 1 is the date on the home screen; the lock screen shows the date beside the clock,
+        // so there it is the condition instead.
+        val title = if (surface == AtAGlanceService.SURFACE_HOME) dateText() else reading.condition
+        val layout = Prefs.weatherLayout(context)
+        val views = RemoteViews(
+            context.packageName,
+            when (layout) {
+                WeatherLayout.SPLIT -> R.layout.card_weather_split
+                WeatherLayout.GRID -> R.layout.card_weather_grid
+                else -> R.layout.card_weather_columns
+            }
+        )
         views.setTextViewText(R.id.weather_temp, reading.temp)
         views.setTextViewText(R.id.weather_title, title)
-        if (bottom) {
-            val detail = listOfNotNull(reading.detail.ifEmpty { null }, reading.peek?.replace(" at ", " ")).joinToString(" · ")
-            views.setTextViewText(R.id.weather_detail, detail)
-        } else {
-            views.setTextViewText(R.id.weather_detail, reading.detail)
-            views.setViewVisibility(R.id.weather_detail, if (reading.detail.isEmpty()) View.GONE else View.VISIBLE)
-            if (reading.peek != null) {
-                views.setTextViewText(R.id.weather_peek, reading.peek)
-                views.setViewVisibility(R.id.weather_peek, View.VISIBLE)
-            }
-        }
+        views.setTextViewText(R.id.weather_detail, reading.detail)
+        views.setViewVisibility(R.id.weather_detail, if (reading.detail.isEmpty()) View.GONE else View.VISIBLE)
         if (aod) {
-            Style.aodBody(views, R.id.weather_temp, R.id.weather_title, R.id.weather_detail, R.id.weather_peek)
+            Style.aodBody(views, R.id.weather_temp, R.id.weather_title, R.id.weather_detail)
             views.setImageViewResource(R.id.weather_icon, reading.aodIcon)
         } else {
             views.setInt(R.id.card_body, "setBackgroundResource", reading.background)
             views.setImageViewResource(R.id.weather_icon, reading.icon)
         }
-        Chips.add(context, views, shown, if (bottom) ComplicationLayout.BOTTOM else ComplicationLayout.RIGHT, aod)
+        forecast(context, views, weather, if (layout == WeatherLayout.GRID) 2 else 3, aod, layout)
+
+        // Chips: the first with something to report sits under the temperature; the next fill
+        // the right side in the variant's arrangement.
+        val shown = if (layout == WeatherLayout.NONE) emptyList()
+        else Chips.withValues(chips ?: Prefs.chips(context) ?: DEFAULTS.getValue(layout)).map { it.first }
+        Chips.addStyled(context, views, shown.take(1), 1, R.layout.include_chip_anchor, aod, R.id.complications_anchor)
+        val rest = shown.drop(1)
+        when (layout) {
+            WeatherLayout.COLUMNS -> Chips.addStyled(context, views, rest, 2, R.layout.include_chip_column, aod, R.id.complications)
+            WeatherLayout.SPLIT -> Chips.addStyled(context, views, rest, 2, R.layout.include_chip_wide, aod, R.id.complications)
+            WeatherLayout.GRID -> {
+                Chips.addStyled(context, views, rest.take(2), 2, R.layout.include_chip_grid, aod, R.id.complications)
+                Chips.addStyled(context, views, rest.drop(2), 2, R.layout.include_chip_grid, aod, R.id.complications_2)
+            }
+            WeatherLayout.NONE -> views.setViewVisibility(R.id.complications, View.GONE)
+        }
         Style.holdBar(views, pinned = true, aod = aod)
 
         val tap = weatherIntent(context)
         views.setOnClickPendingIntent(R.id.card_root, tap)
-        return Style.target(context, TARGET_ID, views, "${reading.temp} $title", reading.detail, reading.icon, tap, 2f)
+        return Style.target(context, TARGET_ID, views, "${reading.temp} ${reading.condition}", reading.detail, reading.icon, tap, 2f)
+    }
+
+    /** Chips the weather card has room for in each variant: the anchor plus the right side. */
+    fun room(layout: WeatherLayout): Int = when (layout) {
+        WeatherLayout.COLUMNS, WeatherLayout.SPLIT -> 3
+        WeatherLayout.GRID -> 5
+        WeatherLayout.NONE -> 0
+    }
+
+    /** The next hours (3, or 2 in the grid variant); hidden until a reading with hourly data arrives. */
+    private fun forecast(context: Context, views: RemoteViews, weather: Weather, count: Int, aod: Boolean, layout: WeatherLayout) {
+        val hours = weather.nextHours(count)
+        if (hours.size < count) {
+            views.setViewVisibility(R.id.forecast, View.GONE)
+            if (layout == WeatherLayout.SPLIT) views.setViewVisibility(R.id.forecast_rule, View.GONE)
+            return
+        }
+        val ids = listOf(
+            Triple(R.id.f1_time, R.id.f1_icon, R.id.f1_temp),
+            Triple(R.id.f2_time, R.id.f2_icon, R.id.f2_temp),
+            Triple(R.id.f3_time, R.id.f3_icon, R.id.f3_temp),
+        )
+        val pattern = if (DateFormat.is24HourFormat(context)) "HH:mm" else "ha"
+        hours.forEachIndexed { i, hour ->
+            val (time, icon, temp) = ids[i]
+            views.setTextViewText(time, DateFormat.format(pattern, Date(hour.time)).toString().lowercase(Locale.getDefault()))
+            views.setTextViewText(temp, "${hour.temperature.roundToInt()}°")
+            views.setImageViewResource(icon, if (aod) hour.condition.aodIcon(hour.isDay) else hour.condition.icon(hour.isDay))
+            if (aod) {
+                views.setTextColor(time, Style.AOD_TEXT)
+                views.setTextColor(temp, Style.AOD_TEXT)
+            }
+        }
+        if (aod && layout == WeatherLayout.GRID) views.setInt(R.id.forecast, "setBackgroundResource", R.drawable.aod_outline_r14)
     }
 
     private fun live(weather: Weather): Reading {
@@ -105,7 +149,6 @@ object WeatherCard {
             icon = condition.icon(isDay),
             aodIcon = condition.aodIcon(isDay),
             background = condition.background(isDay),
-            peek = null,
         )
     }
 

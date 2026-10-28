@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Put inside any chip's pill when it has several values (Bluetooth devices): the ViewFlipper
+    switches every 3 seconds by itself, without the app redrawing the card.
+-->
+<ViewFlipper xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chip_flipper_inner"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:autoStart="true"
+    android:flipInterval="3000"
+    android:inAnimation="@android:anim/fade_in"
+    android:outAnimation="@android:anim/fade_out" />

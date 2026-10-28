@@ -53,7 +53,7 @@ import com.ataglanceplus.Prefs
 import com.ataglanceplus.cards.ChipSpec
 import com.ataglanceplus.cards.Chips
 import com.ataglanceplus.cards.Complication
-import com.ataglanceplus.cards.ComplicationLayout
+import com.ataglanceplus.cards.WeatherLayout
 import com.ataglanceplus.complications.ChipValues
 import com.ataglanceplus.complications.GmailSource
 import com.ataglanceplus.complications.HealthSource
@@ -156,7 +156,7 @@ internal fun ChipsSection() {
     }
 
     val chips = remember(version) { Prefs.chips(context) ?: emptyList() }
-    val layout = remember(version) { Prefs.complicationLayout(context) }
+    val layout = remember(version) { Prefs.weatherLayout(context) }
 
     fun add(spec: ChipSpec) {
         if (chips.none { it.key == spec.key } && chips.size < Chips.MAX_CHOSEN) Prefs.setChips(context, chips + spec)
@@ -184,28 +184,28 @@ internal fun ChipsSection() {
             style = MaterialTheme.typography.bodySmall
         )
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            ComplicationLayout.entries.forEachIndexed { index, option ->
+            WeatherLayout.entries.forEachIndexed { index, option ->
                 SegmentedButton(
                     selected = layout == option,
-                    onClick = { Prefs.setComplicationLayout(context, option) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = ComplicationLayout.entries.size)
-                ) {
-                    Text(
-                        when (option) {
-                            ComplicationLayout.RIGHT -> "Right"
-                            ComplicationLayout.BOTTOM -> "Bottom"
-                            ComplicationLayout.NONE -> "None"
-                        }
-                    )
-                }
+                    onClick = { Prefs.setWeatherLayout(context, option) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = WeatherLayout.entries.size)
+                ) { Text(option.label) }
             }
         }
-
+        Text(
+            when (layout) {
+                WeatherLayout.COLUMNS -> "Weather card: next 3 hours as columns, 1 chip under the temperature and 2 stacked on the right."
+                WeatherLayout.SPLIT -> "Weather card: next 3 hours in a row, 1 chip under the temperature and 2 wide chips under the forecast."
+                WeatherLayout.GRID -> "Weather card: next 2 hours in a box, 1 chip under the temperature and a 2 x 2 grid of chips."
+                WeatherLayout.NONE -> "Weather card: next 3 hours, no chips anywhere."
+            },
+            style = MaterialTheme.typography.bodySmall
+        )
         if (grantMessage.isNotEmpty()) {
             Text(grantMessage, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
         if (chips.isEmpty()) {
-            Text("No chips chosen; the weather card uses the design's defaults (Alarm, Battery and so on).", style = MaterialTheme.typography.bodySmall)
+            Text("No chips chosen; the weather card uses the design's examples (Steps, Battery, Alarm and so on).", style = MaterialTheme.typography.bodySmall)
         }
         chips.forEach { spec ->
             HorizontalDivider()
@@ -224,7 +224,8 @@ internal fun ChipsSection() {
                 if (spec.kind == Complication.STEPS || spec.kind == Complication.SLEEP) {
                     Text("Reads Health Connect. Turn on Health Connect sync in Google Health or Fitbit.", style = MaterialTheme.typography.bodySmall)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Wraps onto a second line rather than squeezing buttons when space runs out.
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     missing.firstOrNull()?.let { need ->
                         Button(enabled = !busy || need !in setOf(Need.NOTIFICATIONS, Need.USAGE, Need.CALL_LOG), onClick = {
                             when (need) {

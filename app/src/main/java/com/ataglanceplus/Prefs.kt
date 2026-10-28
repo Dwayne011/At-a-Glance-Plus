@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.ataglanceplus.cards.ChipSpec
 import com.ataglanceplus.cards.ComplicationLayout
+import com.ataglanceplus.cards.WeatherLayout
 import com.ataglanceplus.cards.CardType
 
 /** Small settings store. The service and the UI live in one process and both read it. */
@@ -17,6 +18,7 @@ object Prefs {
     private const val KEY_CALENDAR_LEAD = "calendar_lead_minutes"
     private const val KEY_CALENDAR_ALL_DAY = "calendar_all_day"
     private const val KEY_COMP_LAYOUT = "comp_layout"
+    private const val KEY_WEATHER_LAYOUT = "weather_layout"
     private const val KEY_CHIPS = "chips"
     private const val KEY_DISMISSED = "dismissed_cards"
     private const val KEY_CHIP_APP = "chip_app_"
@@ -88,14 +90,27 @@ object Prefs {
         get(context).edit().putBoolean(KEY_CALENDAR_ALL_DAY, on).apply()
     }
 
-    fun complicationLayout(context: Context): ComplicationLayout {
-        val raw = get(context).getString(KEY_COMP_LAYOUT, null) ?: return ComplicationLayout.RIGHT
-        return runCatching { ComplicationLayout.valueOf(raw) }.getOrDefault(ComplicationLayout.RIGHT)
+    /**
+     * The weather card's arrangement. Before it existed there was a Right / Bottom / None
+     * choice; that maps to Columns / Split / No chips.
+     */
+    fun weatherLayout(context: Context): WeatherLayout {
+        get(context).getString(KEY_WEATHER_LAYOUT, null)?.let { raw ->
+            return runCatching { WeatherLayout.valueOf(raw) }.getOrDefault(WeatherLayout.COLUMNS)
+        }
+        return when (get(context).getString(KEY_COMP_LAYOUT, null)) {
+            ComplicationLayout.BOTTOM.name -> WeatherLayout.SPLIT
+            ComplicationLayout.NONE.name -> WeatherLayout.NONE
+            else -> WeatherLayout.COLUMNS
+        }
     }
 
-    fun setComplicationLayout(context: Context, layout: ComplicationLayout) {
-        get(context).edit().putString(KEY_COMP_LAYOUT, layout.name).apply()
+    fun setWeatherLayout(context: Context, layout: WeatherLayout) {
+        get(context).edit().putString(KEY_WEATHER_LAYOUT, layout.name).apply()
     }
+
+    /** How chips sit on the other cards, following the weather card's arrangement. */
+    fun complicationLayout(context: Context): ComplicationLayout = weatherLayout(context).others
 
     /** The user's chosen weather-card chips in the order picked, or null to use the spec's defaults. */
     fun chips(context: Context): List<ChipSpec>? {
