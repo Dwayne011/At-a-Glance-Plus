@@ -10,6 +10,7 @@ object Prefs {
     const val KEY_CARD_STYLE = "card_style"
     const val KEY_PAIRED = "wadb_paired"
     const val KEY_ACTIVATE_ON_BOOT = "activate_on_boot"
+    const val KEY_SHOW_TEST_CARD = "show_test_card"
 
     /** How the test card is drawn in the At a Glance slot. */
     enum class CardStyle {
@@ -37,6 +38,12 @@ object Prefs {
 
     fun setPaired(context: Context, paired: Boolean) {
         get(context).edit().putBoolean(KEY_PAIRED, paired).apply()
+    }
+
+    fun showTestCard(context: Context): Boolean = get(context).getBoolean(KEY_SHOW_TEST_CARD, true)
+
+    fun setShowTestCard(context: Context, show: Boolean) {
+        get(context).edit().putBoolean(KEY_SHOW_TEST_CARD, show).apply()
     }
 
     fun activateOnBoot(context: Context): Boolean = get(context).getBoolean(KEY_ACTIVATE_ON_BOOT, true)

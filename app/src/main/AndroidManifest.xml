@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Weather for the date line: city-level location only, refreshed in the background. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- Granted by the app to itself over its first adb session; lets it switch wireless debugging on. -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
@@ -18,6 +21,11 @@
     <queries>
         <package android:name="com.google.android.apps.nexuslauncher" />
         <package android:name="com.google.android.as" />
+        <package android:name="com.google.android.apps.weather" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="content" android:host="com.android.calendar" />
+        </intent>
         <intent>
             <action android:name="android.service.smartspace.SmartspaceService" />
         </intent>

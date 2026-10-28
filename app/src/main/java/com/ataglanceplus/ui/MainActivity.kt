@@ -59,6 +59,7 @@ import com.ataglanceplus.service.ServiceState
 import com.ataglanceplus.wadb.Activator
 import com.ataglanceplus.wadb.PairingService
 import com.ataglanceplus.wadb.Wadb
+import com.ataglanceplus.weather.WeatherRepository
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
@@ -103,6 +104,19 @@ private fun StatusScreen() {
     val canSelfEnable = remember(refresh, wadbStatus) { Wadb.canWriteSecureSettings(context) }
     val wifi = remember(refresh, wadbStatus) { Wadb.isWifiConnected(context) }
 
+    val weather by WeatherRepository.weather.collectAsStateWithLifecycle()
+    val weatherStatus by WeatherRepository.status.collectAsStateWithLifecycle()
+    var showTestCard by remember { mutableStateOf(Prefs.showTestCard(context)) }
+    val hasLocation = remember(refresh, weatherStatus) { WeatherRepository.hasLocationPermission(context) }
+    val hasBackgroundLocation = remember(refresh, weatherStatus) { WeatherRepository.hasBackgroundLocationPermission(context) }
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        refresh++
+        if (granted) scope.launch { WeatherRepository.refresh(context, force = true) }
+    }
+    val backgroundLocationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        refresh++
+    }
+
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startPairing(context)
     }
@@ -118,7 +132,7 @@ private fun StatusScreen() {
         ) {
             Text("At a Glance Plus", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Milestone 2: take over the native At a Glance slot from the phone itself, over wireless debugging.",
+                "Takes over the native At a Glance slot over wireless debugging. Now with the date and weather line.",
                 style = MaterialTheme.typography.bodyMedium
             )
 
@@ -209,7 +223,53 @@ private fun StatusScreen() {
                 }
             }
 
+            Section("Date and weather") {
+                Text(
+                    "Weather from Open-Meteo, worldwide, using each country's own forecast model where one exists. Only your approximate location is sent.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                CheckRow("Approximate location", hasLocation, if (hasLocation) "Granted" else "Needed to know which forecast to show")
+                CheckRow(
+                    "Location in the background",
+                    hasBackgroundLocation,
+                    if (hasBackgroundLocation) "Weather follows you while the app is closed" else "Without it, weather uses where you were when the app was last open"
+                )
+                if (!hasLocation) {
+                    Button(onClick = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) {
+                        Text("Allow location")
+                    }
+                } else if (!hasBackgroundLocation) {
+                    Text("On the next screen choose \"Allow all the time\".", style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = { backgroundLocationPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) }) {
+                        Text("Allow in the background")
+                    }
+                }
+                val current = weather
+                if (current != null) {
+                    val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(current.fetchedAt))
+                    Text("Now: ${current.condition.label}, ${current.temperatureText} · updated $time")
+                } else {
+                    Text("No weather yet.")
+                }
+                if (weatherStatus.isNotEmpty()) {
+                    Text(weatherStatus, style = MaterialTheme.typography.bodySmall)
+                }
+                OutlinedButton(enabled = hasLocation, onClick = {
+                    scope.launch { WeatherRepository.refresh(context, force = true) }
+                }) { Text("Refresh weather") }
+            }
+
             Section("Test card style") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Show the test card")
+                        Text("Off leaves just the date and weather line.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = showTestCard, onCheckedChange = {
+                        showTestCard = it
+                        Prefs.setShowTestCard(context, it)
+                    })
+                }
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     Prefs.CardStyle.entries.forEachIndexed { index, style ->
                         SegmentedButton(

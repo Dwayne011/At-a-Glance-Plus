@@ -17,6 +17,7 @@ import com.ataglanceplus.R
 import com.ataglanceplus.service.AtAGlanceService
 import com.ataglanceplus.ui.MainActivity
 import com.ataglanceplus.ui.UnlockGateActivity
+import com.ataglanceplus.weather.Weather
 import android.app.smartspace.uitemplatedata.Icon as TemplateIcon
 
 /**
@@ -28,10 +29,14 @@ import android.app.smartspace.uitemplatedata.Icon as TemplateIcon
  */
 object TestCards {
 
-    fun build(context: Context, surface: String, style: Prefs.CardStyle): List<SmartspaceTarget> {
+    /** Everything shown on a surface, in order: the date and weather line first, then cards. */
+    fun build(context: Context, surface: String, style: Prefs.CardStyle, weather: Weather?): List<SmartspaceTarget> {
         return when (surface) {
             AtAGlanceService.SURFACE_HOME,
-            AtAGlanceService.SURFACE_LOCKSCREEN -> listOf(testCard(context, surface, style))
+            AtAGlanceService.SURFACE_LOCKSCREEN -> buildList {
+                add(DateWeatherCard.build(context, weather))
+                if (Prefs.showTestCard(context)) add(testCard(context, surface, style))
+            }
             // Media, glanceable hub, screensaver and ambient surfaces: nothing yet.
             else -> emptyList()
         }

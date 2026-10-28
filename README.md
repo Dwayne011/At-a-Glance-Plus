@@ -73,8 +73,10 @@ Pixel on Android 17 (API 37), Pixel Launcher:
 - SystemUI opens five sessions with the provider, all asking for up to five targets:
   `home` (Pixel Launcher), `lockscreen`, `ambientcue`, `glanceable_hub` and `dream` (SystemUI).
   The app currently answers only `home` and `lockscreen`.
-- Replacing Google's provider also removes Google's date and weather line, so the app has to
-  supply its own.
+- Replacing Google's provider also removes Google's date and weather line, so the app supplies
+  its own from Open-Meteo (https://open-meteo.com), free and keyless. Open-Meteo picks each
+  country's own high-resolution model where one exists (Met Office 2 km in the UK) and global
+  models elsewhere. Only city-level coordinates are sent.
 
 Still to check: the always-on display, tapping the card from the lock screen, and re-activation
 after a reboot.
@@ -82,7 +84,8 @@ after a reboot.
 ## Roadmap
 
 1. Milestone 1: system hook and test card.
-2. Milestone 2: pairing and activation over wireless debugging, including after boot (this).
-3. Generic sources: Live Updates from any app, media from any player, Wallet passes.
-4. Rules engine: show a card when near a place, when navigating somewhere, at a time, on a network.
-5. Place categories from OpenStreetMap.
+2. Milestone 2: pairing and activation over wireless debugging, including after boot.
+3. Date and weather line (Open-Meteo, worldwide) and unlock-before-open for every card tap (this).
+4. Generic sources: Live Updates from any app, media from any player, Wallet passes.
+5. Rules engine: show a card when near a place, when navigating somewhere, at a time, on a network.
+6. Place categories from OpenStreetMap.
