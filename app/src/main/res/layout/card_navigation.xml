@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 8.7 Navigating to a place: manoeuvre box, distance and instruction, destination line, right-column chips. -->
+<!--
+    8.7 Navigating to a place: manoeuvre box (with a travel-mode badge), distance and instruction,
+    destination line, trip progress bar, right-column chips.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/card_root"
     style="@style/AagCardRoot">
@@ -23,8 +26,18 @@
                 android:layout_height="24dp"
                 android:layout_gravity="center"
                 android:contentDescription="@null"
-                android:src="@drawable/ic_nav_turn_left"
-                android:tint="#FF6EE7B7" />
+                android:src="@drawable/ic_nav_turn_left" />
+
+            <!-- Travel mode (train, bus, walk, bike), when the directions say. -->
+            <ImageView
+                android:id="@+id/nav_mode"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_gravity="bottom|end"
+                android:background="@drawable/nav_mode_bg"
+                android:contentDescription="@null"
+                android:padding="2dp"
+                android:visibility="gone" />
         </FrameLayout>
 
         <LinearLayout
@@ -45,15 +58,16 @@
                     style="@style/AagText.Badge"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
                     android:textColor="#FF6EE7B7"
                     android:textStyle="bold" />
 
+                <!-- No start margin: when there is no distance, the line starts flush with the one below. -->
                 <TextView
                     android:id="@+id/nav_instruction"
                     style="@style/AagText.Title"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
                     android:layout_weight="1" />
             </LinearLayout>
 
@@ -63,6 +77,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textColor="#FFA7F3D0" />
+
+            <ProgressBar
+                android:id="@+id/nav_progress"
+                style="@android:style/Widget.Material.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="3dp"
+                android:layout_marginTop="5dp"
+                android:max="1000"
+                android:progressDrawable="@drawable/nav_progress"
+                android:visibility="gone" />
         </LinearLayout>
 
         <LinearLayout
@@ -75,15 +99,12 @@
             android:visibility="gone" />
     </LinearLayout>
 
-    <!-- Hold bar (spec 6.3): fills while the card is held, until the launcher's menu opens. -->
+    <!-- Hold ring (spec 6.3): traces the card's edge while it is held, until the launcher's menu opens. -->
     <ImageView
         android:id="@+id/hold_bar"
         android:layout_width="match_parent"
-        android:layout_height="3dp"
-        android:layout_gravity="top"
-        android:layout_marginStart="22dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="22dp"
+        android:layout_height="76dp"
+        android:layout_gravity="center_vertical"
         android:contentDescription="@null"
         android:duplicateParentState="true"
         android:scaleType="fitXY"

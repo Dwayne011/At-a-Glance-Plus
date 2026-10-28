@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Finance: the user's stocks, one page each, taking turns every 4 seconds (the ViewFlipper
+    switches by itself). Pages are added from include_finance_page.xml.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_root"
+    style="@style/AagCardRoot">
+
+    <LinearLayout
+        android:id="@+id/card_body"
+        style="@style/AagCardBody"
+        android:background="@drawable/card_bg_finance"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ViewFlipper
+            android:id="@+id/finance_flipper"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:autoStart="true"
+            android:flipInterval="4000"
+            android:inAnimation="@android:anim/fade_in"
+            android:outAnimation="@android:anim/fade_out" />
+    </LinearLayout>
+
+    <!-- Hold ring (spec 6.3): traces the card's edge while it is held, until the launcher's menu opens. -->
+    <ImageView
+        android:id="@+id/hold_bar"
+        android:layout_width="match_parent"
+        android:layout_height="76dp"
+        android:layout_gravity="center_vertical"
+        android:contentDescription="@null"
+        android:duplicateParentState="true"
+        android:scaleType="fitXY"
+        android:src="@drawable/hold_bar_red_400" />
+</FrameLayout>

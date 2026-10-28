@@ -27,6 +27,8 @@ import com.ataglanceplus.complications.ComplicationEngine
 import com.ataglanceplus.complications.NotificationCounter
 import com.ataglanceplus.live.CalendarNow
 import com.ataglanceplus.live.CalendarSource
+import com.ataglanceplus.live.FinanceRules
+import com.ataglanceplus.live.FinanceSource
 import com.ataglanceplus.live.IncomingMessage
 import com.ataglanceplus.live.MediaSource
 import com.ataglanceplus.live.NotificationHub
@@ -60,6 +62,7 @@ class AtAGlanceService : SmartspaceService() {
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key in Prefs.NON_CARD_KEYS) return@OnSharedPreferenceChangeListener
         if (Prefs.isChipSettingKey(key)) engine.settingsChanged()
+        if (Prefs.isFinanceFetchKey(key)) restartFinance()
         // Calendar options or permission may have changed.
         refreshCalendar()
         pushAll()
@@ -93,6 +96,8 @@ class AtAGlanceService : SmartspaceService() {
     private var message: IncomingMessage? = null
     private var messageUntil = 0L
     private var islandJob: Job? = null
+    private var financeJob: Job? = null
+    private var shownFinance: String? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -122,6 +127,8 @@ class AtAGlanceService : SmartspaceService() {
         scope.launch { NotificationHub.live.drop(1).distinctUntilChanged().collect { pushAll() } }
         scope.launch { NotificationHub.nav.drop(1).distinctUntilChanged().collect { pushAll() } }
         scope.launch { NotificationHub.messages.collect { showMessage(it) } }
+        scope.launch { FinanceSource.quotes.drop(1).collect { pushAll() } }
+        restartFinance()
         // The media track bar cannot move by itself; nudge it while playing.
         scope.launch {
             while (true) {
@@ -163,7 +170,12 @@ class AtAGlanceService : SmartspaceService() {
                 // The calendar card counts down ("in 25 min") and the alarm card appears 12 hours
                 // ahead, so those redraw each minute too.
                 refreshCalendar()
-                if (now != shownDate || day != shownDay || calendar != null || LiveCards.upcomingAlarm(this@AtAGlanceService) != null) {
+                // The finance card comes and goes with the time (periods and windows).
+                val finance = FinanceRules.showing(this@AtAGlanceService, FinanceSource.quotes.value)?.instanceKey
+                if (now != shownDate || day != shownDay || calendar != null || finance != shownFinance ||
+                    LiveCards.upcomingAlarm(this@AtAGlanceService) != null
+                ) {
+                    shownFinance = finance
                     shownDate = now
                     shownDay = day
                     pushAll()
@@ -277,9 +289,24 @@ class AtAGlanceService : SmartspaceService() {
         timer = NotificationHub.timer.value,
         media = MediaSource.now.value,
         calendar = calendar,
+        quotes = FinanceSource.quotes.value,
         message = message,
         messageRemainingMs = (messageUntil - System.currentTimeMillis()).coerceAtLeast(0L),
     )
+
+    /** Fetches prices now and then at the user's interval, while the finance card is on and has tickers. */
+    private fun restartFinance() {
+        financeJob?.cancel()
+        financeJob = scope.launch {
+            while (true) {
+                if (Prefs.cardEnabled(this@AtAGlanceService, CardType.FINANCE)) {
+                    runCatching { FinanceSource.refresh(this@AtAGlanceService) }
+                        .onFailure { CrashLog.record(this@AtAGlanceService, "Fetching prices", it) }
+                }
+                delay(Prefs.financeRefreshMinutes(this@AtAGlanceService) * 60_000L)
+            }
+        }
+    }
 
     private fun refreshCalendar() {
         scope.launch {

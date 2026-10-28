@@ -50,15 +50,12 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Hold bar (spec 6.3): fills while the card is held, until the launcher's menu opens. -->
+    <!-- Hold ring (spec 6.3): traces the card's edge while it is held, until the launcher's menu opens. -->
     <ImageView
         android:id="@+id/hold_bar"
         android:layout_width="match_parent"
-        android:layout_height="3dp"
-        android:layout_gravity="top"
-        android:layout_marginStart="22dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="22dp"
+        android:layout_height="76dp"
+        android:layout_gravity="center_vertical"
         android:contentDescription="@null"
         android:duplicateParentState="true"
         android:scaleType="fitXY"

@@ -49,21 +49,22 @@ object WeatherCard {
     fun dateText(locale: Locale = Locale.getDefault()): String =
         DateFormat.format(DateFormat.getBestDateTimePattern(locale, "EEEdMMM"), Date()).toString()
 
-    fun build(context: Context, surface: String, aod: Boolean, weather: Weather?, status: String): SmartspaceTarget {
+    /** [chips]: the chips this card was given by the deck; null for the user's list or the spec's defaults. */
+    fun build(context: Context, surface: String, aod: Boolean, weather: Weather?, status: String, chips: List<ChipSpec>? = null): SmartspaceTarget {
         val reading = weather?.let { live(it) }
             ?: return needed(context, aod, !WeatherRepository.hasLocationPermission(context), status)
 
         val showDate = surface == AtAGlanceService.SURFACE_HOME
         val title = if (showDate) "${dateText()} · ${reading.condition}" else reading.condition
         val layout = Prefs.complicationLayout(context)
-        val chosen = Prefs.chips(context)
-        val chips = when (layout) {
+        val chosen = chips ?: Prefs.chips(context)
+        val shown = when (layout) {
             ComplicationLayout.RIGHT -> chosen ?: DEFAULT_RIGHT
             ComplicationLayout.BOTTOM -> chosen ?: DEFAULT_BOTTOM
             ComplicationLayout.NONE -> emptyList()
         }
         // The bottom strip is only used when there is something to put in it (spec 7.1).
-        val bottom = layout == ComplicationLayout.BOTTOM && Chips.withValues(chips).isNotEmpty()
+        val bottom = layout == ComplicationLayout.BOTTOM && Chips.withValues(shown).isNotEmpty()
         val views = RemoteViews(context.packageName, if (bottom) R.layout.card_weather_bottom else R.layout.card_weather_right)
 
         views.setTextViewText(R.id.weather_temp, reading.temp)
@@ -86,7 +87,7 @@ object WeatherCard {
             views.setInt(R.id.card_body, "setBackgroundResource", reading.background)
             views.setImageViewResource(R.id.weather_icon, reading.icon)
         }
-        Chips.add(context, views, chips, if (bottom) ComplicationLayout.BOTTOM else ComplicationLayout.RIGHT, aod)
+        Chips.add(context, views, shown, if (bottom) ComplicationLayout.BOTTOM else ComplicationLayout.RIGHT, aod)
         Style.holdBar(views, pinned = true, aod = aod)
 
         val tap = weatherIntent(context)

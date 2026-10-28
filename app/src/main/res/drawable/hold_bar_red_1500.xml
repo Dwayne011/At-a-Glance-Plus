@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Hold bar, red, for a 1500 ms touch-and-hold delay -->
+<!-- Hold ring, red, for a 1500 ms touch-and-hold delay -->
 <animated-selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/hold_pressed"

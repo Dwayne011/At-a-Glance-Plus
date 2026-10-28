@@ -40,14 +40,25 @@ data class LiveNow(
     val open: PendingIntent?,
 )
 
+/** How the directions are travelling, when their wording says so. */
+enum class TravelMode { TRANSIT, BUS, WALK, BIKE, CAR }
+
 /** Turn-by-turn navigation from a maps app's notification. */
 data class NavNow(
     val key: String,
     val distance: String?,
     val instruction: String,
     val detail: String,
+    /** The maps app's own picture (turn arrow, or the line's roundel on public transport). */
     val icon: Icon?,
     val open: PendingIntent?,
+    /** Trip progress out of 1000, from the app's Live Update progress, or null. */
+    val progress: Int?,
+    /** Colour of the route section the trip is on now (a line's colour), or null. */
+    val progressColour: Int?,
+    val mode: TravelMode?,
+    /** The platform, track or stand to go to ("Platform 3"), when the directions mention one. */
+    val platform: String?,
 )
 
 /** A message that just arrived, for the message toast. */
@@ -82,6 +93,8 @@ object NotificationHub {
     /** Latest message time seen per notification, so an update without a new message is not a new message. */
     private val lastMessageAt = HashMap<String, Long>()
 
+    private const val MAPS = "com.google.android.apps.maps"
+
     private val TIME_TEXT = Regex("""^\d{1,2}(:\d{2}){1,2}$""")
     private val DISTANCE = Regex("""^(\d+([.,]\d+)?\s?(m|km|mi|ft|yd|metres|meters|miles|yards|feet))\b\s*[·,-]?\s*(.*)$""", RegexOption.IGNORE_CASE)
 
@@ -90,7 +103,11 @@ object NotificationHub {
         val usable = active.filter { it.packageName != own && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
 
         val timer = usable.firstNotNullOfOrNull { timerFrom(it) }
-        val nav = usable.firstOrNull { it.notification.category == Notification.CATEGORY_NAVIGATION && it.isOngoing }?.let { navFrom(context, it) }
+        // Navigation: marked as such, or any ongoing Google Maps notification (public-transport
+        // trips may be posted as a plain Live Update).
+        val nav = usable.firstOrNull {
+            it.isOngoing && (it.notification.category == Notification.CATEGORY_NAVIGATION || it.packageName == MAPS)
+        }?.let { navFrom(context, it) }
         val live = usable
             .filter { it.key != timer?.key && it.key != nav?.key && isLiveUpdate(it.notification) }
             .sortedByDescending { it.postTime }
@@ -186,14 +203,68 @@ object NotificationHub {
             match != null -> Triple(match.groupValues[1], text, listOf(sub))
             else -> Triple(null, title, listOf(text, sub))
         }
+        val max = n.extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0)
+        val progress = n.extras.getInt(Notification.EXTRA_PROGRESS, 0).coerceIn(0, maxOf(max, 0))
+        val words = listOf(title, text, sub) + listOf(
+            Notification.EXTRA_BIG_TEXT, Notification.EXTRA_INFO_TEXT, Notification.EXTRA_SUMMARY_TEXT, Notification.EXTRA_TITLE_BIG,
+        ).map { n.extras.getCharSequence(it)?.toString().orEmpty() } +
+            n.extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES).orEmpty().map { it.toString() }
         return NavNow(
             key = sbn.key,
-            distance = distance,
+            distance = distance ?: n.shortCriticalText?.takeIf { it.isNotBlank() },
             instruction = instruction.ifEmpty { title },
             detail = detail.filter { it.isNotEmpty() }.joinToString(" · "),
             icon = shrink(context, n.getLargeIcon()),
             open = n.contentIntent,
+            progress = if (max > 0 && !n.extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE)) (1000L * progress / max).toInt() else null,
+            progressColour = segmentColour(context, n, progress),
+            mode = travelMode(words),
+            platform = platform(words),
         )
+    }
+
+    private val PLATFORM = Regex("""\b(platform|plat\.?|track|stand|bay)\s*([A-Za-z]?\d{1,3}[A-Za-z]?|[A-Z])\b""", RegexOption.IGNORE_CASE)
+
+    /** "Platform 3" from wording like "Platform 3", "Plat. 3", "Track 4" or "Stand B". */
+    private fun platform(texts: List<String>): String? {
+        val match = texts.firstNotNullOfOrNull { PLATFORM.find(it) } ?: return null
+        val word = match.groupValues[1].lowercase().trimEnd('.')
+        val label = when (word) {
+            "plat" -> "Platform"
+            else -> word.replaceFirstChar { it.uppercase() }
+        }
+        return "$label ${match.groupValues[2].uppercase()}"
+    }
+
+    /**
+     * The colour of the route section the trip is in, from a progress-style notification's
+     * segments (Maps colours each public-transport leg with its line's colour).
+     */
+    private fun segmentColour(context: Context, n: Notification, progress: Int): Int? = runCatching {
+        val style = Notification.Builder.recoverBuilder(context, n).style as? Notification.ProgressStyle ?: return null
+        var end = 0
+        style.progressSegments.firstOrNull { segment ->
+            end += segment.length
+            progress <= end
+        }?.color?.takeIf { it != 0 }?.let { it or 0xFF000000.toInt() }
+    }.getOrNull()
+
+    /**
+     * The travel mode from the directions' wording, title first ("Ride to…", "Walk to…").
+     * Maps does not say the mode outright, so with no clear word there is no badge.
+     */
+    private fun travelMode(texts: List<String>): TravelMode? {
+        val rules = listOf(
+            TravelMode.WALK to Regex("""\b(walk|walking|on foot)\b"""),
+            TravelMode.BIKE to Regex("""\b(cycle|cycling|bike|biking)\b"""),
+            TravelMode.BUS to Regex("""\b(bus|coach)\b"""),
+            TravelMode.TRANSIT to Regex("""\b(ride|board|train|rail|tube|underground|subway|metro|tram|platform|stops?)\b"""),
+            TravelMode.CAR to Regex("""\b(drive|driving)\b"""),
+        )
+        texts.map { it.lowercase() }.forEach { text ->
+            rules.firstOrNull { (_, regex) -> regex.containsMatchIn(text) }?.let { return it.first }
+        }
+        return null
     }
 
     /** A new incoming message: a conversation notification whose latest message is newer than before, not sent by the user. */

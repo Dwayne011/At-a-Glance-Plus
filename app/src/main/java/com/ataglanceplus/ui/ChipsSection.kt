@@ -159,19 +159,28 @@ internal fun ChipsSection() {
     val layout = remember(version) { Prefs.complicationLayout(context) }
 
     fun add(spec: ChipSpec) {
-        if (chips.none { it.key == spec.key } && chips.size < Chips.MAX_BOTTOM) Prefs.setChips(context, chips + spec)
+        if (chips.none { it.key == spec.key } && chips.size < Chips.MAX_CHOSEN) Prefs.setChips(context, chips + spec)
     }
 
+    // The Gmail chip whose account is being changed; null when adding a new Gmail chip.
+    var replacing by remember { mutableStateOf<ChipSpec?>(null) }
     val accountChooser = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val old = replacing
+        replacing = null
         result.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)?.let { account ->
-            add(ChipSpec(Complication.GMAIL, account))
+            val spec = ChipSpec(Complication.GMAIL, account)
+            if (old != null) {
+                Prefs.setChips(context, chips.map { if (it.key == old.key) spec else it }.distinctBy { it.key })
+            } else {
+                add(spec)
+            }
             if (!GmailSource.hasPermission(context)) permissions.launch(arrayOf(GmailSource.PERMISSION))
         }
     }
 
     Section("Complication chips") {
         Text(
-            "Chips on the weather card, in the order added. The right column shows the first 2 with something to report, the bottom strip the first 4. A chip with nothing to report is hidden.",
+            "Pick as many chips as you like, in order of importance. The card shows the first ones that have something to report right now: 2 in the right column, 4 in the bottom strip. When one has nothing to report (no unread mail, say), the next one takes its place.",
             style = MaterialTheme.typography.bodySmall
         )
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -204,7 +213,7 @@ internal fun ChipsSection() {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(chipTitle(context, spec), style = MaterialTheme.typography.labelLarge)
                 val opens = appLabel(context, Prefs.chipApp(context, spec.key)) ?: "its usual app"
-                val status = (if (!spec.configured) "Not set up: remove it and add it again" else null)
+                val status = (if (!spec.configured) "Choose the Gmail account to count" else null)
                     ?: values[spec.key]?.text?.let { "Now: $it" }
                     ?: missing.firstOrNull()?.text
                     ?: "Nothing to report right now"
@@ -231,7 +240,19 @@ internal fun ChipsSection() {
                             }
                         }) { Text(if (need == Need.DATE) "Choose date" else "Grant") }
                     }
+                    if (spec.kind == Complication.GMAIL && !spec.configured) {
+                        Button(onClick = {
+                            replacing = spec
+                            accountChooser.launch(chooseGoogleAccount(spec.arg))
+                        }) { Text("Choose account") }
+                    }
                     OutlinedButton(onClick = { settingsFor = spec }) { Text("Settings") }
+                    val index = chips.indexOfFirst { it.key == spec.key }
+                    if (index > 0) {
+                        TextButton(onClick = {
+                            Prefs.setChips(context, chips.toMutableList().apply { add(index - 1, removeAt(index)) })
+                        }) { Text("Move up") }
+                    }
                     TextButton(onClick = { Prefs.setChips(context, chips.filter { it.key != spec.key }) }) { Text("Remove") }
                 }
                 // Android blocks notification and usage access for apps installed outside the Play
@@ -257,17 +278,21 @@ internal fun ChipsSection() {
         }
 
         HorizontalDivider()
-        Text(if (chips.size < Chips.MAX_BOTTOM) "Add a chip" else "Remove a chip to add another (4 at most)", style = MaterialTheme.typography.labelLarge)
-        if (chips.size < Chips.MAX_BOTTOM) {
+        Text(
+            if (chips.size < Chips.MAX_CHOSEN) "Add a chip" else "Remove a chip to add another (${Chips.MAX_CHOSEN} at most)",
+            style = MaterialTheme.typography.labelLarge
+        )
+        if (chips.size < Chips.MAX_CHOSEN) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Complication.entries.filter { it.pickable }.forEach { kind ->
                     val already = !kind.needsArg && chips.any { it.kind == kind }
                     if (!already) {
                         AssistChip(onClick = {
                             when (kind) {
-                                Complication.GMAIL -> accountChooser.launch(
-                                    AccountManager.newChooseAccountIntent(null, null, arrayOf("com.google"), null, null, null, null)
-                                )
+                                Complication.GMAIL -> {
+                                    replacing = null
+                                    accountChooser.launch(chooseGoogleAccount(null))
+                                }
                                 Complication.APP_NOTIFICATIONS -> picking = { pkg -> add(ChipSpec(Complication.APP_NOTIFICATIONS, pkg)) }
                                 else -> add(ChipSpec(kind))
                             }
@@ -279,7 +304,16 @@ internal fun ChipsSection() {
     }
 
     settingsFor?.let { spec ->
-        ChipSettingsDialog(spec, onPickApp = { onPicked -> picking = onPicked }, onDismiss = { settingsFor = null })
+        ChipSettingsDialog(
+            spec,
+            onPickApp = { onPicked -> picking = onPicked },
+            onChooseAccount = {
+                settingsFor = null
+                replacing = spec
+                accountChooser.launch(chooseGoogleAccount(spec.arg))
+            },
+            onDismiss = { settingsFor = null }
+        )
     }
     picking?.let { onPicked ->
         AppPickerDialog(onPick = { pkg -> onPicked(pkg); picking = null }, onDismiss = { picking = null })
@@ -287,7 +321,7 @@ internal fun ChipsSection() {
 }
 
 @Composable
-private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -> Unit, onDismiss: () -> Unit) {
+private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -> Unit, onChooseAccount: () -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var opens by remember { mutableStateOf(Prefs.chipApp(context, spec.key)) }
     var labels by remember { mutableStateOf<List<GmailSource.Label>?>(null) }
@@ -303,6 +337,13 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
         title = { Text(chipTitle(context, spec)) },
         text = {
             LazyColumn(modifier = Modifier.heightIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (spec.kind == Complication.GMAIL) {
+                    item {
+                        Text("Gmail account", style = MaterialTheme.typography.labelLarge)
+                        Text(spec.arg ?: "None chosen yet")
+                        OutlinedButton(onClick = onChooseAccount) { Text("Choose account") }
+                    }
+                }
                 item {
                     Text("When tapped, opens", style = MaterialTheme.typography.labelLarge)
                     Text(appLabel(context, opens) ?: "Its usual app or screen")
@@ -312,7 +353,7 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                                 Prefs.setChipApp(context, spec.key, pkg)
                                 opens = pkg
                             }
-                        }) { Text("Choose app") }
+                        }) { Text("Choose app to open") }
                         if (opens != null) {
                             TextButton(onClick = {
                                 Prefs.setChipApp(context, spec.key, null)
@@ -388,3 +429,10 @@ private fun AppPickerDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
         }
     )
 }
+
+/** Android's own account picker, listing only Google accounts (the ones Gmail uses). */
+private fun chooseGoogleAccount(current: String?): Intent =
+    AccountManager.newChooseAccountIntent(
+        current?.let { android.accounts.Account(it, "com.google") }, null, arrayOf("com.google"),
+        "Count unread mail in this account", null, null, null
+    )

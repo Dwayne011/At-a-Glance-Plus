@@ -25,6 +25,14 @@ object Prefs {
     private const val KEY_CHIP_REFRESH = "chip_refresh"
     private const val KEY_AOD_PREVIEW = "aod_preview"
     private const val KEY_MEDIA_WAVE = "media_wave"
+    private const val KEY_FIN_TICKERS = "finance_tickers"
+    private const val KEY_FIN_REFRESH = "finance_refresh_minutes"
+    private const val KEY_FIN_MOVES = "finance_show_moves"
+    private const val KEY_FIN_THRESHOLD = "finance_move_threshold"
+    private const val KEY_FIN_PERIODIC = "finance_show_periodic"
+    private const val KEY_FIN_PERIOD_HOURS = "finance_period_hours"
+    private const val KEY_FIN_WINDOWS_ON = "finance_show_windows"
+    private const val KEY_FIN_WINDOWS = "finance_windows"
 
     /** Keys that only matter to the wireless-debugging screens; changing them needs no redraw. */
     val NON_CARD_KEYS = setOf(KEY_PAIRED, KEY_ACTIVATE_ON_BOOT)
@@ -159,4 +167,68 @@ object Prefs {
     fun setMediaWave(context: Context, wave: Boolean) {
         get(context).edit().putBoolean(KEY_MEDIA_WAVE, wave).apply()
     }
+
+    // --- Finance card ---
+
+    /** Tickers in the user's order (Yahoo Finance symbols, e.g. AAPL, VOD.L). */
+    fun financeTickers(context: Context): List<String> =
+        get(context).getString(KEY_FIN_TICKERS, "").orEmpty().split(',').filter { it.isNotBlank() }
+
+    fun setFinanceTickers(context: Context, tickers: List<String>) {
+        get(context).edit().putString(KEY_FIN_TICKERS, tickers.joinToString(",")).apply()
+    }
+
+    /** How often prices are fetched. */
+    fun financeRefreshMinutes(context: Context): Int = get(context).getInt(KEY_FIN_REFRESH, 15)
+
+    fun setFinanceRefreshMinutes(context: Context, minutes: Int) {
+        get(context).edit().putInt(KEY_FIN_REFRESH, minutes).apply()
+    }
+
+    /** Show the card when a stock has moved at least [financeThreshold] percent today. On to start with. */
+    fun financeOnMoves(context: Context): Boolean = get(context).getBoolean(KEY_FIN_MOVES, true)
+
+    fun setFinanceOnMoves(context: Context, on: Boolean) {
+        get(context).edit().putBoolean(KEY_FIN_MOVES, on).apply()
+    }
+
+    fun financeThreshold(context: Context): Int = get(context).getInt(KEY_FIN_THRESHOLD, 3)
+
+    fun setFinanceThreshold(context: Context, percent: Int) {
+        get(context).edit().putInt(KEY_FIN_THRESHOLD, percent).apply()
+    }
+
+    /** Show the card for 10 minutes every [financePeriodHours] hours. */
+    fun financePeriodic(context: Context): Boolean = get(context).getBoolean(KEY_FIN_PERIODIC, false)
+
+    fun setFinancePeriodic(context: Context, on: Boolean) {
+        get(context).edit().putBoolean(KEY_FIN_PERIODIC, on).apply()
+    }
+
+    fun financePeriodHours(context: Context): Int = get(context).getInt(KEY_FIN_PERIOD_HOURS, 2)
+
+    fun setFinancePeriodHours(context: Context, hours: Int) {
+        get(context).edit().putInt(KEY_FIN_PERIOD_HOURS, hours).apply()
+    }
+
+    /** Show the card during the user's time windows. */
+    fun financeInWindows(context: Context): Boolean = get(context).getBoolean(KEY_FIN_WINDOWS_ON, false)
+
+    fun setFinanceInWindows(context: Context, on: Boolean) {
+        get(context).edit().putBoolean(KEY_FIN_WINDOWS_ON, on).apply()
+    }
+
+    /** Time windows as minutes of the day, start to end (an end before the start runs past midnight). */
+    fun financeWindows(context: Context): List<Pair<Int, Int>> =
+        get(context).getString(KEY_FIN_WINDOWS, "").orEmpty().split(',').mapNotNull { part ->
+            val (a, b) = part.split('-').takeIf { it.size == 2 } ?: return@mapNotNull null
+            (a.toIntOrNull() ?: return@mapNotNull null) to (b.toIntOrNull() ?: return@mapNotNull null)
+        }
+
+    fun setFinanceWindows(context: Context, windows: List<Pair<Int, Int>>) {
+        get(context).edit().putString(KEY_FIN_WINDOWS, windows.joinToString(",") { "${it.first}-${it.second}" }).apply()
+    }
+
+    /** Settings that change which prices are fetched. */
+    fun isFinanceFetchKey(key: String?): Boolean = key == KEY_FIN_TICKERS || key == KEY_FIN_REFRESH
 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
@@ -40,6 +41,9 @@ import com.ataglanceplus.Prefs
 import com.ataglanceplus.cards.CardType
 import com.ataglanceplus.complications.NotificationCounter
 import com.ataglanceplus.live.CalendarSource
+import com.ataglanceplus.live.FinanceSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.ataglanceplus.wadb.Activator
 import com.ataglanceplus.wadb.Wadb
 import kotlinx.coroutines.launch
@@ -141,6 +145,9 @@ internal fun CardPreviewSection(maxCards: Int) {
                     Prefs.setCalendarAllDay(context, it)
                 }
             }
+            if (type == CardType.FINANCE && Prefs.cardEnabled(context, type)) {
+                FinanceSettings()
+            }
             if (type == CardType.MEDIA && Prefs.cardEnabled(context, type)) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     val wave = Prefs.mediaWave(context)
@@ -173,5 +180,103 @@ private fun SwitchRow(title: String, detail: String, checked: Boolean, onChange:
             Text(detail, style = MaterialTheme.typography.bodySmall)
         }
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/** Tickers, how often prices refresh, and when the finance card shows. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FinanceSettings() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val status by FinanceSource.status.collectAsStateWithLifecycle()
+    val quotes by FinanceSource.quotes.collectAsStateWithLifecycle()
+    var entry by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+    val tickers = Prefs.financeTickers(context)
+
+    Text("Stocks (Yahoo Finance symbols, e.g. AAPL, TSLA, VOD.L for London)", style = MaterialTheme.typography.bodySmall)
+    tickers.forEach { ticker ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val quote = quotes.firstOrNull { it.symbol.equals(ticker, ignoreCase = true) }
+            Text(
+                ticker + (quote?.let { String.format(java.util.Locale.getDefault(), " · %.2f (%+.2f%%)", it.price, it.changePercent) } ?: ""),
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = { Prefs.setFinanceTickers(context, tickers - ticker) }) { Text("Remove") }
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = entry, onValueChange = { entry = it.uppercase().trim() }, singleLine = true,
+            label = { Text("Ticker") }, modifier = Modifier.weight(1f)
+        )
+        Button(enabled = entry.isNotEmpty(), onClick = {
+            val symbol = entry
+            message = "Checking $symbol…"
+            scope.launch {
+                val quote = withContext(Dispatchers.IO) { FinanceSource.fetch(symbol) }
+                if (quote == null) {
+                    message = "$symbol was not found, or the price feed did not answer."
+                } else {
+                    if (tickers.none { it.equals(quote.symbol, ignoreCase = true) }) Prefs.setFinanceTickers(context, tickers + quote.symbol)
+                    message = "Added ${quote.symbol} (${quote.name})."
+                    entry = ""
+                }
+            }
+        }) { Text("Add") }
+    }
+    if (message.isNotEmpty()) Text(message, style = MaterialTheme.typography.bodySmall)
+    if (status.isNotEmpty()) Text("Prices: $status", style = MaterialTheme.typography.bodySmall)
+
+    Text("Refresh prices every", style = MaterialTheme.typography.bodySmall)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val refresh = Prefs.financeRefreshMinutes(context)
+        listOf(5, 15, 30, 60).forEach { minutes ->
+            FilterChip(selected = refresh == minutes, onClick = { Prefs.setFinanceRefreshMinutes(context, minutes) },
+                label = { Text(if (minutes < 60) "$minutes min" else "1 h") })
+        }
+    }
+
+    Text("Show the card", style = MaterialTheme.typography.labelLarge)
+    SwitchRow("On big moves", "When a stock has moved this much today.", Prefs.financeOnMoves(context)) { Prefs.setFinanceOnMoves(context, it) }
+    if (Prefs.financeOnMoves(context)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val threshold = Prefs.financeThreshold(context)
+            listOf(1, 2, 3, 5, 10).forEach { percent ->
+                FilterChip(selected = threshold == percent, onClick = { Prefs.setFinanceThreshold(context, percent) }, label = { Text("$percent%") })
+            }
+        }
+    }
+    SwitchRow("Every few hours", "For 10 minutes at the start of each period.", Prefs.financePeriodic(context)) { Prefs.setFinancePeriodic(context, it) }
+    if (Prefs.financePeriodic(context)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val hours = Prefs.financePeriodHours(context)
+            listOf(1, 2, 3, 4, 6).forEach { h ->
+                FilterChip(selected = hours == h, onClick = { Prefs.setFinancePeriodHours(context, h) }, label = { Text("Every $h h") })
+            }
+        }
+    }
+    SwitchRow("During time windows", "For example 08:00 to 09:00, and around the market close.", Prefs.financeInWindows(context)) { Prefs.setFinanceInWindows(context, it) }
+    if (Prefs.financeInWindows(context)) {
+        val windows = Prefs.financeWindows(context)
+        fun hm(m: Int) = String.format(java.util.Locale.ROOT, "%02d:%02d", m / 60, m % 60)
+        windows.forEach { window ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${hm(window.first)} – ${hm(window.second)}", modifier = Modifier.weight(1f))
+                TextButton(onClick = { Prefs.setFinanceWindows(context, windows - window) }) { Text("Remove") }
+            }
+        }
+        OutlinedButton(onClick = {
+            // Start time, then end time.
+            android.app.TimePickerDialog(context, { _, sh, sm ->
+                android.app.TimePickerDialog(context, { _, eh, em ->
+                    Prefs.setFinanceWindows(context, windows + ((sh * 60 + sm) to (eh * 60 + em)))
+                }, (sh + 1) % 24, sm, true).apply { setTitle("Until") }.show()
+            }, 8, 0, true).apply { setTitle("From") }.show()
+        }) { Text("Add a time window") }
+    }
+    if (!Prefs.financeOnMoves(context) && !Prefs.financePeriodic(context) && !Prefs.financeInWindows(context)) {
+        Text("Turn on at least one of these, or the card never shows.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
     }
 }

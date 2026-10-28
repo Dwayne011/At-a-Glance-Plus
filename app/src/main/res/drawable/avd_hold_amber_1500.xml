@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Hold bar fill, amber, 1400 ms -->
+<!-- Hold ring trace, amber, 100 ms delay then 1300 ms -->
 <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
-    android:drawable="@drawable/hold_bar_amber_full">
-    <target android:name="bar">
+    android:drawable="@drawable/hold_bar_amber_zero">
+    <target android:name="ring">
         <aapt:attr name="android:animation">
             <objectAnimator
-                android:duration="1400"
+                android:duration="1300"
                 android:interpolator="@android:interpolator/linear"
                 android:propertyName="trimPathEnd"
+                android:startOffset="100"
                 android:valueFrom="0"
                 android:valueTo="1"
                 android:valueType="floatType" />

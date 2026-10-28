@@ -22,6 +22,10 @@ import com.ataglanceplus.live.LiveNow
 import com.ataglanceplus.live.MediaNow
 import com.ataglanceplus.live.NavNow
 import com.ataglanceplus.live.TimerNow
+import com.ataglanceplus.live.TravelMode
+import com.ataglanceplus.live.FinanceRules
+import com.ataglanceplus.live.FinanceSource
+import com.ataglanceplus.live.Quote
 import com.ataglanceplus.ui.UnlockGateActivity
 import java.util.Date
 import java.util.Locale
@@ -34,6 +38,7 @@ enum class CardType(val id: String, val label: String, val detail: String) {
     MEDIA("media", "Media", "Whatever is playing, with controls; stays 5 minutes after pausing"),
     CALENDAR("calendar", "Calendar", "Your next event, shortly before it starts and while it is on"),
     MESSAGES("messages", "Message pop-up", "New messages show for 4.5 seconds in place of the first card"),
+    FINANCE("finance", "Finance", "Your stocks, when the rules below say so; one page each, taking turns"),
 }
 
 /**
@@ -179,7 +184,7 @@ object LiveCards {
 
     // --- 8.4 Calendar ---
 
-    fun calendar(context: Context, aod: Boolean, event: CalendarNow): SmartspaceTarget {
+    fun calendar(context: Context, aod: Boolean, event: CalendarNow, given: List<ChipSpec>? = null): SmartspaceTarget {
         val key = event.instanceKey
         val now = System.currentTimeMillis()
         val time = { t: Long -> DateFormat.getTimeFormat(context).format(Date(t)) }
@@ -195,7 +200,7 @@ object LiveCards {
             event.location.ifEmpty { null },
         ).joinToString(" · ")
         val layout = Prefs.complicationLayout(context)
-        val chips = if (layout == ComplicationLayout.NONE) emptyList() else listOf(ChipSpec(Complication.STEPS), ChipSpec(Complication.BATTERY))
+        val chips = if (layout == ComplicationLayout.NONE) emptyList() else given ?: listOf(ChipSpec(Complication.STEPS), ChipSpec(Complication.BATTERY))
         val bottom = layout == ComplicationLayout.BOTTOM && Chips.withValues(chips).isNotEmpty()
         val views = RemoteViews(context.packageName, if (bottom) R.layout.card_calendar_bottom else R.layout.card_calendar)
         views.setTextViewText(R.id.calendar_title, event.title)
@@ -215,7 +220,7 @@ object LiveCards {
 
     // --- 8.5 Timer and next alarm ---
 
-    fun timer(context: Context, aod: Boolean, timer: TimerNow): SmartspaceTarget {
+    fun timer(context: Context, aod: Boolean, timer: TimerNow, given: List<ChipSpec>? = null): SmartspaceTarget {
         val key = "timer:${timer.key}"
         val views = RemoteViews(context.packageName, R.layout.card_timer)
         val running = timer.endsAt != null
@@ -241,7 +246,7 @@ object LiveCards {
             views.setViewVisibility(R.id.timer_button, View.GONE)
         }
         if (aod) Style.aodBody(views, R.id.timer_chrono, R.id.timer_fixed, R.id.timer_title, R.id.timer_detail)
-        timerChips(context, views, aod)
+        timerChips(context, views, aod, given)
         val tap = gate(context, timer.open, null, key)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
@@ -254,7 +259,7 @@ object LiveCards {
         return next.takeIf { it.triggerTime - System.currentTimeMillis() in 0..ALARM_WINDOW_MS }
     }
 
-    fun alarm(context: Context, aod: Boolean, alarm: AlarmManager.AlarmClockInfo): SmartspaceTarget {
+    fun alarm(context: Context, aod: Boolean, alarm: AlarmManager.AlarmClockInfo, given: List<ChipSpec>? = null): SmartspaceTarget {
         val key = "alarm:${alarm.triggerTime}"
         val views = RemoteViews(context.packageName, R.layout.card_timer)
         val readout = DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", Date(alarm.triggerTime)).toString()
@@ -266,7 +271,7 @@ object LiveCards {
         views.setTextViewText(R.id.timer_title, title)
         views.setTextViewText(R.id.timer_detail, detail)
         if (aod) Style.aodBody(views, R.id.timer_fixed, R.id.timer_title, R.id.timer_detail)
-        timerChips(context, views, aod)
+        timerChips(context, views, aod, given)
         val tap = alarm.showIntent?.let { gate(context, it, null, key) }
             ?: Style.gated(context, Intent(AlarmClock.ACTION_SHOW_ALARMS), REQUEST_BASE + (key.hashCode() and 0xFFFF))
         Style.holdBar(views, pinned = false, aod = aod)
@@ -280,8 +285,8 @@ object LiveCards {
         return DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", Date(next.triggerTime)).toString()
     }
 
-    private fun timerChips(context: Context, views: RemoteViews, aod: Boolean) {
-        val chips = if (Prefs.complicationLayout(context) == ComplicationLayout.RIGHT) listOf(ChipSpec(Complication.ALARM), ChipSpec(Complication.SLEEP)) else emptyList()
+    private fun timerChips(context: Context, views: RemoteViews, aod: Boolean, given: List<ChipSpec>?) {
+        val chips = if (Prefs.complicationLayout(context) == ComplicationLayout.RIGHT) given ?: listOf(ChipSpec(Complication.ALARM), ChipSpec(Complication.SLEEP)) else emptyList()
         Chips.add(context, views, chips, ComplicationLayout.RIGHT, aod)
     }
 
@@ -293,27 +298,166 @@ object LiveCards {
 
     // --- 8.7 Navigation ---
 
-    fun nav(context: Context, aod: Boolean, nav: NavNow): SmartspaceTarget {
+    fun nav(context: Context, aod: Boolean, nav: NavNow, given: List<ChipSpec>? = null): SmartspaceTarget {
         val key = "nav:${nav.key}"
         val views = RemoteViews(context.packageName, R.layout.card_navigation)
-        if (nav.distance != null) views.setTextViewText(R.id.nav_distance, nav.distance) else views.setViewVisibility(R.id.nav_distance, View.GONE)
+        // The platform matters most on public transport, so it takes the bold green spot and the
+        // distance moves to the second line.
+        val lead = nav.platform ?: nav.distance
+        val detail = listOfNotNull(nav.distance.takeIf { nav.platform != null }, nav.detail.ifEmpty { null }).joinToString(" · ")
+        if (lead != null) views.setTextViewText(R.id.nav_distance, lead) else views.setViewVisibility(R.id.nav_distance, View.GONE)
         views.setTextViewText(R.id.nav_instruction, nav.instruction)
-        views.setTextViewText(R.id.nav_detail, nav.detail)
-        // The maps app's own turn arrow when it gives one, tinted like the design's arrow.
-        if (nav.icon != null) views.setImageViewIcon(R.id.nav_icon, nav.icon)
+        views.setTextViewText(R.id.nav_detail, detail)
+        // The maps app's own picture (turn arrow, or a line's roundel) in its own colours;
+        // otherwise the design's arrow in the card's green.
+        if (nav.icon != null) {
+            views.setImageViewIcon(R.id.nav_icon, nav.icon)
+        } else {
+            views.setInt(R.id.nav_icon, "setColorFilter", NAV_GREEN)
+        }
+        nav.mode?.let { mode ->
+            views.setViewVisibility(R.id.nav_mode, View.VISIBLE)
+            views.setImageViewResource(R.id.nav_mode, modeIcon(mode, aod))
+            views.setInt(R.id.nav_mode, "setColorFilter", if (aod) Style.AOD_TEXT else NAV_GREEN)
+        }
+        nav.progress?.let { progress ->
+            views.setViewVisibility(R.id.nav_progress, View.VISIBLE)
+            views.setProgressBar(R.id.nav_progress, 1000, progress.coerceIn(0, 1000), false)
+            val colour = if (aod) Style.AOD_TEXT else nav.progressColour ?: NAV_GREEN
+            views.setColorStateList(R.id.nav_progress, "setProgressTintList", ColorStateList.valueOf(colour))
+        }
         if (aod) {
             Style.aodBody(views, R.id.nav_distance, R.id.nav_instruction, R.id.nav_detail)
             views.setInt(R.id.nav_box, "setBackgroundResource", R.drawable.aod_outline_r12)
             if (nav.icon == null) views.setImageViewResource(R.id.nav_icon, R.drawable.ic_nav_turn_left_aod)
             views.setInt(R.id.nav_icon, "setColorFilter", Style.AOD_TEXT)
         }
-        val chips = if (Prefs.complicationLayout(context) == ComplicationLayout.NONE) emptyList() else listOf(ChipSpec(Complication.BATTERY))
+        val chips = if (Prefs.complicationLayout(context) == ComplicationLayout.NONE) emptyList() else given ?: listOf(ChipSpec(Complication.BATTERY))
         Chips.add(context, views, chips, ComplicationLayout.RIGHT, aod)
         val tap = gate(context, nav.open, "com.google.android.apps.maps", key)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
-        val title = listOfNotNull(nav.distance, nav.instruction).joinToString(" · ")
-        return Style.target(context, targetId(key), views, title, nav.detail, R.drawable.ic_nav_turn_left, tap, 1.8f)
+        val title = listOfNotNull(lead, nav.instruction).joinToString(" · ")
+        return Style.target(context, targetId(key), views, title, detail, R.drawable.ic_nav_turn_left, tap, 1.8f)
+    }
+
+    private fun modeIcon(mode: TravelMode, aod: Boolean): Int = when (mode) {
+        TravelMode.TRANSIT -> if (aod) R.drawable.ic_mode_train_aod else R.drawable.ic_mode_train
+        TravelMode.BUS -> if (aod) R.drawable.ic_mode_bus_aod else R.drawable.ic_mode_bus
+        TravelMode.BIKE -> if (aod) R.drawable.ic_mode_bike_aod else R.drawable.ic_mode_bike
+        TravelMode.CAR -> if (aod) R.drawable.ic_mode_car_aod else R.drawable.ic_mode_car
+        TravelMode.WALK -> if (aod) R.drawable.ic_nav_walk_aod else R.drawable.ic_nav_walk
+    }
+
+    // --- Extra chips ---
+
+    /** A card of chips that did not fit on the other cards: up to 4 per row, two rows. */
+    fun chips(context: Context, aod: Boolean, specs: List<ChipSpec>, index: Int): SmartspaceTarget {
+        val views = RemoteViews(context.packageName, R.layout.card_chips)
+        if (aod) Style.aodBody(views)
+        Chips.add(context, views, specs.take(Chips.MAX_BOTTOM), ComplicationLayout.BOTTOM, aod)
+        Chips.add(context, views, specs.drop(Chips.MAX_BOTTOM), ComplicationLayout.BOTTOM, aod, R.id.complications_2)
+        val summary = Chips.withValues(specs).joinToString(" · ") { (spec, value) -> "${spec.kind.label} ${value.text}" }
+        val tap = Style.gated(context, Intent(context, com.ataglanceplus.ui.MainActivity::class.java), REQUEST_BASE + 0xFF00 + index)
+        return Style.target(context, "aagp_chips:$index", views, "More", summary, R.drawable.ic_card, tap, 0.5f)
+    }
+
+    // --- Finance ---
+
+    /**
+     * The user's stocks, one page each, taking turns. When shown because of a big move, the
+     * biggest movers come first; otherwise the user's order. Each page opens that stock on
+     * Google Finance.
+     */
+    fun finance(context: Context, aod: Boolean, quotes: List<Quote>, showing: FinanceRules.Showing): SmartspaceTarget {
+        val key = showing.instanceKey
+        val ordered = (if (showing.byMoves) quotes.sortedByDescending { it.moved } else quotes).take(MAX_STOCKS)
+        val views = RemoteViews(context.packageName, R.layout.card_finance)
+        if (aod) Style.aodBody(views)
+        ordered.forEach { quote ->
+            val up = quote.change >= 0
+            val colour = if (aod) Style.AOD_TEXT else if (up) UP else DOWN
+            val page = RemoteViews(context.packageName, R.layout.include_finance_page)
+            page.setTextViewText(R.id.finance_title, "${quote.symbol} · ${quote.name}")
+            page.setTextViewText(R.id.finance_detail, "${price(quote.price, quote.currency)} · ${signed(quote.change)}")
+            page.setTextViewText(R.id.finance_change, signed(quote.changePercent) + "%")
+            page.setTextColor(R.id.finance_change, colour)
+            page.setImageViewResource(R.id.finance_trend, if (up) R.drawable.ic_trend_up else R.drawable.ic_trend_down)
+            page.setInt(R.id.finance_trend, "setColorFilter", colour)
+            if (aod) {
+                page.setInt(R.id.finance_badge, "setBackgroundResource", R.drawable.aod_outline_r12)
+                page.setInt(R.id.finance_change, "setBackgroundResource", R.drawable.aod_outline_r14)
+                page.setTextColor(R.id.finance_title, Style.AOD_TEXT)
+                page.setTextColor(R.id.finance_detail, Style.AOD_TEXT)
+            } else {
+                page.setInt(R.id.finance_badge, "setBackgroundResource", if (up) R.drawable.finance_badge_up else R.drawable.finance_badge_down)
+                page.setInt(R.id.finance_change, "setBackgroundResource", if (up) R.drawable.finance_pill_up else R.drawable.finance_pill_down)
+            }
+            chart(quote, colour)?.let { page.setImageViewBitmap(R.id.finance_chart, it) }
+            if (!aod) {
+                val open = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(FinanceSource.googleFinanceUrl(quote)))
+                page.setOnClickPendingIntent(R.id.finance_page, Style.gated(context, open, REQUEST_BASE + ("stock:" + quote.symbol).hashCode().and(0xFFFF)))
+            }
+            views.addView(R.id.finance_flipper, page)
+        }
+        val first = ordered.first()
+        val tap = Style.gated(
+            context, Intent(Intent.ACTION_VIEW, android.net.Uri.parse(FinanceSource.googleFinanceUrl(first))),
+            REQUEST_BASE + ("stock:" + first.symbol).hashCode().and(0xFFFF)
+        )
+        Style.holdBar(views, pinned = false, aod = aod)
+        views.setOnClickPendingIntent(R.id.card_root, tap)
+        return Style.target(
+            context, targetId(key), views, "${first.symbol} ${price(first.price, first.currency)}",
+            signed(first.changePercent) + "%", R.drawable.ic_trend_up, tap, 1.1f
+        )
+    }
+
+    /** "117.45p" for pence-quoted London prices, otherwise "189.20 USD". */
+    private fun price(value: Double, currency: String): String = when (currency) {
+        "GBp", "GBX" -> String.format(Locale.getDefault(), "%.2fp", value)
+        "" -> String.format(Locale.getDefault(), "%.2f", value)
+        else -> String.format(Locale.getDefault(), "%.2f %s", value, currency)
+    }
+
+    private fun signed(value: Double): String = String.format(Locale.getDefault(), "%+.2f", value)
+
+    /**
+     * Today's prices as a small line chart (128 x 44 px, drawn at 2x for the 64 x 22 dp slot), with
+     * yesterday's close as a faint line for reference.
+     */
+    private fun chart(quote: Quote, colour: Int): android.graphics.Bitmap? {
+        val points = quote.points
+        if (points.size < 2) return null
+        val w = 128f
+        val h = 44f
+        val pad = 3f
+        val low = minOf(points.min(), quote.previousClose)
+        val high = maxOf(points.max(), quote.previousClose)
+        val span = (high - low).takeIf { it > 0 } ?: 1.0
+        fun y(v: Double) = (h - pad - (v - low) / span * (h - 2 * pad)).toFloat()
+        val bitmap = android.graphics.Bitmap.createBitmap(w.toInt(), h.toInt(), android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        val base = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x40FFFFFF
+            strokeWidth = 1.5f
+            pathEffect = android.graphics.DashPathEffect(floatArrayOf(4f, 4f), 0f)
+        }
+        canvas.drawLine(0f, y(quote.previousClose), w, y(quote.previousClose), base)
+        val path = android.graphics.Path()
+        points.forEachIndexed { i, v ->
+            val x = pad + i * (w - 2 * pad) / (points.size - 1)
+            if (i == 0) path.moveTo(x, y(v)) else path.lineTo(x, y(v))
+        }
+        val line = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = colour
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 3f
+            strokeJoin = android.graphics.Paint.Join.ROUND
+            strokeCap = android.graphics.Paint.Cap.ROUND
+        }
+        canvas.drawPath(path, line)
+        return bitmap
     }
 
     // --- 6.1 Incoming message toast ---
@@ -356,5 +500,9 @@ object LiveCards {
 
     private const val REQUEST_BASE = 0x20000
     private const val TEAL = 0xFF2DD4BF.toInt()
+    private const val NAV_GREEN = 0xFF6EE7B7.toInt()
+    private const val UP = 0xFF34D399.toInt()
+    private const val DOWN = 0xFFF87171.toInt()
+    private const val MAX_STOCKS = 6
     private const val ALARM_WINDOW_MS = 12 * 60 * 60 * 1000L
 }

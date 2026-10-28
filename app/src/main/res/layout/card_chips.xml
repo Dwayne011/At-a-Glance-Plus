@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Extra chips: appears only when more chips have something to report than the other cards
+    have room for. Two rows of up to 4.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_root"
+    style="@style/AagCardRoot">
+
+    <LinearLayout
+        android:id="@+id/card_body"
+        style="@style/AagCardBody"
+        android:background="@drawable/card_bg_weather_cloudy"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/complications"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:gravity="bottom|start"
+            android:orientation="horizontal" />
+
+        <LinearLayout
+            android:id="@+id/complications_2"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:gravity="bottom|start"
+            android:orientation="horizontal" />
+    </LinearLayout>
+</FrameLayout>

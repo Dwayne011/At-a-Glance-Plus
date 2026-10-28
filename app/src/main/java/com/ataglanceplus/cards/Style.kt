@@ -32,8 +32,9 @@ object Style {
     }
 
     /**
-     * Picks the hold bar for the user's touch-and-hold delay (Accessibility settings), so it
-     * fills as the launcher's menu opens: amber on the pinned weather card, red elsewhere.
+     * Picks the hold ring for the user's touch-and-hold delay (Accessibility settings), so it
+     * closes round the card as the launcher's menu opens: amber on the pinned weather card, red
+     * elsewhere.
      * Hidden on the always-on display, where nothing can be pressed.
      */
     fun holdBar(views: RemoteViews, pinned: Boolean, aod: Boolean) {

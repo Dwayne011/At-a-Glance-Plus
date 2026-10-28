@@ -114,6 +114,8 @@ object Chips {
 
     const val MAX_RIGHT = 2
     const val MAX_BOTTOM = 4
+    /** Chips the user can pick (no practical limit). Only those with something to report are shown, up to the layout's room. */
+    const val MAX_CHOSEN = 50
 
     /**
      * Adds the chips that have something to show, up to the layout's maximum. A chip with no
@@ -121,19 +123,26 @@ object Chips {
      * as "0" (spec 7.2). With none left, the container is hidden so the card's text gets the
      * whole width (spec 7.1 collapse rule).
      */
-    fun add(context: Context, views: RemoteViews, specs: List<ChipSpec>, layout: ComplicationLayout, aod: Boolean) {
+    fun add(
+        context: Context,
+        views: RemoteViews,
+        specs: List<ChipSpec>,
+        layout: ComplicationLayout,
+        aod: Boolean,
+        container: Int = R.id.complications,
+    ) {
         val max = if (layout == ComplicationLayout.BOTTOM) MAX_BOTTOM else MAX_RIGHT
         val shown = withValues(specs).take(max)
         if (shown.isEmpty() || layout == ComplicationLayout.NONE) {
-            views.setViewVisibility(R.id.complications, View.GONE)
+            views.setViewVisibility(container, View.GONE)
             return
         }
-        views.setViewVisibility(R.id.complications, View.VISIBLE)
+        views.setViewVisibility(container, View.VISIBLE)
         val bottom = layout == ComplicationLayout.BOTTOM
         val chipLayout = if (bottom) R.layout.include_complication_chip_strip else R.layout.include_complication_chip
         shown.forEach { (spec, value) ->
             if (value.parts.size > 1) {
-                views.addView(R.id.complications, flipping(context, spec, value, bottom, aod))
+                views.addView(container, flipping(context, spec, value, bottom, aod))
                 return@forEach
             }
             val icon = value.parts.singleOrNull()?.let { if (aod) it.aodIcon else it.icon }
@@ -155,7 +164,7 @@ object Chips {
                 else -> child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.icon)
             }
             child.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
-            views.addView(R.id.complications, child)
+            views.addView(container, child)
         }
     }
 

@@ -44,12 +44,17 @@ object HealthSource {
                 )
             )
             val steps = result[StepsRecord.COUNT_TOTAL] ?: return null
-            if (steps > 0) ChipValues.Value(NumberFormat.getIntegerInstance().format(steps)) else null
+            if (steps > 0) ChipValues.Value(stepsText(steps)) else null
         } catch (e: Exception) {
             Log.w(TAG, "steps read failed", e)
             null
         }
     }
+
+    /** "6,214", or "12.3k" from 10,000 on, so the chip stays within its 80dp cap (spec 7.2). */
+    fun stepsText(steps: Long): String =
+        if (steps < 10_000) NumberFormat.getIntegerInstance().format(steps)
+        else String.format(java.util.Locale.getDefault(), "%.1fk", steps / 1000.0)
 
     /**
      * Sleep that ended after 18:00 yesterday, minus time marked awake or out of bed.
