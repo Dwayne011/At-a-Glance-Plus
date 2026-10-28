@@ -89,8 +89,8 @@ private fun StatusScreen() {
     val busy by Wadb.busy.collectAsStateWithLifecycle()
     val wadbLog by Wadb.log.collectAsStateWithLifecycle()
     var activateOnBoot by remember { mutableStateOf(Prefs.activateOnBoot(context)) }
-    // Cards first once set up; the App tab (pairing, activation, weather) until then.
-    var tab by rememberSaveable { mutableIntStateOf(if (Prefs.isPaired(context)) 0 else 2) }
+    // The App tab (pairing, activation, weather) comes first.
+    var tab by rememberSaveable { mutableIntStateOf(0) }
 
     // Re-read settings and permissions whenever the screen comes back to the foreground.
     var refresh by remember { mutableIntStateOf(0) }
@@ -137,14 +137,14 @@ private fun StatusScreen() {
             )
 
             PrimaryTabRow(selectedTabIndex = tab) {
-                listOf("Cards", "Chips", "App").forEachIndexed { index, title ->
+                listOf("App", "Cards", "Chips").forEachIndexed { index, title ->
                     Tab(selected = tab == index, onClick = { tab = index }, text = { Text(title) })
                 }
             }
 
             when (tab) {
-                0 -> CardPreviewSection(maxCards = sessions.values.maxOfOrNull { it.targetCount } ?: 0)
-                1 -> ChipsSection()
+                1 -> CardPreviewSection(maxCards = sessions.values.maxOfOrNull { it.targetCount } ?: 0)
+                2 -> ChipsSection()
                 else -> {
                     ProblemsSection()
 

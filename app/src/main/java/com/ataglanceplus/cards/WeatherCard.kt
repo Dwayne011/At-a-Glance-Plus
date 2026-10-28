@@ -126,13 +126,30 @@ object WeatherCard {
         WeatherLayout.NONE -> 6 + 102 + 4
     }
 
+    /** The screen's width in dp, from the display's own pixels. */
+    private fun screenDp(context: Context): Float {
+        val metrics = context.resources.displayMetrics
+        return minOf(metrics.widthPixels, metrics.heightPixels) / metrics.density
+    }
+
     /**
-     * Width of the row under the temperature, in dp. The card is the screen's width less the
-     * launcher's margins (about 21dp each side on Pixel Launcher, measured on a 448dp-wide
-     * screen), less the card's padding (16 + 14) and the right side, with 2dp kept spare.
+     * Width of the row under the temperature, in dp: the card is the screen's width less the
+     * launcher's margins (about 21dp each side on Pixel Launcher), less the card's padding
+     * (16 + 14) and the right side. The launcher does not tell the app the card's real width.
      */
     private fun anchorRowDp(context: Context, layout: WeatherLayout): Float =
-        context.resources.configuration.screenWidthDp - 42f - 30f - rightWidthDp(layout) - 2f
+        screenDp(context) - 42f - 30f - rightWidthDp(layout)
+
+    /** The numbers behind the fitting, for the Chips tab, so a wrong guess can be seen and fixed. */
+    fun fitReport(context: Context): String {
+        val layout = Prefs.weatherLayout(context)
+        val pills = Chips.withValues(Prefs.chips(context).orEmpty()).joinToString(", ") { (spec, value) ->
+            val text = value.parts.maxByOrNull { it.text.length }?.text ?: value.text
+            "${spec.kind.id} ${Chips.ANCHOR.widthDp(context, text).toInt()}"
+        }
+        return "Fitting: screen ${screenDp(context).toInt()}dp, room under the temperature ${anchorRowDp(context, layout).toInt()}dp " +
+            "(${layout.label}), fits ${anchorCount(context, layout, Prefs.chips(context).orEmpty())}. Pill widths: ${pills.ifEmpty { "none" }}."
+    }
 
     /**
      * How many of [specs] (those with something to show, in order) fit under the temperature,
