@@ -52,6 +52,13 @@ data class Weather(
     val condition: WeatherCondition get() = WeatherCondition.fromWmo(code)
     val temperatureText: String get() = "${temperature.roundToInt()}${unit.symbol}"
 
+    /** "H16° L8° · Feels 13°": the same as [detailText], shorter, for the narrow weather layouts. */
+    val compactDetail: String
+        get() = listOfNotNull(
+            listOfNotNull(high?.let { "H${it.roundToInt()}°" }, low?.let { "L${it.roundToInt()}°" }).joinToString(" ").ifEmpty { null },
+            feelsLike?.let { "Feels ${it.roundToInt()}°" }
+        ).joinToString(" · ")
+
     /**
      * Day or night now, from the sun times rather than the reading, which can be up to half an
      * hour old (otherwise the sun icon could stay up after sunset).

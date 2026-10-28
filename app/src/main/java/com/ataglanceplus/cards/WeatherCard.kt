@@ -72,8 +72,10 @@ object WeatherCard {
         )
         views.setTextViewText(R.id.weather_temp, reading.temp)
         views.setTextViewText(R.id.weather_title, title)
-        views.setTextViewText(R.id.weather_detail, reading.detail)
-        views.setViewVisibility(R.id.weather_detail, if (reading.detail.isEmpty()) View.GONE else View.VISIBLE)
+        // Compact high/low/feels so it fits beside the temperature.
+        val detail = weather.compactDetail
+        views.setTextViewText(R.id.weather_detail, detail)
+        views.setViewVisibility(R.id.weather_detail, if (detail.isEmpty()) View.GONE else View.VISIBLE)
         if (aod) {
             Style.aodBody(views, R.id.weather_temp, R.id.weather_title, R.id.weather_detail)
             views.setImageViewResource(R.id.weather_icon, reading.aodIcon)
@@ -83,12 +85,12 @@ object WeatherCard {
         }
         forecast(context, views, weather, if (layout == WeatherLayout.GRID) 2 else 3, aod, layout)
 
-        // Chips: the first with something to report sits under the temperature; the next fill
+        // Chips: the first 2 with something to report sit under the temperature; the next fill
         // the right side in the variant's arrangement.
         val shown = if (layout == WeatherLayout.NONE) emptyList()
         else Chips.withValues(chips ?: Prefs.chips(context) ?: DEFAULTS.getValue(layout)).map { it.first }
-        Chips.addStyled(context, views, shown.take(1), 1, R.layout.include_chip_anchor, aod, R.id.complications_anchor)
-        val rest = shown.drop(1)
+        Chips.addStyled(context, views, shown.take(ANCHORS), ANCHORS, R.layout.include_chip_anchor, aod, R.id.complications_anchor)
+        val rest = shown.drop(ANCHORS)
         when (layout) {
             WeatherLayout.COLUMNS -> Chips.addStyled(context, views, rest, 2, R.layout.include_chip_column, aod, R.id.complications)
             WeatherLayout.SPLIT -> Chips.addStyled(context, views, rest, 2, R.layout.include_chip_wide, aod, R.id.complications)
@@ -105,10 +107,13 @@ object WeatherCard {
         return Style.target(context, TARGET_ID, views, "${reading.temp} ${reading.condition}", reading.detail, reading.icon, tap, 2f)
     }
 
-    /** Chips the weather card has room for in each variant: the anchor plus the right side. */
+    /** Chips under the temperature. */
+    private const val ANCHORS = 2
+
+    /** Chips the weather card has room for in each variant: those under the temperature plus the right side. */
     fun room(layout: WeatherLayout): Int = when (layout) {
-        WeatherLayout.COLUMNS, WeatherLayout.SPLIT -> 3
-        WeatherLayout.GRID -> 5
+        WeatherLayout.COLUMNS, WeatherLayout.SPLIT -> ANCHORS + 2
+        WeatherLayout.GRID -> ANCHORS + 4
         WeatherLayout.NONE -> 0
     }
 

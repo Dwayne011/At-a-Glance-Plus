@@ -24,13 +24,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -180,24 +178,21 @@ internal fun ChipsSection() {
 
     Section("Complication chips") {
         Text(
-            "Pick as many chips as you like, in order of importance. The card shows the first ones that have something to report right now: 2 in the right column, 4 in the bottom strip. When one has nothing to report (no unread mail, say), the next one takes its place.",
+            "Pick as many chips as you like, in order of importance. Chips with something to report right now fill the weather card first, then other cards on show, then an extra chips card. When one has nothing to report (no unread mail, say), the next one takes its place.",
             style = MaterialTheme.typography.bodySmall
         )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            WeatherLayout.entries.forEachIndexed { index, option ->
-                SegmentedButton(
-                    selected = layout == option,
-                    onClick = { Prefs.setWeatherLayout(context, option) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = WeatherLayout.entries.size)
-                ) { Text(option.label) }
+        Text("Weather card layout", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WeatherLayout.entries.forEach { option ->
+                FilterChip(selected = layout == option, onClick = { Prefs.setWeatherLayout(context, option) }, label = { Text(option.label) })
             }
         }
         Text(
             when (layout) {
-                WeatherLayout.COLUMNS -> "Weather card: next 3 hours as columns, 1 chip under the temperature and 2 stacked on the right."
-                WeatherLayout.SPLIT -> "Weather card: next 3 hours in a row, 1 chip under the temperature and 2 wide chips under the forecast."
-                WeatherLayout.GRID -> "Weather card: next 2 hours in a box, 1 chip under the temperature and a 2 x 2 grid of chips."
-                WeatherLayout.NONE -> "Weather card: next 3 hours, no chips anywhere."
+                WeatherLayout.COLUMNS -> "Next 3 hours as columns; 2 chips under the temperature and 2 stacked on the right."
+                WeatherLayout.SPLIT -> "Next 3 hours in a row; 2 chips under the temperature and 2 wide chips under the forecast."
+                WeatherLayout.GRID -> "Next 2 hours in a box; 2 chips under the temperature and a 2 x 2 grid of chips."
+                WeatherLayout.NONE -> "Next 3 hours, and no chips anywhere."
             },
             style = MaterialTheme.typography.bodySmall
         )
