@@ -11,9 +11,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,9 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.ataglanceplus.Prefs
-import com.ataglanceplus.cards.Chips
-import com.ataglanceplus.cards.Complication
-import com.ataglanceplus.cards.ComplicationLayout
 import com.ataglanceplus.cards.PreviewCard
 import com.ataglanceplus.cards.PreviewCards
 import com.ataglanceplus.cards.WeatherCard
@@ -52,14 +46,12 @@ internal fun CardPreviewSection(maxCards: Int) {
     }
     if (version < 0) return
 
-    val layout = Prefs.complicationLayout(context)
     val enabled = Prefs.previewCards(context)
     val dismissed = Prefs.dismissed(context)
-    val chips = Prefs.chips(context)
 
     Section("Cards") {
         Text(
-            "Weather uses live data. The other cards show the design's sample content until their data sources are built. Buttons on the cards work.",
+            "Weather and the chips use live data. The other cards show the design's sample content until their data sources are built. Buttons on the cards work.",
             style = MaterialTheme.typography.bodySmall
         )
         if (maxCards > 0) {
@@ -77,46 +69,6 @@ internal fun CardPreviewSection(maxCards: Int) {
             }
         }
 
-        HorizontalDivider()
-        Text("Complications", style = MaterialTheme.typography.labelLarge)
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            ComplicationLayout.entries.forEachIndexed { index, option ->
-                SegmentedButton(
-                    selected = layout == option,
-                    onClick = { Prefs.setComplicationLayout(context, option) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = ComplicationLayout.entries.size)
-                ) {
-                    Text(
-                        when (option) {
-                            ComplicationLayout.RIGHT -> "Right"
-                            ComplicationLayout.BOTTOM -> "Bottom"
-                            ComplicationLayout.NONE -> "None"
-                        }
-                    )
-                }
-            }
-        }
-        val max = if (layout == ComplicationLayout.BOTTOM) Chips.MAX_BOTTOM else Chips.MAX_RIGHT
-        Text(
-            if (chips == null) "Weather card chips: the design's defaults. Pick your own below (up to $max shown, in the order picked)."
-            else "Weather card chips, in the order picked (up to $max shown):",
-            style = MaterialTheme.typography.bodySmall
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Complication.entries.filter { it.pickable }.forEach { chip ->
-                val position = chips?.indexOf(chip) ?: -1
-                FilterChip(
-                    selected = position >= 0,
-                    onClick = {
-                        val now = (chips ?: emptyList()).toMutableList()
-                        if (position >= 0) now.remove(chip) else if (now.size < Chips.MAX_BOTTOM) now.add(chip)
-                        Prefs.setChips(context, now)
-                    },
-                    label = { Text(if (position >= 0) "${position + 1}. ${chip.label}" else chip.label) }
-                )
-            }
-        }
-        Text("Other cards use the design's chips for each card.", style = MaterialTheme.typography.bodySmall)
 
         PreviewCard.entries.forEach { card ->
             HorizontalDivider()

@@ -31,6 +31,25 @@ object Style {
         textIds.forEach { views.setTextColor(it, AOD_TEXT) }
     }
 
+    /**
+     * Picks the hold bar for the user's touch-and-hold delay (Accessibility settings), so it
+     * fills as the launcher's menu opens: amber on the pinned weather card, red elsewhere.
+     * Hidden on the always-on display, where nothing can be pressed.
+     */
+    fun holdBar(views: RemoteViews, pinned: Boolean, aod: Boolean) {
+        if (aod) {
+            views.setViewVisibility(R.id.hold_bar, android.view.View.GONE)
+            return
+        }
+        val timeout = android.view.ViewConfiguration.getLongPressTimeout()
+        val res = when {
+            timeout < 700 -> if (pinned) R.drawable.hold_bar_amber_400 else R.drawable.hold_bar_red_400
+            timeout < 1250 -> if (pinned) R.drawable.hold_bar_amber_1000 else R.drawable.hold_bar_red_1000
+            else -> if (pinned) R.drawable.hold_bar_amber_1500 else R.drawable.hold_bar_red_1500
+        }
+        views.setImageViewResource(R.id.hold_bar, res)
+    }
+
     /** An activity, opened only after the phone is unlocked. */
     fun gated(context: Context, intent: Intent, requestCode: Int): PendingIntent {
         val target = PendingIntent.getActivity(

@@ -88,7 +88,10 @@ after a reboot.
 2. Milestone 2: pairing and activation over wireless debugging, including after boot.
 3. Date and weather line (Open-Meteo, worldwide) and unlock-before-open for every card tap.
 4. Every card layout from the design spec, with a preview mode filled with the spec's sample
-   content; complication chips; always-on display look (this). See docs/spec-deviations.md.
-5. Generic sources: Live Updates from any app, media from any player, Wallet passes.
-6. Rules engine: show a card when near a place, when navigating somewhere, at a time, on a network.
-7. Place categories from OpenStreetMap.
+   content; complication chips; always-on display look. See docs/spec-deviations.md.
+5. Live complication chips: Gmail per account, missed calls, texts, alarm, screen time, steps and
+   sleep (Health Connect), sunrise or sunset, battery, earbuds (experimental), countdown, app
+   notifications; each chip's tap target can be changed (this).
+6. Generic sources: Live Updates from any app, media from any player, Wallet passes.
+7. Rules engine: show a card when near a place, when navigating somewhere, at a time, on a network.
+8. Place categories from OpenStreetMap.

@@ -28,10 +28,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -44,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -89,6 +89,8 @@ private fun StatusScreen() {
     val busy by Wadb.busy.collectAsStateWithLifecycle()
     val wadbLog by Wadb.log.collectAsStateWithLifecycle()
     var activateOnBoot by remember { mutableStateOf(Prefs.activateOnBoot(context)) }
+    // Cards first once set up; the App tab (pairing, activation, weather) until then.
+    var tab by rememberSaveable { mutableIntStateOf(if (Prefs.isPaired(context)) 0 else 2) }
 
     // Re-read settings and permissions whenever the screen comes back to the foreground.
     var refresh by remember { mutableIntStateOf(0) }
@@ -130,144 +132,154 @@ private fun StatusScreen() {
         ) {
             Text("At a Glance Plus", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Takes over the native At a Glance slot over wireless debugging. Weather is live; the other cards are previews with sample content.",
+                "Takes over the native At a Glance slot over wireless debugging.",
                 style = MaterialTheme.typography.bodyMedium
             )
 
-            Section("Device checks") {
-                CheckRow("Android 16 or newer", Build.VERSION.SDK_INT >= 36, "API ${Build.VERSION.SDK_INT}")
-                CheckRow("Pixel Launcher installed", Commands.isPixelLauncherInstalled(context), Commands.PIXEL_LAUNCHER)
-                when (val provider = Commands.lookupDefaultProvider(context)) {
-                    is Commands.Provider.Found -> CheckRow("Google At a Glance provider found", true, provider.component.flattenToShortString())
-                    is Commands.Provider.Missing -> CheckRow("Google At a Glance provider found", false, provider.reason)
+            PrimaryTabRow(selectedTabIndex = tab) {
+                listOf("Cards", "Chips", "App").forEachIndexed { index, title ->
+                    Tab(selected = tab == index, onClick = { tab = index }, text = { Text(title) })
                 }
             }
 
-            Section("Connection") {
-                if (sessions.isEmpty()) {
-                    Text("Not connected. No client has opened a session with this service yet.")
-                } else {
-                    val surfaces = sessions.values.map { it.surface }.toSet()
-                    Text(
-                        "Home screen: " + (if ("home" in surfaces) "connected" else "not connected") +
-                            " · Lock screen: " + (if ("lockscreen" in surfaces) "connected" else "not connected")
-                    )
-                    Text("Active sessions:")
-                    sessions.values.forEach { s ->
-                        val pushed = if (s.lastPushAt == 0L) "no push yet" else "pushed " + DateFormat.getTimeInstance().format(Date(s.lastPushAt))
-                        Text("• ${s.surface} from ${s.clientPackage} (wants ${s.targetCount}) · $pushed", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                if (lastEvent.isNotEmpty()) {
-                    Text("Last event: $lastEvent", style = MaterialTheme.typography.bodySmall)
-                }
-            }
-
-            Section("Wireless debugging") {
-                CheckRow("Paired with this phone", paired, if (paired) "The phone trusts this app's key" else "Pair once; no computer needed")
-                when (wirelessOn) {
-                    true -> CheckRow("Wireless debugging on", true, "Developer options › Wireless debugging")
-                    else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("--", style = MaterialTheme.typography.labelLarge)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("Wireless debugging")
-                            Text("Android hides this setting from apps. Activate checks it directly.", style = MaterialTheme.typography.bodySmall)
+            when (tab) {
+                0 -> CardPreviewSection(maxCards = sessions.values.maxOfOrNull { it.targetCount } ?: 0)
+                1 -> ChipsSection()
+                else -> {
+                    Section("Device checks") {
+                        CheckRow("Android 16 or newer", Build.VERSION.SDK_INT >= 36, "API ${Build.VERSION.SDK_INT}")
+                        CheckRow("Pixel Launcher installed", Commands.isPixelLauncherInstalled(context), Commands.PIXEL_LAUNCHER)
+                        when (val provider = Commands.lookupDefaultProvider(context)) {
+                            is Commands.Provider.Found -> CheckRow("Google At a Glance provider found", true, provider.component.flattenToShortString())
+                            is Commands.Provider.Missing -> CheckRow("Google At a Glance provider found", false, provider.reason)
                         }
                     }
-                }
-                CheckRow("Can switch it on after a restart", canSelfEnable, if (canSelfEnable) "Secure-settings permission held" else "Granted automatically during the first activation")
-                CheckRow("Wi-Fi connected", wifi, "Wireless debugging only works on Wi-Fi")
 
-                if (!paired) {
-                    Text(
-                        "Pairing: tap the button, then in the Developer options page that opens choose \"Pair device with pairing code\". A notification from this app asks for the six-digit code. Keep the dialog open while you type it.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Button(onClick = {
-                        if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                            startPairing(context)
+                    Section("Connection") {
+                        if (sessions.isEmpty()) {
+                            Text("Not connected. No client has opened a session with this service yet.")
                         } else {
-                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            val surfaces = sessions.values.map { it.surface }.toSet()
+                            Text(
+                                "Home screen: " + (if ("home" in surfaces) "connected" else "not connected") +
+                                    " · Lock screen: " + (if ("lockscreen" in surfaces) "connected" else "not connected")
+                            )
+                            Text("Active sessions:")
+                            sessions.values.forEach { s ->
+                                val pushed = if (s.lastPushAt == 0L) "no push yet" else "pushed " + DateFormat.getTimeInstance().format(Date(s.lastPushAt))
+                                Text("• ${s.surface} from ${s.clientPackage} (wants ${s.targetCount}) · $pushed", style = MaterialTheme.typography.bodySmall)
+                            }
                         }
-                    }) { Text("Pair with this phone") }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(enabled = !busy, onClick = {
-                            scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) }
-                        }) { Text("Activate") }
-                        OutlinedButton(enabled = !busy && Commands.defaultProvider(context) != null, onClick = {
-                            scope.launch { Activator.run(context, Activator.Mode.RESET) }
-                        }) { Text("Back to Google") }
-                    }
-                    OutlinedButton(onClick = { startPairing(context) }) { Text("Pair again") }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Re-activate after a restart")
-                            Text("Waits for Wi-Fi, then runs the activation. The launcher and SystemUI restart once.", style = MaterialTheme.typography.bodySmall)
+                        if (lastEvent.isNotEmpty()) {
+                            Text("Last event: $lastEvent", style = MaterialTheme.typography.bodySmall)
                         }
-                        Switch(checked = activateOnBoot, onCheckedChange = {
-                            activateOnBoot = it
-                            Prefs.setActivateOnBoot(context, it)
-                        })
+                    }
+
+                    Section("Wireless debugging") {
+                        CheckRow("Paired with this phone", paired, if (paired) "The phone trusts this app's key" else "Pair once; no computer needed")
+                        when (wirelessOn) {
+                            true -> CheckRow("Wireless debugging on", true, "Developer options › Wireless debugging")
+                            else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("--", style = MaterialTheme.typography.labelLarge)
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text("Wireless debugging")
+                                    Text("Android hides this setting from apps. Activate checks it directly.", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                        CheckRow("Can switch it on after a restart", canSelfEnable, if (canSelfEnable) "Secure-settings permission held" else "Granted automatically during the first activation")
+                        CheckRow("Wi-Fi connected", wifi, "Wireless debugging only works on Wi-Fi")
+
+                        if (!paired) {
+                            Text(
+                                "Pairing: tap the button, then in the Developer options page that opens choose \"Pair device with pairing code\". A notification from this app asks for the six-digit code. Keep the dialog open while you type it.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Button(onClick = {
+                                if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                                    startPairing(context)
+                                } else {
+                                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            }) { Text("Pair with this phone") }
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Button(enabled = !busy, onClick = {
+                                    scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) }
+                                }) { Text("Activate") }
+                                OutlinedButton(enabled = !busy && Commands.defaultProvider(context) != null, onClick = {
+                                    scope.launch { Activator.run(context, Activator.Mode.RESET) }
+                                }) { Text("Back to Google") }
+                            }
+                            OutlinedButton(onClick = { startPairing(context) }) { Text("Pair again") }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Re-activate after a restart")
+                                    Text("Waits for Wi-Fi, then runs the activation. The launcher and SystemUI restart once.", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Switch(checked = activateOnBoot, onCheckedChange = {
+                                    activateOnBoot = it
+                                    Prefs.setActivateOnBoot(context, it)
+                                })
+                            }
+                        }
+                        if (wadbStatus.isNotEmpty()) {
+                            Text(wadbStatus, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                        }
+                        if (wadbLog.isNotEmpty()) {
+                            Text("Last activation, command by command:", style = MaterialTheme.typography.labelLarge)
+                            Text(wadbLog, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    Section("Weather") {
+                        Text(
+                            "Weather from Open-Meteo, worldwide, using each country's own forecast model where one exists. Only your approximate location is sent.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        CheckRow("Approximate location", hasLocation, if (hasLocation) "Granted" else "Needed to know which forecast to show")
+                        CheckRow(
+                            "Location in the background",
+                            hasBackgroundLocation,
+                            if (hasBackgroundLocation) "Weather follows you while the app is closed" else "Without it, weather uses where you were when the app was last open"
+                        )
+                        if (!hasLocation) {
+                            Button(onClick = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) {
+                                Text("Allow location")
+                            }
+                        } else if (!hasBackgroundLocation) {
+                            Text("On the next screen choose \"Allow all the time\".", style = MaterialTheme.typography.bodySmall)
+                            OutlinedButton(onClick = { backgroundLocationPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) }) {
+                                Text("Allow in the background")
+                            }
+                        }
+                        val current = weather
+                        if (current != null) {
+                            val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(current.fetchedAt))
+                            Text("Now: ${current.condition.label}, ${current.temperatureText}. ${current.detailText}. Updated $time")
+                        } else {
+                            Text("No weather yet.")
+                        }
+                        if (weatherStatus.isNotEmpty()) {
+                            Text(weatherStatus, style = MaterialTheme.typography.bodySmall)
+                        }
+                        OutlinedButton(enabled = hasLocation, onClick = {
+                            scope.launch { WeatherRepository.refresh(context, force = true) }
+                        }) { Text("Refresh weather") }
+                    }
+
+                    Section("Fallback: from a computer") {
+                        Text("The same commands, for adb over USB if wireless debugging is not an option.", style = MaterialTheme.typography.bodySmall)
+                        CommandBlock(Commands.activateAdb(context))
+                        Commands.resetAdb(context)?.let { CommandBlock(it) }
+                    }
+
+                    Section("Service component") {
+                        Text(Commands.serviceComponent(context), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                        Text("User id ${Commands.userId()}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                if (wadbStatus.isNotEmpty()) {
-                    Text(wadbStatus, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                }
-                if (wadbLog.isNotEmpty()) {
-                    Text("Last activation, command by command:", style = MaterialTheme.typography.labelLarge)
-                    Text(wadbLog, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-
-            Section("Weather") {
-                Text(
-                    "Weather from Open-Meteo, worldwide, using each country's own forecast model where one exists. Only your approximate location is sent.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                CheckRow("Approximate location", hasLocation, if (hasLocation) "Granted" else "Needed to know which forecast to show")
-                CheckRow(
-                    "Location in the background",
-                    hasBackgroundLocation,
-                    if (hasBackgroundLocation) "Weather follows you while the app is closed" else "Without it, weather uses where you were when the app was last open"
-                )
-                if (!hasLocation) {
-                    Button(onClick = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) {
-                        Text("Allow location")
-                    }
-                } else if (!hasBackgroundLocation) {
-                    Text("On the next screen choose \"Allow all the time\".", style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(onClick = { backgroundLocationPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) }) {
-                        Text("Allow in the background")
-                    }
-                }
-                val current = weather
-                if (current != null) {
-                    val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(current.fetchedAt))
-                    Text("Now: ${current.condition.label}, ${current.temperatureText}. ${current.detailText}. Updated $time")
-                } else {
-                    Text("No weather yet.")
-                }
-                if (weatherStatus.isNotEmpty()) {
-                    Text(weatherStatus, style = MaterialTheme.typography.bodySmall)
-                }
-                OutlinedButton(enabled = hasLocation, onClick = {
-                    scope.launch { WeatherRepository.refresh(context, force = true) }
-                }) { Text("Refresh weather") }
-            }
-
-            CardPreviewSection(maxCards = sessions.values.maxOfOrNull { it.targetCount } ?: 0)
-
-            Section("Fallback: from a computer") {
-                Text("The same commands, for adb over USB if wireless debugging is not an option.", style = MaterialTheme.typography.bodySmall)
-                CommandBlock(Commands.activateAdb(context))
-                Commands.resetAdb(context)?.let { CommandBlock(it) }
-            }
-
-            Section("Service component") {
-                Text(Commands.serviceComponent(context), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-                Text("User id ${Commands.userId()}", style = MaterialTheme.typography.bodySmall)
             }
             Spacer(Modifier.height(24.dp))
         }

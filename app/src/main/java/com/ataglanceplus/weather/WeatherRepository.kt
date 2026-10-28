@@ -33,10 +33,30 @@ data class Weather(
     val unit: TemperatureUnit,
     val code: Int,
     val isDay: Boolean,
-    val fetchedAt: Long
+    val fetchedAt: Long,
+    /** Today's and tomorrow's sunrises and sunsets, epoch milliseconds; empty in old cached readings. */
+    val sunrises: List<Long> = emptyList(),
+    val sunsets: List<Long> = emptyList(),
 ) {
     val condition: WeatherCondition get() = WeatherCondition.fromWmo(code)
     val temperatureText: String get() = "${temperature.roundToInt()}${unit.symbol}"
+
+    /**
+     * Day or night now, from the sun times rather than the reading, which can be up to half an
+     * hour old (otherwise the sun icon could stay up after sunset).
+     */
+    fun isDayAt(now: Long = System.currentTimeMillis()): Boolean {
+        val last = (sunrises.map { it to true } + sunsets.map { it to false })
+            .filter { it.first <= now }
+            .maxByOrNull { it.first }
+        return last?.second ?: isDay
+    }
+
+    /** The next sunrise or sunset: its time and whether it is a sunrise. */
+    fun nextSunEvent(now: Long = System.currentTimeMillis()): Pair<Long, Boolean>? =
+        (sunrises.map { it to true } + sunsets.map { it to false })
+            .filter { it.first > now }
+            .minByOrNull { it.first }
 
     /** "H 15° · L 8° · Feels 9°", leaving out anything the service did not return. */
     val detailText: String
@@ -99,7 +119,9 @@ object WeatherRepository {
                 unit = TemperatureUnit.valueOf(json.getString("u")),
                 code = json.getInt("c"),
                 isDay = json.getBoolean("d"),
-                fetchedAt = json.getLong("f")
+                fetchedAt = json.getLong("f"),
+                sunrises = json.optJSONArray("sr").toLongList(),
+                sunsets = json.optJSONArray("ss").toLongList(),
             )
         }
     }
@@ -141,7 +163,7 @@ object WeatherRepository {
                 Locale.ROOT,
                 "https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f" +
                     "&current=temperature_2m,apparent_temperature,weather_code,is_day" +
-                    "&daily=temperature_2m_max,temperature_2m_min&forecast_days=1" +
+                    "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&forecast_days=2" +
                     "&temperature_unit=%s&timezone=auto",
                 lat, lon, unit.apiValue
             )
@@ -157,6 +179,15 @@ object WeatherRepository {
             val root = JSONObject(body)
             val current = root.getJSONObject("current")
             val daily = root.optJSONObject("daily")
+            // Times come in the location's local time; this offset turns them into instants.
+            val offset = java.time.ZoneOffset.ofTotalSeconds(root.optInt("utc_offset_seconds", 0))
+            fun times(name: String): List<Long> {
+                val array = daily?.optJSONArray(name) ?: return emptyList()
+                return (0 until array.length()).mapNotNull { i ->
+                    if (array.isNull(i)) null // no sunrise or sunset that day (polar regions)
+                    else runCatching { java.time.LocalDateTime.parse(array.getString(i)).toInstant(offset).toEpochMilli() }.getOrNull()
+                }
+            }
             return Weather(
                 temperature = current.getDouble("temperature_2m"),
                 feelsLike = current.optDoubleOrNull("apparent_temperature"),
@@ -165,7 +196,9 @@ object WeatherRepository {
                 unit = unit,
                 code = current.getInt("weather_code"),
                 isDay = current.optInt("is_day", 1) == 1,
-                fetchedAt = System.currentTimeMillis()
+                fetchedAt = System.currentTimeMillis(),
+                sunrises = times("sunrise"),
+                sunsets = times("sunset"),
             )
         } finally {
             connection.disconnect()
@@ -214,12 +247,17 @@ object WeatherRepository {
             .put("c", weather.code)
             .put("d", weather.isDay)
             .put("f", weather.fetchedAt)
+            .put("sr", org.json.JSONArray(weather.sunrises))
+            .put("ss", org.json.JSONArray(weather.sunsets))
         Prefs.get(context).edit().putString(KEY_CACHE, json.toString()).apply()
     }
 }
 
 private fun JSONObject.optDoubleOrNull(name: String): Double? =
     if (has(name) && !isNull(name)) optDouble(name).takeUnless { it.isNaN() } else null
+
+private fun org.json.JSONArray?.toLongList(): List<Long> =
+    if (this == null) emptyList() else (0 until length()).map { getLong(it) }
 
 private fun org.json.JSONArray.optDoubleOrNull(index: Int): Double? =
     if (length() > index && !isNull(index)) optDouble(index).takeUnless { it.isNaN() } else null

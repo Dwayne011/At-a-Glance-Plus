@@ -45,8 +45,8 @@ object WeatherCard {
     )
 
     /** The spec's default chips for each layout (8.1), used until the user picks their own. */
-    private val DEFAULT_RIGHT = listOf(Complication.GMAIL, Complication.ALARM)
-    private val DEFAULT_BOTTOM = listOf(Complication.GMAIL, Complication.MISSED_CALLS, Complication.ALARM, Complication.BATTERY)
+    private val DEFAULT_RIGHT = listOf(Complication.GMAIL, Complication.ALARM).map { ChipSpec(it) }
+    private val DEFAULT_BOTTOM = listOf(Complication.GMAIL, Complication.MISSED_CALLS, Complication.ALARM, Complication.BATTERY).map { ChipSpec(it) }
 
     private class Reading(
         val temp: String,
@@ -70,13 +70,14 @@ object WeatherCard {
         val showDate = surface == AtAGlanceService.SURFACE_HOME
         val title = if (showDate) "${dateText()} · ${reading.condition}" else reading.condition
         val layout = Prefs.complicationLayout(context)
+        val chosen = Prefs.chips(context)
         val chips = when (layout) {
-            ComplicationLayout.RIGHT -> (Prefs.chips(context) ?: DEFAULT_RIGHT).take(Chips.MAX_RIGHT)
-            ComplicationLayout.BOTTOM -> (Prefs.chips(context) ?: DEFAULT_BOTTOM).take(Chips.MAX_BOTTOM)
+            ComplicationLayout.RIGHT -> chosen ?: DEFAULT_RIGHT
+            ComplicationLayout.BOTTOM -> chosen ?: DEFAULT_BOTTOM
             ComplicationLayout.NONE -> emptyList()
         }
         // The bottom strip is only used when there is something to put in it (spec 7.1).
-        val bottom = layout == ComplicationLayout.BOTTOM && chips.isNotEmpty()
+        val bottom = layout == ComplicationLayout.BOTTOM && Chips.withValues(chips).isNotEmpty()
         val views = RemoteViews(context.packageName, if (bottom) R.layout.card_weather_bottom else R.layout.card_weather_right)
 
         views.setTextViewText(R.id.weather_temp, reading.temp)
@@ -100,6 +101,7 @@ object WeatherCard {
             views.setImageViewResource(R.id.weather_icon, reading.icon)
         }
         Chips.add(context, views, chips, if (bottom) ComplicationLayout.BOTTOM else ComplicationLayout.RIGHT, aod)
+        Style.holdBar(views, pinned = true, aod = aod)
 
         val tap = if (sample == "live") weatherIntent(context) else Style.gatedApp(context, PIXEL_WEATHER, REQUEST_WEATHER)
         views.setOnClickPendingIntent(R.id.card_root, tap)
@@ -108,13 +110,14 @@ object WeatherCard {
 
     private fun live(weather: Weather): Reading {
         val condition = weather.condition
+        val isDay = weather.isDayAt()
         return Reading(
             temp = "${weather.temperature.roundToInt()}°",
             condition = condition.label,
             detail = weather.detailText,
-            icon = condition.icon(weather.isDay),
-            aodIcon = condition.aodIcon(weather.isDay),
-            background = condition.background(weather.isDay),
+            icon = condition.icon(isDay),
+            aodIcon = condition.aodIcon(isDay),
+            background = condition.background(isDay),
             peek = null,
         )
     }
@@ -146,6 +149,7 @@ object WeatherCard {
             views.setInt(R.id.needed_badge, "setBackgroundResource", R.drawable.aod_outline_oval)
             views.setImageViewResource(R.id.needed_icon, R.drawable.ic_weather_location_off_aod)
         }
+        Style.holdBar(views, pinned = true, aod = aod)
         val tap = setupIntent(context)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, TARGET_ID, views, title, detail, R.drawable.ic_weather_location_off, tap, 2f)

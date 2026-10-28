@@ -26,7 +26,23 @@ object Activator {
         data class Failure(val reason: String) : Outcome()
     }
 
-    suspend fun run(context: Context, mode: Mode): Outcome = withContext(Dispatchers.IO) {
+    suspend fun run(context: Context, mode: Mode): Outcome {
+        val steps = when (mode) {
+            Mode.ACTIVATE -> Commands.activateSteps(context)
+            Mode.RESET -> Commands.resetSteps(context) ?: return fail("No Google provider found on this device")
+        }
+        return execute(
+            context, steps,
+            working = if (mode == Mode.ACTIVATE) "Switching At a Glance to this app" else "Restoring Google's At a Glance",
+            done = if (mode == Mode.ACTIVATE) "Activated. The launcher and SystemUI restarted." else "Google's At a Glance restored.",
+        )
+    }
+
+    /** Grants chip permissions that Android only lets the shell grant to a sideloaded app. */
+    suspend fun grant(context: Context, steps: List<String>): Outcome =
+        execute(context, steps, working = "Granting chip permissions", done = "Permissions granted.")
+
+    private suspend fun execute(context: Context, steps: List<String>, working: String, done: String): Outcome = withContext(Dispatchers.IO) {
         if (!Prefs.isPaired(context)) return@withContext fail("Not paired yet")
         Wadb.setBusy(true)
         try {
@@ -46,11 +62,6 @@ object Activator {
                 ?: return@withContext fail("Could not find the wireless debugging port. Check that Wireless debugging is on in Developer options.")
 
             Wadb.setStatus("Connecting on port $port")
-            val steps = when (mode) {
-                Mode.ACTIVATE -> Commands.activateSteps(context)
-                Mode.RESET -> Commands.resetSteps(context)
-                    ?: return@withContext fail("No Google provider found on this device")
-            }
             val log = StringBuilder()
             try {
                 AdbClient("127.0.0.1", port, Wadb.key(context)).use { client ->
@@ -59,7 +70,7 @@ object Activator {
                         Wadb.setStatus("Granting the secure-settings permission")
                         runStep(client, Commands.grantSecureSettingsShell(context), log)
                     }
-                    Wadb.setStatus(if (mode == Mode.ACTIVATE) "Switching At a Glance to this app" else "Restoring Google's At a Glance")
+                    Wadb.setStatus(working)
                     steps.forEach { runStep(client, it, log) }
                 }
             } catch (e: Exception) {
@@ -70,14 +81,13 @@ object Activator {
                 // Now that we hold the permission, make sure debugging stays on for next boot.
                 runCatching { Wadb.enableWirelessDebugging(context) }
             }
-            Wadb.setStatus(if (mode == Mode.ACTIVATE) "Activated. The launcher and SystemUI restarted." else "Google's At a Glance restored.")
+            Wadb.setStatus(done)
             Outcome.Success
         } finally {
             Wadb.setBusy(false)
         }
     }
 
-    /** Runs one command (stderr folded into the output) and appends it to the log. */
     /**
      * Runs one command and appends it to the log. A failing step is logged and the next steps
      * still run, so for example the launcher is restarted even if restarting SystemUI misbehaves.

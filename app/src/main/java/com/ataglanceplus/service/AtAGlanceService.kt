@@ -14,6 +14,8 @@ import com.ataglanceplus.Prefs
 import com.ataglanceplus.cards.CardDeck
 import com.ataglanceplus.cards.PreviewCards
 import com.ataglanceplus.cards.WeatherCard
+import com.ataglanceplus.complications.ChipValues
+import com.ataglanceplus.complications.ComplicationEngine
 import com.ataglanceplus.weather.WeatherRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +44,7 @@ class AtAGlanceService : SmartspaceService() {
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key in Prefs.NON_CARD_KEYS) return@OnSharedPreferenceChangeListener
+        if (Prefs.isChipSettingKey(key)) engine.settingsChanged()
         when (key) {
             Prefs.KEY_ISLAND_UNTIL -> runIsland()
             Prefs.KEY_TIMER_END -> watchTimer()
@@ -62,6 +65,8 @@ class AtAGlanceService : SmartspaceService() {
         }
     }
 
+    private val engine by lazy { ComplicationEngine(this) }
+
     private var islandJob: Job? = null
     private var timerJob: Job? = null
 
@@ -76,6 +81,11 @@ class AtAGlanceService : SmartspaceService() {
         })
         runIsland()
         watchTimer()
+        engine.start()
+        // A chip value changed: redraw.
+        scope.launch {
+            ChipValues.values.drop(1).distinctUntilChanged().collect { pushAll() }
+        }
         WeatherRepository.loadCached(this)
         // New weather: redraw every surface.
         scope.launch {
@@ -96,12 +106,16 @@ class AtAGlanceService : SmartspaceService() {
         }
         // Roll the date over at midnight (checked every minute; cheap, and survives time-zone changes).
         scope.launch {
+            // Also redraw at sunrise and sunset, so the weather icon and colours follow the sun.
             var shownDate = WeatherCard.dateText()
+            var shownDay = WeatherRepository.weather.value?.isDayAt()
             while (true) {
                 delay(DATE_CHECK_MS)
                 val now = WeatherCard.dateText()
-                if (now != shownDate) {
+                val day = WeatherRepository.weather.value?.isDayAt()
+                if (now != shownDate || day != shownDay) {
                     shownDate = now
+                    shownDay = day
                     pushAll()
                 }
             }
@@ -113,6 +127,7 @@ class AtAGlanceService : SmartspaceService() {
     override fun onDestroy() {
         Prefs.get(this).unregisterOnSharedPreferenceChangeListener(prefsListener)
         unregisterReceiver(screenReceiver)
+        engine.stop()
         scope.cancel()
         sessions.keys.forEach { ServiceState.sessionDestroyed(it.id) }
         sessions.clear()

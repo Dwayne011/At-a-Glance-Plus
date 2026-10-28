@@ -35,18 +35,8 @@
                     style="@style/AagText.Title"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:ellipsize="marquee"
-                    android:focusable="true"
-                    android:focusableInTouchMode="true"
-                    android:freezesText="true"
                     android:lineHeight="18sp"
-                    android:marqueeRepeatLimit="marquee_forever"
-                    android:scrollHorizontally="true"
-                    android:singleLine="true"
-                    android:textSize="15sp">
-
-                    <requestFocus />
-                </TextView>
+                    android:textSize="15sp" />
 
                 <TextView
                     android:id="@+id/calendar_detail"
@@ -65,4 +55,18 @@
             android:gravity="bottom|start"
             android:orientation="horizontal" />
     </LinearLayout>
+
+    <!-- Hold bar (spec 6.3): fills while the card is held, until the launcher's menu opens. -->
+    <ImageView
+        android:id="@+id/hold_bar"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_gravity="top"
+        android:layout_marginStart="22dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="22dp"
+        android:contentDescription="@null"
+        android:duplicateParentState="true"
+        android:scaleType="fitXY"
+        android:src="@drawable/hold_bar_red_400" />
 </FrameLayout>

@@ -88,6 +88,16 @@ object Commands {
         "pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS"
 
     /** The same commands wrapped for a computer with adb. */
+    /** Shell commands that grant what the chosen chips need and the app cannot grant itself. */
+    fun chipGrantSteps(context: Context, notifications: Boolean, usage: Boolean, callLog: Boolean): List<String> {
+        val pkg = context.packageName
+        return buildList {
+            if (notifications) add("cmd notification allow_listener ${com.ataglanceplus.complications.NotificationCounter.component(context).flattenToString()}")
+            if (usage) add("appops set $pkg GET_USAGE_STATS allow")
+            if (callLog) add("pm grant $pkg android.permission.READ_CALL_LOG")
+        }
+    }
+
     fun activateAdb(context: Context): String = "adb shell \"${activateShell(context)}\""
 
     fun resetAdb(context: Context): String? = resetShell(context)?.let { "adb shell \"$it\"" }

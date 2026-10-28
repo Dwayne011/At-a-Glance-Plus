@@ -106,6 +106,7 @@ object PreviewCards {
             views.setOnClickPendingIntent(R.id.dismiss, CardActionReceiver.dismiss(context, card))
         }
         val tap = openApp(context, REQUEST_LIVE)
+        Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, card.targetId, views, title, detail, R.drawable.ic_card, tap, 1.6f)
     }
@@ -159,6 +160,7 @@ object PreviewCards {
             views.setOnClickPendingIntent(R.id.media_next, CardActionReceiver.action(context, CardActionReceiver.ACTION_MEDIA_NEXT))
         }
         val tap = openApp(context, REQUEST_MEDIA)
+        Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, card.targetId, views, title, detail, R.drawable.ic_music_note, tap, 1.5f)
     }
@@ -175,7 +177,7 @@ object PreviewCards {
             else -> "18:00 · in 25 min · PureGym London Holborn, 120 High Holborn" to 0xFF60A5FA.toInt()
         }
         val layout = Prefs.complicationLayout(context)
-        val chips = if (layout == ComplicationLayout.NONE) emptyList() else listOf(Complication.STEPS, Complication.BATTERY)
+        val chips = if (layout == ComplicationLayout.NONE) emptyList() else listOf(ChipSpec(Complication.STEPS), ChipSpec(Complication.BATTERY))
         val bottom = layout == ComplicationLayout.BOTTOM
         val views = RemoteViews(context.packageName, if (bottom) R.layout.card_calendar_bottom else R.layout.card_calendar)
         views.setTextViewText(R.id.calendar_title, title)
@@ -188,6 +190,7 @@ object PreviewCards {
         val intent = Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(now, System.currentTimeMillis()))
             .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, System.currentTimeMillis())
         val tap = Style.gated(context, intent, REQUEST_CALENDAR)
+        Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, card.targetId, views, title, detail, R.drawable.ic_comp_countdown, tap, 1.4f)
     }
@@ -243,10 +246,11 @@ object PreviewCards {
             views.setInt(R.id.timer_button, "setBackgroundResource", R.drawable.aod_outline_oval)
             views.setInt(R.id.timer_button_icon, "setColorFilter", Style.AOD_TEXT)
         }
-        val chips = if (Prefs.complicationLayout(context) == ComplicationLayout.RIGHT) listOf(Complication.ALARM, Complication.SLEEP) else emptyList()
+        val chips = if (Prefs.complicationLayout(context) == ComplicationLayout.RIGHT) listOf(ChipSpec(Complication.ALARM), ChipSpec(Complication.SLEEP)) else emptyList()
         Chips.add(context, views, chips, ComplicationLayout.RIGHT, aod)
 
         val tap = Style.gated(context, Intent(AlarmClock.ACTION_SHOW_TIMERS), REQUEST_TIMER)
+        Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, card.targetId, views, "$readout $title", detail, R.drawable.ic_comp_alarm, tap, 1.7f)
     }
@@ -287,6 +291,7 @@ object PreviewCards {
             views.setViewVisibility(R.id.wallet_qr_box, View.GONE)
         }
         val tap = Style.gatedApp(context, WALLET_PKG, REQUEST_WALLET)
+        Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, card.targetId, views, title, detail, R.drawable.ic_comp_ticket, tap, 1.3f)
     }
@@ -323,10 +328,11 @@ object PreviewCards {
         }
         // The rail ticket chip is the spec's example of a rule: "navigating to Manchester Piccadilly".
         val chips = if (Prefs.complicationLayout(context) == ComplicationLayout.NONE) emptyList()
-        else listOf(Complication.RAIL_TICKET, Complication.BATTERY)
+        else listOf(ChipSpec(Complication.RAIL_TICKET), ChipSpec(Complication.BATTERY))
         Chips.add(context, views, chips, ComplicationLayout.RIGHT, aod)
 
         val tap = Style.gatedApp(context, MAPS_PKG, REQUEST_NAV)
+        Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, card.targetId, views, "$distance · $instruction", detail, icon, tap, 1.8f)
     }

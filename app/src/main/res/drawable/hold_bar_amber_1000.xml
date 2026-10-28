@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hold bar, amber, for a 1000 ms touch-and-hold delay -->
+<animated-selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/hold_pressed"
+        android:drawable="@drawable/hold_bar_amber_full"
+        android:state_pressed="true" />
+    <item
+        android:id="@+id/hold_idle"
+        android:drawable="@drawable/hold_bar_empty" />
+    <transition
+        android:drawable="@drawable/avd_hold_amber_1000"
+        android:fromId="@id/hold_idle"
+        android:toId="@id/hold_pressed" />
+</animated-selector>

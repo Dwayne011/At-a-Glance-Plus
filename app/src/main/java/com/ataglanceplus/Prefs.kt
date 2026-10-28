@@ -2,7 +2,7 @@ package com.ataglanceplus
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.ataglanceplus.cards.Complication
+import com.ataglanceplus.cards.ChipSpec
 import com.ataglanceplus.cards.ComplicationLayout
 import com.ataglanceplus.cards.PreviewCard
 
@@ -20,6 +20,10 @@ object Prefs {
     private const val KEY_COMP_LAYOUT = "comp_layout"
     private const val KEY_CHIPS = "chips"
     private const val KEY_DISMISSED = "dismissed"
+    private const val KEY_CHIP_APP = "chip_app_"
+    private const val KEY_GMAIL_LABELS = "gmail_labels_"
+    private const val KEY_COUNTDOWN = "countdown_day"
+    private const val KEY_CHIP_REFRESH = "chip_refresh"
     private const val KEY_LONG_TEXT = "long_text"
     private const val KEY_AOD_PREVIEW = "aod_preview"
     const val KEY_ISLAND_UNTIL = "island_until"
@@ -32,6 +36,15 @@ object Prefs {
 
     /** Keys that only matter to the wireless-debugging screens; changing them needs no redraw. */
     val NON_CARD_KEYS = setOf(KEY_PAIRED, KEY_ACTIVATE_ON_BOOT)
+
+    /** Settings that change what the complication engine has to watch. */
+    fun isChipSettingKey(key: String?): Boolean =
+        key != null && (key == KEY_CHIPS || key.startsWith(KEY_GMAIL_LABELS) || key == KEY_COUNTDOWN || key == KEY_CHIP_REFRESH)
+
+    /** Tells the service a chip permission was granted, so it starts watching that source. */
+    fun chipPermissionsChanged(context: Context) {
+        get(context).edit().putLong(KEY_CHIP_REFRESH, System.currentTimeMillis()).apply()
+    }
 
     fun get(context: Context): SharedPreferences =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -88,14 +101,40 @@ object Prefs {
     }
 
     /** The user's chosen weather-card chips in the order picked, or null to use the spec's defaults. */
-    fun chips(context: Context): List<Complication>? {
+    fun chips(context: Context): List<ChipSpec>? {
         val raw = get(context).getString(KEY_CHIPS, null) ?: return null
-        return raw.split(',').filter { it.isNotEmpty() }.mapNotNull { Complication.fromId(it) }
+        return raw.split(',').filter { it.isNotEmpty() }.mapNotNull { ChipSpec.parse(it) }
     }
 
-    fun setChips(context: Context, chips: List<Complication>) {
-        get(context).edit().putString(KEY_CHIPS, chips.joinToString(",") { it.id }).apply()
+    fun setChips(context: Context, chips: List<ChipSpec>) {
+        // Keys may hold an account address or a package name, never a comma.
+        get(context).edit().putString(KEY_CHIPS, chips.joinToString(",") { it.key }).apply()
     }
+
+    /** The app a chip opens when tapped, if the user chose one. */
+    fun chipApp(context: Context, chipKey: String): String? = get(context).getString(KEY_CHIP_APP + chipKey, null)
+
+    fun setChipApp(context: Context, chipKey: String, pkg: String?) {
+        get(context).edit().apply { if (pkg == null) remove(KEY_CHIP_APP + chipKey) else putString(KEY_CHIP_APP + chipKey, pkg) }.apply()
+    }
+
+    /** Gmail labels counted for an account, by canonical name; the inbox until the user picks. */
+    fun gmailLabels(context: Context, account: String): Set<String> =
+        get(context).getStringSet(KEY_GMAIL_LABELS + account, null) ?: setOf(GMAIL_INBOX)
+
+    fun setGmailLabels(context: Context, account: String, labels: Set<String>) {
+        get(context).edit().putStringSet(KEY_GMAIL_LABELS + account, labels).apply()
+    }
+
+    /** The countdown chip's date as an epoch day, or null when none is set. */
+    fun countdownDay(context: Context): Long? =
+        get(context).getLong(KEY_COUNTDOWN, Long.MIN_VALUE).takeIf { it != Long.MIN_VALUE }
+
+    fun setCountdownDay(context: Context, epochDay: Long) {
+        get(context).edit().putLong(KEY_COUNTDOWN, epochDay).apply()
+    }
+
+    const val GMAIL_INBOX = "^i"
 
     fun dismissed(context: Context): Set<String> = get(context).getStringSet(KEY_DISMISSED, emptySet()) ?: emptySet()
 
