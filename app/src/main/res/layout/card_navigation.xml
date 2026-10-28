@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 8.7 Navigating to a place: manoeuvre box, distance and instruction, destination line, right-column chips. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_root"
+    style="@style/AagCardRoot">
+
+    <LinearLayout
+        android:id="@+id/card_body"
+        style="@style/AagCardBody"
+        android:background="@drawable/card_bg_nav"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <FrameLayout
+            android:id="@+id/nav_box"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/nav_box_bg">
+
+            <ImageView
+                android:id="@+id/nav_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_nav_turn_left"
+                android:tint="#FF6EE7B7" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="11dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:baselineAligned="true"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/nav_distance"
+                    style="@style/AagText.Badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FF6EE7B7"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/nav_instruction"
+                    style="@style/AagText.Title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/nav_detail"
+                style="@style/AagText.Detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#FFA7F3D0" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/complications"
+            android:layout_width="84dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:visibility="gone" />
+    </LinearLayout>
+</FrameLayout>

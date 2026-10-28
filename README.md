@@ -49,8 +49,9 @@ Needs the Android SDK; Gradle fetches platform 37 (needed by the current Compose
    and keep that dialog open. A notification from the app asks for the six-digit code; type it
    there. The app pairs, grants itself the secure-settings permission, and activates: SystemUI and
    the launcher restart.
-4. The home screen and lock screen now show the test card. Switch between "Google template" and
-   "Own layout" in the app to compare the two rendering tiers.
+4. The home screen and lock screen now show the weather card, followed by the preview cards.
+   The "Cards" section of the app switches each preview card on or off, picks its sample state,
+   picks the complication layout and chips, and can simulate an incoming message.
 5. "Back to Google" restores the stock provider. "Activate" switches back.
 6. After a reboot the app waits for Wi-Fi, switches wireless debugging on and re-activates by
    itself (switch in the app).
@@ -85,7 +86,9 @@ after a reboot.
 
 1. Milestone 1: system hook and test card.
 2. Milestone 2: pairing and activation over wireless debugging, including after boot.
-3. Date and weather line (Open-Meteo, worldwide) and unlock-before-open for every card tap (this).
-4. Generic sources: Live Updates from any app, media from any player, Wallet passes.
-5. Rules engine: show a card when near a place, when navigating somewhere, at a time, on a network.
-6. Place categories from OpenStreetMap.
+3. Date and weather line (Open-Meteo, worldwide) and unlock-before-open for every card tap.
+4. Every card layout from the design spec, with a preview mode filled with the spec's sample
+   content; complication chips; always-on display look (this). See docs/spec-deviations.md.
+5. Generic sources: Live Updates from any app, media from any player, Wallet passes.
+6. Rules engine: show a card when near a place, when navigating somewhere, at a time, on a network.
+7. Place categories from OpenStreetMap.

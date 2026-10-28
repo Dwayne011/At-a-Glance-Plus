@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Complication chip for the bottom strip (spec 7.1 Layout B): the tap zone is as wide as the pill
+    (64 to 80dp) and 36dp tall, reaching to the card's bottom edge; the 24dp pill sits 6dp above it.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chip_zone"
+    android:layout_width="wrap_content"
+    android:layout_height="36dp"
+    android:layout_marginEnd="6dp">
+
+    <LinearLayout
+        android:id="@+id/chip_pill"
+        android:layout_width="wrap_content"
+        android:layout_height="24dp"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="6dp"
+        android:background="@drawable/chip_selector_normal"
+        android:duplicateParentState="true"
+        android:gravity="center"
+        android:minWidth="64dp"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <ImageView
+            android:id="@+id/chip_icon"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/chip_text"
+            style="@style/AagText.Chip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+</FrameLayout>

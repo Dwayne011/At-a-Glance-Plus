@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    8.5 Timer and next alarm. The countdown is a Chronometer the system ticks every second,
+    so the app does not redraw the card. Alarm-only state shows a fixed time instead.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_root"
+    style="@style/AagCardRoot">
+
+    <LinearLayout
+        android:id="@+id/card_body"
+        style="@style/AagCardBody"
+        android:background="@drawable/card_bg_timer"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <Chronometer
+            android:id="@+id/timer_chrono"
+            style="@style/AagText.Hero"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:countDown="true"
+            android:fontFamily="monospace"
+            android:textColor="#FFFBBF24"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/timer_fixed"
+            style="@style/AagText.Hero"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textColor="#FFFBBF24"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/timer_title"
+                style="@style/AagText.Title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/timer_detail"
+                style="@style/AagText.Detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFDE68A" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/timer_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/timer_button_bg"
+            android:contentDescription="Pause or resume">
+
+            <ImageView
+                android:id="@+id/timer_button_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_media_pause"
+                android:tint="#FFFDE68A" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/complications"
+            android:layout_width="84dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:visibility="gone" />
+    </LinearLayout>
+</FrameLayout>

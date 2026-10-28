@@ -22,6 +22,14 @@
         <package android:name="com.google.android.apps.nexuslauncher" />
         <package android:name="com.google.android.as" />
         <package android:name="com.google.android.apps.weather" />
+        <!-- Apps the cards and complication chips open. -->
+        <package android:name="com.google.android.gm" />
+        <package android:name="com.google.android.dialer" />
+        <package android:name="com.google.android.apps.messaging" />
+        <package android:name="com.google.android.apps.wellbeing" />
+        <package android:name="com.google.android.apps.walletnfcrel" />
+        <package android:name="com.google.android.apps.maps" />
+        <package android:name="com.whatsapp" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="content" android:host="com.android.calendar" />
@@ -37,6 +45,11 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.AtAGlancePlus">
+
+        <!-- In-card buttons (dismiss, play/pause, timer, reply). Only our own cards can send these. -->
+        <receiver
+            android:name=".cards.CardActionReceiver"
+            android:exported="false" />
 
         <activity
             android:name=".ui.MainActivity"

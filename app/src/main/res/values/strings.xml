@@ -1,10 +1,5 @@
 <resources>
     <string name="app_name">At a Glance Plus</string>
-    <string name="card_test_title">At a Glance Plus</string>
-    <string name="card_test_subtitle_home">Test card · home screen</string>
-    <string name="card_test_subtitle_lock">Test card · lock screen</string>
-    <string name="card_test_eta">12 min</string>
-    <string name="card_test_layout_subtitle">Custom layout · tap to open</string>
     <string name="card_icon_description">At a Glance Plus</string>
 
     <string name="pairing_channel">Wireless debugging pairing</string>

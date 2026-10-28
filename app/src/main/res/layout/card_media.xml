@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    8.3 Media player: 48dp album art with a 4-bar equaliser overlay, title, artist and time,
+    a 14-bar equaliser (or a 3dp track bar), and three 48dp transport buttons.
+    The equalisers are indeterminate ProgressBars: they start their animated drawable by
+    themselves, which an animated vector in a plain ImageView never does inside RemoteViews.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_root"
+    style="@style/AagCardRoot">
+
+    <LinearLayout
+        android:id="@+id/card_body"
+        style="@style/AagCardBody"
+        android:background="@drawable/card_bg_media"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <FrameLayout
+            android:layout_width="48dp"
+            android:layout_height="48dp">
+
+            <ImageView
+                android:id="@+id/media_art"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/media_art_placeholder"
+                android:clipToOutline="true"
+                android:contentDescription="@null"
+                android:scaleType="centerCrop" />
+
+            <ImageView
+                android:id="@+id/media_art_fallback_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_music_note"
+                android:visibility="gone" />
+
+            <ProgressBar
+                android:id="@+id/media_art_eq"
+                android:layout_width="19dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:indeterminate="true"
+                android:indeterminateDrawable="@drawable/avd_art_equalizer"
+                android:indeterminateOnly="true" />
+
+            <ImageView
+                android:id="@+id/media_art_eq_paused"
+                android:layout_width="19dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_art_equalizer_paused"
+                android:visibility="gone" />
+
+            <ImageView
+                android:id="@+id/media_art_border"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:contentDescription="@null"
+                android:src="@drawable/media_art_border" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingEnd="4dp">
+
+            <TextView
+                android:id="@+id/media_title"
+                style="@style/AagText.Title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/media_detail"
+                style="@style/AagText.Detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFBCFE8" />
+
+            <LinearLayout
+                android:id="@+id/media_wave_row"
+                android:layout_width="match_parent"
+                android:layout_height="20dp"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ProgressBar
+                    android:id="@+id/media_eq"
+                    android:layout_width="75dp"
+                    android:layout_height="20dp"
+                    android:indeterminate="true"
+                    android:indeterminateDrawable="@drawable/avd_media_equalizer"
+                    android:indeterminateOnly="true" />
+
+                <ImageView
+                    android:id="@+id/media_eq_paused"
+                    android:layout_width="75dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_media_equalizer_paused"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/media_eq_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:fontFamily="monospace"
+                    android:includeFontPadding="false"
+                    android:singleLine="true"
+                    android:textColor="#FFFDA4AF"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/media_track"
+                style="@android:style/Widget.Material.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="3dp"
+                android:layout_marginTop="6dp"
+                android:max="1000"
+                android:progressDrawable="@drawable/media_track_progress"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/media_prev"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="Previous track">
+
+            <ImageView
+                android:id="@+id/media_prev_icon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_media_prev" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/media_play"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/media_play_bg"
+            android:contentDescription="Play or pause">
+
+            <ImageView
+                android:id="@+id/media_play_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_media_pause" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/media_next"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="Next track">
+
+            <ImageView
+                android:id="@+id/media_next_icon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_media_next" />
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

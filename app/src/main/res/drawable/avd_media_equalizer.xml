@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 8.3 14-bar audio wave. Playing: bars bounce between 3dp and 18dp. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="75dp"
+            android:height="20dp"
+            android:viewportWidth="75"
+            android:viewportHeight="20">
+            <group android:name="b0" android:pivotX="1.5" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M1.5,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b1" android:pivotX="7" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M7,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b2" android:pivotX="12.5" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M12.5,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b3" android:pivotX="18" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M18,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b4" android:pivotX="23.5" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M23.5,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b5" android:pivotX="29" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M29,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b6" android:pivotX="34.5" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M34.5,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b7" android:pivotX="40" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M40,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b8" android:pivotX="45.5" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M45.5,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b9" android:pivotX="51" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M51,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b10" android:pivotX="56.5" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M56.5,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b11" android:pivotX="62" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M62,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b12" android:pivotX="67.5" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M67.5,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+            <group android:name="b13" android:pivotX="73" android:pivotY="10" android:scaleY="0.1667">
+                <path android:fillColor="#FFFDA4AF" android:pathData="M73,1a1.5,1.5 0 0 1 1.5,1.5v15a1.5,1.5 0 0 1 -1.5,1.5a1.5,1.5 0 0 1 -1.5,-1.5v-15a1.5,1.5 0 0 1 1.5,-1.5z" />
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="b0">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="520"
+                android:startOffset="50"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b1">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="680"
+                android:startOffset="180"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b2">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="440"
+                android:startOffset="0"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b3">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="760"
+                android:startOffset="250"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b4">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="590"
+                android:startOffset="120"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b5">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="480"
+                android:startOffset="300"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b6">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="640"
+                android:startOffset="80"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b7">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="510"
+                android:startOffset="210"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b8">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="720"
+                android:startOffset="140"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b9">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="460"
+                android:startOffset="30"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b10">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="610"
+                android:startOffset="270"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b11">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="550"
+                android:startOffset="100"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b12">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="490"
+                android:startOffset="190"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="b13">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueFrom="0.1667"
+                android:valueTo="1"
+                android:duration="670"
+                android:startOffset="60"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>

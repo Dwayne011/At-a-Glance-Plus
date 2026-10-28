@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    8.4 Next calendar event, Layout A or no complications.
+    The title scrolls (marquee) when it is too long. Marquee needs the view to be focused or
+    selected; selecting it from code is not allowed in RemoteViews (View.setSelected is not a
+    remotable method, so calling it would stop the card drawing), so the title takes focus with
+    <requestFocus/>. Only one view can hold focus, so the second line truncates with "…".
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_root"
+    style="@style/AagCardRoot">
+
+    <LinearLayout
+        android:id="@+id/card_body"
+        style="@style/AagCardBody"
+        android:background="@drawable/card_bg_calendar"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/calendar_bar"
+            android:layout_width="5dp"
+            android:layout_height="44dp"
+            android:contentDescription="@null"
+            android:src="@drawable/calendar_bar" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/calendar_title"
+                style="@style/AagText.Title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="marquee"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                android:freezesText="true"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:scrollHorizontally="true"
+                android:singleLine="true">
+
+                <requestFocus />
+            </TextView>
+
+            <TextView
+                android:id="@+id/calendar_detail"
+                style="@style/AagText.Detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#FFCBD5E1" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/complications"
+            android:layout_width="84dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:visibility="gone" />
+    </LinearLayout>
+</FrameLayout>

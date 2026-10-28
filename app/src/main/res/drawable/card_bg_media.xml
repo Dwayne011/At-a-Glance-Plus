@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Card background: media (spec 4.1) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient android:angle="315" android:startColor="#F22A1924" android:endColor="#F21A1017" android:type="linear" />
+    <stroke android:width="1dp" android:color="#40FDA4AF" />
+    <corners android:radius="24dp" />
+</shape>

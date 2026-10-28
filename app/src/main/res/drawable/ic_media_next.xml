@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Media control (spec 8.3) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:pathData="M6,18l8.5,-6L6,6v12z"
+        android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M16,6v12h2V6h-2z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Complication chip for the right column (spec 7.1 Layout A): an 84 x 38dp tap zone holding a
+    24dp pill aligned to the right. The pill copies the zone's pressed state for its pressed look.
+    Added into a card with RemoteViews.addView, so ids are local to each chip.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chip_zone"
+    android:layout_width="84dp"
+    android:layout_height="38dp">
+
+    <LinearLayout
+        android:id="@+id/chip_pill"
+        android:layout_width="wrap_content"
+        android:layout_height="24dp"
+        android:layout_gravity="end|center_vertical"
+        android:background="@drawable/chip_selector_normal"
+        android:duplicateParentState="true"
+        android:gravity="center"
+        android:minWidth="64dp"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <ImageView
+            android:id="@+id/chip_icon"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/chip_text"
+            style="@style/AagText.Chip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+</FrameLayout>

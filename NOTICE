@@ -7,3 +7,6 @@ Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
 
 The hidden-API stubs in systemstubs/ follow class and method signatures from the Android Open
 Source Project, licensed under the Apache License, Version 2.0.
+
+The complication icons app/src/main/res/drawable/ic_comp_*.xml use path data from Lucide (https://lucide.dev), Copyright Lucide
+Contributors, licensed under the ISC License.

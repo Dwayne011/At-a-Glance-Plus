@@ -88,7 +88,6 @@ private fun StatusScreen() {
     val wadbStatus by Wadb.status.collectAsStateWithLifecycle()
     val busy by Wadb.busy.collectAsStateWithLifecycle()
     val wadbLog by Wadb.log.collectAsStateWithLifecycle()
-    var cardStyle by remember { mutableStateOf(Prefs.cardStyle(context)) }
     var activateOnBoot by remember { mutableStateOf(Prefs.activateOnBoot(context)) }
 
     // Re-read settings and permissions whenever the screen comes back to the foreground.
@@ -106,7 +105,6 @@ private fun StatusScreen() {
 
     val weather by WeatherRepository.weather.collectAsStateWithLifecycle()
     val weatherStatus by WeatherRepository.status.collectAsStateWithLifecycle()
-    var showTestCard by remember { mutableStateOf(Prefs.showTestCard(context)) }
     val hasLocation = remember(refresh, weatherStatus) { WeatherRepository.hasLocationPermission(context) }
     val hasBackgroundLocation = remember(refresh, weatherStatus) { WeatherRepository.hasBackgroundLocationPermission(context) }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -132,7 +130,7 @@ private fun StatusScreen() {
         ) {
             Text("At a Glance Plus", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Takes over the native At a Glance slot over wireless debugging. Now with its own weather card.",
+                "Takes over the native At a Glance slot over wireless debugging. Weather is live; the other cards are previews with sample content.",
                 style = MaterialTheme.typography.bodyMedium
             )
 
@@ -259,40 +257,7 @@ private fun StatusScreen() {
                 }) { Text("Refresh weather") }
             }
 
-            Section("Test card style") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Show the test card")
-                        Text("Off leaves just the weather card.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Switch(checked = showTestCard, onCheckedChange = {
-                        showTestCard = it
-                        Prefs.setShowTestCard(context, it)
-                    })
-                }
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    Prefs.CardStyle.entries.forEachIndexed { index, style ->
-                        SegmentedButton(
-                            selected = cardStyle == style,
-                            onClick = {
-                                cardStyle = style
-                                Prefs.setCardStyle(context, style)
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = Prefs.CardStyle.entries.size)
-                        ) {
-                            Text(if (style == Prefs.CardStyle.TEMPLATE) "Google template" else "Own layout")
-                        }
-                    }
-                }
-                Text(
-                    when (cardStyle) {
-                        Prefs.CardStyle.TEMPLATE -> "The launcher draws the card from our text and icon. Always works, limited look."
-                        Prefs.CardStyle.LAYOUT -> "Our RemoteViews layout: progress bar, colours and fonts are ours. Android 16+."
-                    },
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text("Changes are pushed to connected sessions immediately.", style = MaterialTheme.typography.bodySmall)
-            }
+            CardPreviewSection(maxCards = sessions.values.maxOfOrNull { it.targetCount } ?: 0)
 
             Section("Fallback: from a computer") {
                 Text("The same commands, for adb over USB if wireless debugging is not an option.", style = MaterialTheme.typography.bodySmall)
@@ -315,7 +280,7 @@ private fun startPairing(context: Context) {
 }
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
+internal fun Section(title: String, content: @Composable () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
