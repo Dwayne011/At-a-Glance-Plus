@@ -8,6 +8,8 @@ object Prefs {
 
     private const val FILE = "settings"
     const val KEY_CARD_STYLE = "card_style"
+    const val KEY_PAIRED = "wadb_paired"
+    const val KEY_ACTIVATE_ON_BOOT = "activate_on_boot"
 
     /** How the test card is drawn in the At a Glance slot. */
     enum class CardStyle {
@@ -28,5 +30,18 @@ object Prefs {
 
     fun setCardStyle(context: Context, style: CardStyle) {
         get(context).edit().putString(KEY_CARD_STYLE, style.name).apply()
+    }
+
+    /** True once a wireless-debugging pairing has completed on this install. */
+    fun isPaired(context: Context): Boolean = get(context).getBoolean(KEY_PAIRED, false)
+
+    fun setPaired(context: Context, paired: Boolean) {
+        get(context).edit().putBoolean(KEY_PAIRED, paired).apply()
+    }
+
+    fun activateOnBoot(context: Context): Boolean = get(context).getBoolean(KEY_ACTIVATE_ON_BOOT, true)
+
+    fun setActivateOnBoot(context: Context, enabled: Boolean) {
+        get(context).edit().putBoolean(KEY_ACTIVATE_ON_BOOT, enabled).apply()
     }
 }

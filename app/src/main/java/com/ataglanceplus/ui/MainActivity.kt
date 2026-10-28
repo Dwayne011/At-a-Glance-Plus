@@ -1,13 +1,17 @@
 package com.ataglanceplus.ui
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,27 +27,39 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ataglanceplus.Commands
 import com.ataglanceplus.Prefs
 import com.ataglanceplus.service.ServiceState
+import com.ataglanceplus.wadb.Activator
+import com.ataglanceplus.wadb.PairingService
+import com.ataglanceplus.wadb.Wadb
+import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
@@ -65,9 +81,30 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun StatusScreen() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val sessions by ServiceState.sessions.collectAsStateWithLifecycle()
     val lastEvent by ServiceState.lastEvent.collectAsStateWithLifecycle()
+    val wadbStatus by Wadb.status.collectAsStateWithLifecycle()
+    val busy by Wadb.busy.collectAsStateWithLifecycle()
     var cardStyle by remember { mutableStateOf(Prefs.cardStyle(context)) }
+    var activateOnBoot by remember { mutableStateOf(Prefs.activateOnBoot(context)) }
+
+    // Re-read settings and permissions whenever the screen comes back to the foreground.
+    var refresh by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh++ }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val paired = remember(refresh, wadbStatus) { Prefs.isPaired(context) }
+    val wirelessOn = remember(refresh, wadbStatus) { Wadb.isWirelessDebuggingEnabled(context) }
+    val canSelfEnable = remember(refresh, wadbStatus) { Wadb.canWriteSecureSettings(context) }
+    val wifi = remember(refresh, wadbStatus) { Wadb.isWifiConnected(context) }
+
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startPairing(context)
+    }
 
     Scaffold { padding ->
         Column(
@@ -80,7 +117,7 @@ private fun StatusScreen() {
         ) {
             Text("At a Glance Plus", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Milestone 1: take over the native At a Glance slot and show one test card.",
+                "Milestone 2: take over the native At a Glance slot from the phone itself, over wireless debugging.",
                 style = MaterialTheme.typography.bodyMedium
             )
 
@@ -105,6 +142,50 @@ private fun StatusScreen() {
                 }
                 if (lastEvent.isNotEmpty()) {
                     Text("Last event: $lastEvent", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            Section("Wireless debugging") {
+                CheckRow("Paired with this phone", paired, if (paired) "The phone trusts this app's key" else "Pair once; no computer needed")
+                CheckRow("Wireless debugging on", wirelessOn, if (canSelfEnable) "The app can switch it on itself" else "Developer options › Wireless debugging")
+                CheckRow("Can switch it on after a restart", canSelfEnable, if (canSelfEnable) "Secure-settings permission held" else "Granted automatically during the first activation")
+                CheckRow("Wi-Fi connected", wifi, "Wireless debugging only works on Wi-Fi")
+
+                if (!paired) {
+                    Text(
+                        "Pairing: tap the button, then in the Developer options page that opens choose \"Pair device with pairing code\". A notification from this app asks for the six-digit code. Keep the dialog open while you type it.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(onClick = {
+                        if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                            startPairing(context)
+                        } else {
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }) { Text("Pair with this phone") }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(enabled = !busy, onClick = {
+                            scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) }
+                        }) { Text("Activate") }
+                        OutlinedButton(enabled = !busy && Commands.defaultProvider(context) != null, onClick = {
+                            scope.launch { Activator.run(context, Activator.Mode.RESET) }
+                        }) { Text("Back to Google") }
+                    }
+                    OutlinedButton(onClick = { startPairing(context) }) { Text("Pair again") }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Re-activate after a restart")
+                            Text("Waits for Wi-Fi, then runs the activation. The launcher and SystemUI restart once.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = activateOnBoot, onCheckedChange = {
+                            activateOnBoot = it
+                            Prefs.setActivateOnBoot(context, it)
+                        })
+                    }
+                }
+                if (wadbStatus.isNotEmpty()) {
+                    Text(wadbStatus, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                 }
             }
 
@@ -133,19 +214,10 @@ private fun StatusScreen() {
                 Text("Changes are pushed to connected sessions immediately.", style = MaterialTheme.typography.bodySmall)
             }
 
-            Section("1. Activate (from a computer)") {
-                Text("Enable USB debugging, connect the phone, then run this once. SystemUI and the launcher restart so they open sessions with this app while the override is in force.", style = MaterialTheme.typography.bodySmall)
-                CommandBlock(Commands.activate(context))
-                Text("After a reboot the phone goes back to Google's provider; run it again. A later milestone does this automatically over wireless debugging.", style = MaterialTheme.typography.bodySmall)
-            }
-
-            Section("2. Back to Google") {
-                val reset = Commands.reset(context)
-                if (reset != null) {
-                    CommandBlock(reset)
-                } else {
-                    Text("No default provider found on this device, so there is nothing to reset to.")
-                }
+            Section("Fallback: from a computer") {
+                Text("The same commands, for adb over USB if wireless debugging is not an option.", style = MaterialTheme.typography.bodySmall)
+                CommandBlock(Commands.activateAdb(context))
+                Commands.resetAdb(context)?.let { CommandBlock(it) }
             }
 
             Section("Service component") {
@@ -155,6 +227,11 @@ private fun StatusScreen() {
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+private fun startPairing(context: Context) {
+    context.startForegroundService(PairingService.startIntent(context))
+    runCatching { context.startActivity(Wadb.wirelessDebuggingSettingsIntent()) }
 }
 
 @Composable

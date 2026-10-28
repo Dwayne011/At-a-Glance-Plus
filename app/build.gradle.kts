@@ -6,6 +6,7 @@ plugins {
 android {
     namespace = "com.ataglanceplus"
     compileSdk = libs.versions.compileSdk.get().toInt()
+    ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
         applicationId = "com.ataglanceplus"
@@ -13,8 +14,18 @@ android {
         // (custom layouts) from Android 15 QPR2 / Android 16, and that is the whole point.
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.2.0"
+
+        // Pixel phones are arm64 only; this keeps Conscrypt and the pairing library small.
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_static")
+            }
+        }
     }
 
     buildTypes {
@@ -31,6 +42,21 @@ android {
 
     buildFeatures {
         compose = true
+        prefab = true
+    }
+
+    packaging {
+        resources {
+            // BouncyCastle's modules each ship the same licence files.
+            excludes += setOf("META-INF/LICENSE.md", "META-INF/LICENSE", "META-INF/NOTICE.md", "META-INF/NOTICE", "META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = libs.versions.cmake.get()
+        }
     }
 }
 
@@ -39,6 +65,10 @@ dependencies {
     compileOnly(project(":systemstubs"))
 
     implementation(libs.kotlinx.coroutines.android)
+    // Wireless debugging client: TLS with keying-material export, certificates, SPAKE2 pairing.
+    implementation(libs.conscrypt.android)
+    implementation(libs.bouncycastle.pkix)
+    implementation(libs.boringssl)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

@@ -6,4 +6,26 @@
     <string name="card_test_eta">12 min</string>
     <string name="card_test_layout_subtitle">Custom layout · tap to open</string>
     <string name="card_icon_description">At a Glance Plus</string>
+
+    <string name="pairing_channel">Wireless debugging pairing</string>
+    <string name="boot_channel">Activation after restart</string>
+    <string name="pairing_searching_title">Waiting for the pairing dialog</string>
+    <string name="pairing_searching_text">In Developer options › Wireless debugging, tap \"Pair device with pairing code\" and keep that dialog open.</string>
+    <string name="pairing_found_title">Pairing dialog found</string>
+    <string name="pairing_found_text">Type the six-digit code from the dialog here. Keep the dialog open until this finishes.</string>
+    <string name="pairing_enter_code">Enter pairing code</string>
+    <string name="pairing_code_label">Pairing code</string>
+    <string name="pairing_cancel">Cancel</string>
+    <string name="pairing_working">Pairing…</string>
+    <string name="pairing_activating">Paired. Switching At a Glance to this app…</string>
+    <string name="pairing_done">Paired</string>
+    <string name="pairing_done_text">At a Glance is now served by this app. The launcher and SystemUI restarted.</string>
+    <string name="pairing_done_but">Pairing worked, but activation did not: %1$s. Open the app and tap Activate.</string>
+    <string name="pairing_failed">Pairing failed</string>
+    <string name="pairing_code_invalid">The code must be six digits.</string>
+    <string name="pairing_code_wrong">Wrong pairing code. Start pairing again.</string>
+    <string name="pairing_port_closed">The pairing dialog was closed before the code was sent.</string>
+    <string name="pairing_rejected">The phone rejected the pairing. Start again.</string>
+    <string name="boot_waiting">Waiting for Wi-Fi to re-activate At a Glance</string>
+    <string name="boot_activating">Re-activating At a Glance</string>
 </resources>

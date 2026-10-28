@@ -8,8 +8,8 @@ import com.ataglanceplus.service.AtAGlanceService
 
 /**
  * The privileged step. Pointing the system at our service needs shell privileges, which an app
- * cannot hold. Milestone 1 does it from a computer with adb; a later milestone does the same over
- * wireless debugging from inside the app so it survives reboots.
+ * cannot hold. The app gets them through wireless debugging (see the wadb package); the same
+ * commands can also be run from a computer with adb.
  *
  * How it works: the system keeps one cached binding to the active Smartspace service. A temporary
  * override lasts at most two minutes, but clients that open a session while it is active stay
@@ -60,13 +60,23 @@ object Commands {
         false
     }
 
-    fun activate(context: Context): String =
-        override(serviceComponent(context))
+    /** Shell command that makes this app the At a Glance provider. */
+    fun activateShell(context: Context): String = overrideShell(serviceComponent(context))
 
-    fun reset(context: Context): String? =
-        defaultProvider(context)?.let { override(it.flattenToString()) }
+    /** Shell command that restores Google's provider, or null if none is configured. */
+    fun resetShell(context: Context): String? =
+        defaultProvider(context)?.let { overrideShell(it.flattenToString()) }
 
-    private fun override(component: String): String =
-        "adb shell \"cmd smartspace set temporary-service ${userId()} $component $OVERRIDE_MS" +
-            " && am crash $SYSTEM_UI && am force-stop $PIXEL_LAUNCHER\""
+    /** Shell command that lets the app flip wireless debugging on by itself later. */
+    fun grantSecureSettingsShell(context: Context): String =
+        "pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS"
+
+    /** The same commands wrapped for a computer with adb. */
+    fun activateAdb(context: Context): String = "adb shell \"${activateShell(context)}\""
+
+    fun resetAdb(context: Context): String? = resetShell(context)?.let { "adb shell \"$it\"" }
+
+    private fun overrideShell(component: String): String =
+        "cmd smartspace set temporary-service ${userId()} $component $OVERRIDE_MS" +
+            " && am crash $SYSTEM_UI && am force-stop $PIXEL_LAUNCHER"
 }

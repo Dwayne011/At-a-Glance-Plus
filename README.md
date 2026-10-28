@@ -3,15 +3,16 @@
 A self-contained replacement for the content of Google's At a Glance on Pixel phones, with
 everything built in: no plugins, no Shizuku.
 
-Status: **milestone 1**. The app takes over the native At a Glance slot on the home screen,
+Status: **milestone 2**. The app takes over the native At a Glance slot on the home screen,
 lock screen and always-on display and shows one test card, drawn either as a Google template or
-as the app's own layout. Its purpose is to prove the system hook and measure what the slot allows
-on a real phone before the real features are built.
+as the app's own layout. It does the privileged step itself over the phone's own wireless
+debugging, with no computer, and repeats it after every reboot.
 
 ## Requirements
 
 - Pixel phone, Android 16 or newer (the slot honours custom layouts from Android 15 QPR2 / 16).
-- A computer with `adb`, for the one privileged step. A later milestone removes this.
+- Developer options with Wireless debugging available (any Pixel). A computer with `adb` is an
+  optional fallback.
 
 ## How it works
 
@@ -43,12 +44,25 @@ Needs the Android SDK; Gradle fetches platform 37 (needed by the current Compose
 ## Try it
 
 1. Install the debug APK and open the app. The device checks at the top should all read OK.
-2. Enable USB debugging and connect the phone.
-3. Copy the activation command from the app and run it on the computer. SystemUI and the launcher
-   restart.
+2. Connect to Wi-Fi and turn on Wireless debugging in Developer options.
+3. Tap "Pair with this phone". Developer options opens; choose "Pair device with pairing code"
+   and keep that dialog open. A notification from the app asks for the six-digit code; type it
+   there. The app pairs, grants itself the secure-settings permission, and activates: SystemUI and
+   the launcher restart.
 4. The home screen and lock screen now show the test card. Switch between "Google template" and
    "Own layout" in the app to compare the two rendering tiers.
-5. Use the "Back to Google" command to restore the stock provider.
+5. "Back to Google" restores the stock provider. "Activate" switches back.
+6. After a reboot the app waits for Wi-Fi, switches wireless debugging on and re-activates by
+   itself (switch in the app).
+
+## How the wireless debugging path works
+
+The app contains an ADB client (derived from Shizuku, Apache 2.0, see NOTICE). Pairing uses
+adb's protocol: TLS, then SPAKE2 with the pairing code and the exported TLS keying material as
+the password, then an encrypted exchange of public keys. After that adbd trusts the app's
+certificate, and the app can connect to `127.0.0.1` on the port adbd advertises over multicast
+DNS and run shell commands. Wireless debugging only runs on Wi-Fi, so activation needs a Wi-Fi
+connection.
 
 ## What to look for on the phone
 
@@ -61,8 +75,8 @@ These are the things that cannot be verified without a device:
 
 ## Roadmap
 
-1. Milestone 1: system hook and test card (this).
-2. Automatic activation over wireless debugging after boot, so the computer is no longer needed.
+1. Milestone 1: system hook and test card.
+2. Milestone 2: pairing and activation over wireless debugging, including after boot (this).
 3. Generic sources: Live Updates from any app, media from any player, Wallet passes.
 4. Rules engine: show a card when near a place, when navigating somewhere, at a time, on a network.
 5. Place categories from OpenStreetMap.

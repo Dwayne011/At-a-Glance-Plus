@@ -1,0 +1,9 @@
+At a Glance Plus
+
+The wireless debugging client in app/src/main/java/com/ataglanceplus/adb and the pairing
+code in app/src/main/cpp/adb_pairing.cpp are derived from Shizuku
+(https://github.com/RikkaApps/Shizuku), Copyright Rikka contributors, licensed under the
+Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
+
+The hidden-API stubs in systemstubs/ follow class and method signatures from the Android Open
+Source Project, licensed under the Apache License, Version 2.0.
