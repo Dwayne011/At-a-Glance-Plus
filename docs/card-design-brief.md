@@ -68,7 +68,7 @@ Not possible:
 
 ## 6. Interaction
 
-- A tap target should be at least 48 × 48 dp. On a 76 dp card that allows up to about five buttons in a row.
+- A tap target should be at least 48 × 48 dp. On a 76 dp card that allows up to about five buttons in a row. Complication chips are the one exception: see section 7.1.
 - Say what each tap does. Whole-card tap is the default; buttons (for example play and pause) are extra.
 - From the lock screen every tap asks for an unlock first. This is deliberate and not configurable per card.
 - Moving between cards: on the home screen the launcher pages horizontally, with dots under the
@@ -85,15 +85,22 @@ drawn in our own layout, so their look is entirely up to the design, within the 
 
 ### 7.1 Where they go: two slot layouts
 
-Each card design picks one of these. Mock both for the weather card so we can compare.
+Each card design picks one of these. Mock both for the weather card so we can compare. In both,
+every chip is tappable and opens its own app (after an unlock on the lock screen).
 
-| Layout | Space | Holds | Main content keeps |
-|---|---|---|---|
-| **Right column** | 84 dp wide, full card height, right edge inside the padding | Up to 2 chips stacked | About 260 dp of width, all 3 text lines |
-| **Bottom strip** | Full content width, 24 dp tall, 6 dp above the bottom padding | Up to 4 chips in a row | 2 text lines above the strip |
+| Layout | Space | Holds | Tap area per chip | Main content keeps |
+|---|---|---|---|---|
+| **Right column** | 84 dp wide, full card height, right edge inside the padding | Up to 2 chips stacked | 84 × 38 dp (each chip owns half the column) | About 260 dp of width, all 3 text lines |
+| **Bottom strip** | Full content width; chips 24 dp tall, sitting 6 dp above the card's bottom edge | Up to 4 chips in a row | Chip width (64 dp minimum) × 36 dp, reaching from just above the chip to the card's bottom edge | 2 text lines above the strip |
 
 Content area inside the card body, after padding: about 346 × 76 dp. Both layouts must still
 work when the user has chosen no complications (the space is given back to the main content).
+
+Tap size: the card's height is fixed at 76 dp, so a chip's tap area is 36 to 38 dp tall, not the
+48 dp Android recommends for buttons. It comfortably exceeds the accessibility minimum (24 dp),
+and the tap area is larger than the visible pill, which makes it easier to hit than it looks.
+Keep at least 6 dp between neighbouring chips so taps are not ambiguous, and keep the rest of the
+card's tap area clear of the chips' zones.
 
 ### 7.2 The chip
 
@@ -105,16 +112,12 @@ work when the user has chosen no complications (the space is given back to the m
 | Text | 12 to 13 sp, medium weight, at most 6 characters ("99+", "07:30", "3h 12m") |
 | Padding | 8 dp left and right, 4 dp between icon and text |
 | Gap between chips | 6 dp |
-| Width | Fits its content; 80 dp maximum |
+| Width | Fits its content; 64 dp minimum (so it stays tappable), 80 dp maximum |
+| Pressed state | Mock a pressed look (for example a lighter fill); Android shows it while the finger is down |
 
-Tapping: in the right column each chip is its own tap zone (about 84 × 36 dp, opening the
-related app). In the bottom strip the chips are too small to tap reliably, so a tap anywhere on
-the card opens the card's own target. Say in the mockup if you would rather trade content space
-for tappable chips.
-
-States to mock for the chip: normal, needs attention (for example a missed call), large number
-("99+"), and the always-on display version (outline only, dim). A complication with nothing to
-report (0 emails) is hidden rather than shown as zero.
+States to mock for the chip: normal, pressed, needs attention (for example a missed call), large
+number ("99+"), and the always-on display version (outline only, dim). A complication with nothing
+to report (0 emails) is hidden rather than shown as zero.
 
 ### 7.3 Complications available, with sample values for mockups
 
