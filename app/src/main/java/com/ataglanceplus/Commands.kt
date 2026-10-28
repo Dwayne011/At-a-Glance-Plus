@@ -28,18 +28,28 @@ object Commands {
     /** The current user's id. UserHandle.hashCode() is documented to return the identifier. */
     fun userId(): Int = Process.myUserHandle().hashCode()
 
-    /** Google's own provider (Android System Intelligence) as configured by the firmware. */
-    fun defaultProvider(context: Context): ComponentName? {
+    /** Result of looking up Google's own provider (Android System Intelligence). */
+    sealed class Provider {
+        data class Found(val component: ComponentName) : Provider()
+        data class Missing(val reason: String) : Provider()
+    }
+
+    /** Google's own provider as configured by the firmware, if its package is installed. */
+    fun defaultProvider(context: Context): ComponentName? =
+        (lookupDefaultProvider(context) as? Provider.Found)?.component
+
+    fun lookupDefaultProvider(context: Context): Provider {
         val id = context.resources.getIdentifier("config_defaultSmartspaceService", "string", "android")
-        if (id == 0) return null
+        if (id == 0) return Provider.Missing("config_defaultSmartspaceService is not defined on this build")
         val flat = context.resources.getString(id)
-        if (flat.isBlank()) return null
-        val component = ComponentName.unflattenFromString(flat) ?: return null
+        if (flat.isBlank()) return Provider.Missing("config_defaultSmartspaceService is empty")
+        val component = ComponentName.unflattenFromString(flat)
+            ?: return Provider.Missing("config_defaultSmartspaceService is malformed: $flat")
         return try {
             context.packageManager.getServiceInfo(component, PackageManager.ComponentInfoFlags.of(0))
-            component
+            Provider.Found(component)
         } catch (e: PackageManager.NameNotFoundException) {
-            null
+            Provider.Missing("configured as ${component.flattenToShortString()} but not visible or not installed")
         }
     }
 

@@ -2,6 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Package visibility: without these the launcher and Google's provider are invisible to us. -->
+    <queries>
+        <package android:name="com.google.android.apps.nexuslauncher" />
+        <package android:name="com.google.android.as" />
+        <intent>
+            <action android:name="android.service.smartspace.SmartspaceService" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"

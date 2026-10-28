@@ -87,8 +87,10 @@ private fun StatusScreen() {
             Section("Device checks") {
                 CheckRow("Android 16 or newer", Build.VERSION.SDK_INT >= 36, "API ${Build.VERSION.SDK_INT}")
                 CheckRow("Pixel Launcher installed", Commands.isPixelLauncherInstalled(context), Commands.PIXEL_LAUNCHER)
-                val default = Commands.defaultProvider(context)
-                CheckRow("Google At a Glance provider found", default != null, default?.flattenToShortString() ?: "config_defaultSmartspaceService is empty")
+                when (val provider = Commands.lookupDefaultProvider(context)) {
+                    is Commands.Provider.Found -> CheckRow("Google At a Glance provider found", true, provider.component.flattenToShortString())
+                    is Commands.Provider.Missing -> CheckRow("Google At a Glance provider found", false, provider.reason)
+                }
             }
 
             Section("Connection") {
