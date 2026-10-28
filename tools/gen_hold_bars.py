@@ -6,8 +6,10 @@ with no app code involved, so it works inside RemoteViews. A line traces the car
 edge clockwise from the top centre. One set per colour (red on dismissible cards, amber on the
 pinned weather card) and per touch-and-hold delay setting (short, medium, long).
 
-Timing: a view in a scrolling container shows as pressed 100 ms after the touch; the ring then
-waits another 100 ms (so quick taps do not flash it) and closes as the launcher's menu opens.
+Timing: Pixel Launcher opens its long-press menu at 3/4 of the touch-and-hold delay (Launcher3's
+long-press factor), and a view in a scrolling container only shows as pressed 100 ms after the
+touch, which also keeps quick taps from flashing the ring. The ring closes at 90% of the time
+between the two, so it is complete just before the menu appears.
 
 The path is drawn for the spec's 380 x 76 dp card with 24 dp corners; on a card of another
 width the corners stretch slightly. Run from the repository root; the output is committed.
@@ -17,7 +19,8 @@ import os
 RES = "app/src/main/res/drawable"
 COLOURS = {"red": "#FFF43F5E", "amber": "#FFF59E0B"}
 TAP_TIMEOUT = 100
-START_DELAY = 100
+LAUNCHER_FACTOR = 0.75
+FINISH_EARLY = 0.9
 TIMEOUTS = (400, 1000, 1500)
 W, H, R, STROKE = 380, 76, 24, 2.5
 i = STROKE / 2
@@ -53,7 +56,7 @@ for name, colour in COLOURS.items():
     # The animation's starting picture: nothing drawn yet, so the start delay shows no ring.
     write(f"hold_bar_{name}_zero", vector(colour, 0), f"Hold ring, {name}, not started")
     for timeout in TIMEOUTS:
-        ms = timeout - TAP_TIMEOUT - START_DELAY
+        ms = int((timeout * LAUNCHER_FACTOR - TAP_TIMEOUT) * FINISH_EARLY)
         avd = f"avd_hold_{name}_{timeout}"
         write(avd, f'''<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
@@ -64,13 +67,12 @@ for name, colour in COLOURS.items():
                 android:duration="{ms}"
                 android:interpolator="@android:interpolator/linear"
                 android:propertyName="trimPathEnd"
-                android:startOffset="{START_DELAY}"
                 android:valueFrom="0"
                 android:valueTo="1"
                 android:valueType="floatType" />
         </aapt:attr>
     </target>
-</animated-vector>''', f"Hold ring trace, {name}, {START_DELAY} ms delay then {ms} ms")
+</animated-vector>''', f"Hold ring trace, {name}, {ms} ms")
         write(f"hold_bar_{name}_{timeout}", f'''<animated-selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/hold_pressed"
