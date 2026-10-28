@@ -1,5 +1,10 @@
 package com.ataglanceplus.ui
 
+import kotlinx.coroutines.delay
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import android.Manifest
 import android.content.Intent
 import android.provider.Settings
@@ -191,40 +196,74 @@ private fun FinanceSettings() {
     val scope = rememberCoroutineScope()
     val status by FinanceSource.status.collectAsStateWithLifecycle()
     val quotes by FinanceSource.quotes.collectAsStateWithLifecycle()
-    var entry by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<FinanceSource.Match>>(emptyList()) }
+    var searching by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val tickers = Prefs.financeTickers(context)
 
-    Text("Stocks (Yahoo Finance symbols, e.g. AAPL, TSLA, VOD.L for London)", style = MaterialTheme.typography.bodySmall)
+    // Search as the user types, once they pause.
+    LaunchedEffect(query) {
+        if (query.isBlank()) {
+            results = emptyList()
+            return@LaunchedEffect
+        }
+        delay(350)
+        searching = true
+        results = withContext(Dispatchers.IO) { FinanceSource.search(query) }
+        searching = false
+    }
+
+    Text("Stocks", style = MaterialTheme.typography.bodySmall)
     tickers.forEach { ticker ->
         Row(verticalAlignment = Alignment.CenterVertically) {
             val quote = quotes.firstOrNull { it.symbol.equals(ticker, ignoreCase = true) }
-            Text(
-                ticker + (quote?.let { String.format(java.util.Locale.getDefault(), " · %.2f (%+.2f%%)", it.price, it.changePercent) } ?: ""),
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(ticker + (quote?.let { " · ${it.name}" } ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                quote?.let {
+                    Text(
+                        String.format(java.util.Locale.getDefault(), "%.2f %s · %+.2f%% today", it.price, it.currency, it.changePercent),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
             TextButton(onClick = { Prefs.setFinanceTickers(context, tickers - ticker) }) { Text("Remove") }
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = entry, onValueChange = { entry = it.uppercase().trim() }, singleLine = true,
-            label = { Text("Ticker") }, modifier = Modifier.weight(1f)
-        )
-        Button(enabled = entry.isNotEmpty(), onClick = {
-            val symbol = entry
-            message = "Checking $symbol…"
-            scope.launch {
-                val quote = withContext(Dispatchers.IO) { FinanceSource.fetch(symbol) }
-                if (quote == null) {
-                    message = "$symbol was not found, or the price feed did not answer."
-                } else {
-                    if (tickers.none { it.equals(quote.symbol, ignoreCase = true) }) Prefs.setFinanceTickers(context, tickers + quote.symbol)
-                    message = "Added ${quote.symbol} (${quote.name})."
-                    entry = ""
+    OutlinedTextField(
+        value = query, onValueChange = { query = it }, singleLine = true,
+        label = { Text("Search by company or ticker") }, modifier = Modifier.fillMaxWidth()
+    )
+    if (searching) Text("Searching…", style = MaterialTheme.typography.bodySmall)
+    if (query.isNotBlank() && !searching && results.isEmpty()) Text("No matches.", style = MaterialTheme.typography.bodySmall)
+    results.forEach { match ->
+        val added = tickers.any { it.equals(match.symbol, ignoreCase = true) }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !added) {
+                    message = "Checking ${match.symbol}…"
+                    scope.launch {
+                        val quote = withContext(Dispatchers.IO) { FinanceSource.fetch(match.symbol) }
+                        if (quote == null) {
+                            message = "${match.symbol} has no price from the feed right now, so it was not added."
+                        } else {
+                            Prefs.setFinanceTickers(context, Prefs.financeTickers(context) + quote.symbol)
+                            message = String.format(
+                                java.util.Locale.getDefault(), "Added %s · %s · %.2f %s", quote.symbol, quote.name, quote.price, quote.currency
+                            )
+                            query = ""
+                        }
+                    }
                 }
-            }
-        }) { Text("Add") }
+                .padding(vertical = 6.dp)
+        ) {
+            Text("${match.symbol} · ${match.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                listOf(match.exchange, match.type).filter { it.isNotEmpty() }.joinToString(" · ") + if (added) " · already added" else "",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
     }
     if (message.isNotEmpty()) Text(message, style = MaterialTheme.typography.bodySmall)
     if (status.isNotEmpty()) Text("Prices: $status", style = MaterialTheme.typography.bodySmall)

@@ -101,6 +101,46 @@ object FinanceSource {
         }
     }
 
+    /** A match for what the user typed: enough to tell, say, VOD (NASDAQ) from VOD.L (London). */
+    data class Match(val symbol: String, val name: String, val exchange: String, val type: String)
+
+    /**
+     * Symbols matching a name or ticker, from Yahoo Finance's search feed (stocks, ETFs,
+     * funds and indices). Empty if nothing matches or the feed does not answer.
+     */
+    fun search(query: String): List<Match> {
+        if (query.isBlank()) return emptyList()
+        val url = URL(
+            "https://query1.finance.yahoo.com/v1/finance/search?q=" + URLEncoder.encode(query.trim(), "UTF-8") +
+                "&quotesCount=8&newsCount=0&listsCount=0"
+        )
+        val connection = (url.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 10_000
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16) AtAGlancePlus")
+        }
+        return try {
+            if (connection.responseCode != 200) return emptyList()
+            val quotes = JSONObject(connection.inputStream.bufferedReader().use { it.readText() }).optJSONArray("quotes")
+                ?: return emptyList()
+            (0 until quotes.length()).mapNotNull { i ->
+                val q = quotes.optJSONObject(i) ?: return@mapNotNull null
+                val symbol = q.optString("symbol").ifEmpty { return@mapNotNull null }
+                Match(
+                    symbol = symbol,
+                    name = q.optString("longname").ifEmpty { q.optString("shortname") }.trim().ifEmpty { symbol },
+                    exchange = q.optString("exchDisp").ifEmpty { q.optString("exchange") },
+                    type = q.optString("typeDisp"),
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "search failed", e)
+            emptyList()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     /** The stock's page on Google Finance, where the exchange is known; otherwise a search. */
     fun googleFinanceUrl(quote: Quote): String {
         val base = quote.symbol.substringBefore('.')
