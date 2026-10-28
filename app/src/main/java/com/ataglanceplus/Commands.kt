@@ -60,6 +60,22 @@ object Commands {
         false
     }
 
+    /**
+     * The activation as separate steps, so each one's output can be shown. Order matters: the
+     * override first, then restart SystemUI (lock screen, always-on display) and the launcher so
+     * both open fresh sessions while the override is in force.
+     */
+    fun activateSteps(context: Context): List<String> = overrideSteps(serviceComponent(context))
+
+    fun resetSteps(context: Context): List<String>? =
+        defaultProvider(context)?.let { overrideSteps(it.flattenToString()) }
+
+    private fun overrideSteps(component: String): List<String> = listOf(
+        "cmd smartspace set temporary-service ${userId()} $component $OVERRIDE_MS",
+        "am crash $SYSTEM_UI",
+        "am force-stop $PIXEL_LAUNCHER"
+    )
+
     /** Shell command that makes this app the At a Glance provider. */
     fun activateShell(context: Context): String = overrideShell(serviceComponent(context))
 

@@ -86,6 +86,7 @@ private fun StatusScreen() {
     val lastEvent by ServiceState.lastEvent.collectAsStateWithLifecycle()
     val wadbStatus by Wadb.status.collectAsStateWithLifecycle()
     val busy by Wadb.busy.collectAsStateWithLifecycle()
+    val wadbLog by Wadb.log.collectAsStateWithLifecycle()
     var cardStyle by remember { mutableStateOf(Prefs.cardStyle(context)) }
     var activateOnBoot by remember { mutableStateOf(Prefs.activateOnBoot(context)) }
 
@@ -134,7 +135,12 @@ private fun StatusScreen() {
                 if (sessions.isEmpty()) {
                     Text("Not connected. No client has opened a session with this service yet.")
                 } else {
-                    Text("Connected. Active sessions:")
+                    val surfaces = sessions.values.map { it.surface }.toSet()
+                    Text(
+                        "Home screen: " + (if ("home" in surfaces) "connected" else "not connected") +
+                            " · Lock screen: " + (if ("lockscreen" in surfaces) "connected" else "not connected")
+                    )
+                    Text("Active sessions:")
                     sessions.values.forEach { s ->
                         val pushed = if (s.lastPushAt == 0L) "no push yet" else "pushed " + DateFormat.getTimeInstance().format(Date(s.lastPushAt))
                         Text("• ${s.surface} from ${s.clientPackage} (wants ${s.targetCount}) · $pushed", style = MaterialTheme.typography.bodySmall)
@@ -196,6 +202,10 @@ private fun StatusScreen() {
                 }
                 if (wadbStatus.isNotEmpty()) {
                     Text(wadbStatus, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                }
+                if (wadbLog.isNotEmpty()) {
+                    Text("Last activation, command by command:", style = MaterialTheme.typography.labelLarge)
+                    Text(wadbLog, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                 }
             }
 

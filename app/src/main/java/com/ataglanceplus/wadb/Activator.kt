@@ -46,22 +46,21 @@ object Activator {
                 ?: return@withContext fail("Could not find the wireless debugging port. Check that Wireless debugging is on in Developer options.")
 
             Wadb.setStatus("Connecting on port $port")
-            val command = when (mode) {
-                Mode.ACTIVATE -> Commands.activateShell(context)
-                Mode.RESET -> Commands.resetShell(context)
+            val steps = when (mode) {
+                Mode.ACTIVATE -> Commands.activateSteps(context)
+                Mode.RESET -> Commands.resetSteps(context)
                     ?: return@withContext fail("No Google provider found on this device")
             }
+            val log = StringBuilder()
             try {
                 AdbClient("127.0.0.1", port, Wadb.key(context)).use { client ->
                     client.connect()
                     if (!Wadb.canWriteSecureSettings(context)) {
                         Wadb.setStatus("Granting the secure-settings permission")
-                        val out = client.shell(Commands.grantSecureSettingsShell(context))
-                        Log.i(TAG, "grant: $out")
+                        runStep(client, Commands.grantSecureSettingsShell(context), log)
                     }
                     Wadb.setStatus(if (mode == Mode.ACTIVATE) "Switching At a Glance to this app" else "Restoring Google's At a Glance")
-                    val out = client.shell(command)
-                    Log.i(TAG, "command output: $out")
+                    steps.forEach { runStep(client, it, log) }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "adb failed", e)
@@ -76,6 +75,14 @@ object Activator {
         } finally {
             Wadb.setBusy(false)
         }
+    }
+
+    /** Runs one command (stderr folded into the output) and appends it to the log. */
+    private fun runStep(client: AdbClient, command: String, log: StringBuilder) {
+        val out = client.shell("$command 2>&1; echo \"exit=$?\"").trim()
+        Log.i(TAG, "$command -> $out")
+        log.append("$ ").append(command).append('\n').append(out).append("\n\n")
+        Wadb.setLog(log.toString().trim())
     }
 
     private fun fail(reason: String): Outcome {

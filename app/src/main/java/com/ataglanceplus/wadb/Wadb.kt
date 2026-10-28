@@ -30,6 +30,14 @@ object Wadb {
     /** One line describing what the activator is doing or last did, for the status screen. */
     val status: StateFlow<String> = _status.asStateFlow()
 
+    private val _log = MutableStateFlow("")
+    /** Each command the last activation ran and what it printed, for diagnosis. */
+    val log: StateFlow<String> = _log.asStateFlow()
+
+    fun setLog(text: String) {
+        _log.value = text
+    }
+
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
