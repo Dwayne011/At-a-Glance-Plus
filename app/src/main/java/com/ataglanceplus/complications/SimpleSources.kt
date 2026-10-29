@@ -69,19 +69,30 @@ object SimpleSources {
      */
     fun screenTime(context: Context): ChipValues.Value? {
         if (!hasUsageAccess(context)) return null
-        val now = System.currentTimeMillis()
-        val start = startOfToday()
+        val byApp = usage(context, startOfToday(), System.currentTimeMillis())
+        val minutes = byApp.values.sum() / 60_000
+        if (minutes <= 0) return null
+        val text = duration(minutes)
+        // The busiest app, for an extended chip.
+        val top = byApp.maxByOrNull { it.value }?.takeIf { it.value >= 60_000 }?.let { (pkg, ms) ->
+            "${appName(context, pkg)} ${duration(ms / 60_000)}"
+        }
+        return ChipValues.Value(text, wide = top?.let { "$text · $it" }, detail = top)
+    }
+
+    /**
+     * Time on screen per app between [start] and [end], in milliseconds: from each app coming to
+     * the front until it leaves or the screen goes off. The home screen and system UI do not count.
+     */
+    fun usage(context: Context, start: Long, end: Long): Map<String, Long> {
         val home = context.packageManager.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0
         )?.activityInfo?.packageName
         val ignored = setOfNotNull(home, "com.android.systemui")
-        val events = context.getSystemService(UsageStatsManager::class.java).queryEvents(start, now) ?: return null
+        val events = context.getSystemService(UsageStatsManager::class.java).queryEvents(start, end) ?: return emptyMap()
         val open = HashMap<String, Long>()
-        var total = 0L
-        // Per app too, for the busiest app on a big chip.
         val byApp = HashMap<String, Long>()
         fun count(key: String, ms: Long) {
-            total += ms
             val pkg = key.substringBefore('/')
             byApp[pkg] = (byApp[pkg] ?: 0L) + ms
         }
@@ -100,16 +111,27 @@ object SimpleSources {
                 }
             }
         }
-        open.forEach { (key, from) -> count(key, now - from) }
-        val minutes = total / 60_000
-        if (minutes <= 0) return null
-        val text = duration(minutes)
-        val top = byApp.maxByOrNull { it.value }?.takeIf { it.value >= 60_000 }?.let { (pkg, ms) ->
-            val name = runCatching { context.packageManager.getApplicationInfo(pkg, 0).loadLabel(context.packageManager).toString() }.getOrDefault(pkg)
-            "$name ${duration(ms / 60_000)}"
-        }
-        return ChipValues.Value(text, wide = top?.let { "$text · $it" }, detail = top)
+        open.forEach { (key, from) -> count(key, end - from) }
+        return byApp
     }
+
+    /** Screen time for the dashboard: today per app (busiest first) and the last 7 days' totals (oldest first). */
+    fun screenTimeWeek(context: Context): Pair<List<Pair<String, Long>>, List<Pair<LocalDate, Long>>> {
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
+        val now = System.currentTimeMillis()
+        val apps = usage(context, startOfToday(), now).entries.sortedByDescending { it.value }.map { it.key to it.value }
+        val days = (6 downTo 0).map { back ->
+            val day = today.minusDays(back.toLong())
+            val from = day.atStartOfDay(zone).toInstant().toEpochMilli()
+            val to = if (back == 0) now else day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            day to (if (back == 0) apps.sumOf { it.second } else usage(context, from, to).values.sum())
+        }
+        return apps to days
+    }
+
+    fun appName(context: Context, pkg: String): String =
+        runCatching { context.packageManager.getApplicationInfo(pkg, 0).loadLabel(context.packageManager).toString() }.getOrDefault(pkg)
 
     /** "1h 20m", or "35m" under an hour. */
     fun duration(minutes: Long): String = if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m" else "${minutes}m"

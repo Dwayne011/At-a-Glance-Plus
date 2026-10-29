@@ -123,6 +123,13 @@
             only so it can ask for an unlock; the real target opens after a successful unlock.
         -->
         <activity
+            android:name=".ui.DashboardActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:taskAffinity=""
+            android:excludeFromRecents="true" />
+
+        <activity
             android:name=".ui.UnlockGateActivity"
             android:exported="false"
             android:excludeFromRecents="true"
