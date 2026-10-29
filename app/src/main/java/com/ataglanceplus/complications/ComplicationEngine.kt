@@ -59,6 +59,13 @@ class ComplicationEngine(private val context: Context) {
         watchContent()
         scope.launch { NotificationCounter.counts.collect { updateNotificationChips(it) } }
         scope.launch { refreshRequests.collect { refreshAll() } }
+        scope.launch { com.ataglanceplus.live.EtoroSource.portfolio.collect { set(Complication.ETORO, it?.let(::etoroValue)) } }
+        scope.launch {
+            while (true) {
+                refreshEtoro()
+                delay(ETORO_MS)
+            }
+        }
         scope.launch { WeatherRepository.weather.collect { set(Complication.SUNSET, SimpleSources.sunEvent(context)) } }
         // Once a minute: values that change with the clock (alarm "Fri" → time, countdown, sun).
         scope.launch {
@@ -101,6 +108,7 @@ class ComplicationEngine(private val context: Context) {
         refreshQuick()
         scope.launch { refreshGmailAndScreen() }
         scope.launch { refreshHealth() }
+        scope.launch { refreshEtoro() }
         updateNotificationChips(NotificationCounter.counts.value)
     }
 
@@ -131,6 +139,33 @@ class ComplicationEngine(private val context: Context) {
         selected().filter { it.kind == Complication.HEALTH }.forEach { spec ->
             HealthMetric.fromId(spec.arg)?.let { metric -> ChipValues.set(spec.key, HealthMetrics.value(context, metric, granted)) }
         }
+    }
+
+    /** The eToro chip's portfolio, when the chip is chosen and the keys are in. */
+    private suspend fun refreshEtoro() {
+        if (selected().none { it.kind == Complication.ETORO } || !com.ataglanceplus.live.EtoroSource.hasKeys(context)) return
+        com.ataglanceplus.live.EtoroSource.refresh(context)
+    }
+
+    /**
+     * Profit/loss on open positions and copies, amount and percent: "+$412 +6.3%"; extended,
+     * with the portfolio's value. The icon trends up (green) or down (red).
+     */
+    private fun etoroValue(p: com.ataglanceplus.live.EtoroSource.Portfolio): ChipValues.Value {
+        val up = p.pnl >= 0
+        val amount = SimpleSources.signedMoney(p.pnl)
+        val percent = String.format(java.util.Locale.getDefault(), "%+.1f%%", p.pnlPercent)
+        val icon = ChipValues.Part(
+            if (up) com.ataglanceplus.R.drawable.ic_comp_trend_up else com.ataglanceplus.R.drawable.ic_comp_trend_down,
+            if (up) com.ataglanceplus.R.drawable.ic_comp_trend_up_aod else com.ataglanceplus.R.drawable.ic_comp_trend_down_aod,
+            "$amount $percent",
+        )
+        return ChipValues.Value(
+            text = "$amount $percent",
+            parts = listOf(icon),
+            wide = "$amount · $percent · ${SimpleSources.money(p.equity)}",
+            detail = "Value ${SimpleSources.money(p.equity)}",
+        )
     }
 
     private fun updateNotificationChips(counts: Map<String, Int>) {
@@ -184,6 +219,7 @@ class ComplicationEngine(private val context: Context) {
 
     companion object {
         private const val MINUTE_MS = 60_000L
+        private const val ETORO_MS = 5 * MINUTE_MS
 
         private val refreshRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 

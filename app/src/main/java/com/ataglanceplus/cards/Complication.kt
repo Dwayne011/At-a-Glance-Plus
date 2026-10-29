@@ -43,6 +43,7 @@ enum class Complication(
     BUDS("buds", "Bluetooth battery", "100%", R.drawable.ic_comp_bluetooth, R.drawable.ic_comp_bluetooth_aod, canGrow = true),
     COUNTDOWN("count", "Date countdown", "12d", R.drawable.ic_comp_countdown, R.drawable.ic_comp_countdown_aod, canGrow = true),
     HEALTH("health", "Health metric", "72", R.drawable.ic_comp_heart, R.drawable.ic_comp_heart_aod, needsArg = true, canGrow = true),
+    ETORO("etoro", "eToro portfolio", "+$412 +6.3%", R.drawable.ic_comp_trend, R.drawable.ic_comp_trend_aod, canGrow = true),
     APP_NOTIFICATIONS("notif", "App notifications", "5", R.drawable.ic_comp_bell, R.drawable.ic_comp_bell_aod, needsArg = true),
     RAIL_TICKET("ticket", "Rail ticket", "Ticket", R.drawable.ic_comp_ticket, R.drawable.ic_comp_ticket_aod, pickable = false);
 
@@ -77,6 +78,7 @@ data class ChipSpec(val kind: Complication, val arg: String? = null) {
         Complication.SUNSET -> "com.google.android.apps.weather"
         Complication.APP_NOTIFICATIONS -> arg
         Complication.RAIL_TICKET -> "com.google.android.apps.walletnfcrel"
+        Complication.ETORO -> ETORO_PKG
         else -> null
     }
 
@@ -97,6 +99,7 @@ data class ChipSpec(val kind: Complication, val arg: String? = null) {
         Complication.SCREEN_TIME -> com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_SCREEN)
         Complication.GMAIL -> arg?.let { gmailAccount(context, it) } ?: defaultPackage()?.let { context.packageManager.getLaunchIntentForPackage(it) }
         Complication.HEALTH -> arg?.let { com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_HEALTH_PREFIX + it) }
+        Complication.ETORO -> com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_ETORO)
         Complication.SUNSET -> weatherSunScreen(context) ?: defaultPackage()?.let { context.packageManager.getLaunchIntentForPackage(it) }
         Complication.BATTERY -> Intent(Intent.ACTION_POWER_USAGE_SUMMARY)
         Complication.BUDS -> Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
@@ -133,6 +136,7 @@ data class ChipSpec(val kind: Complication, val arg: String? = null) {
     companion object {
         private const val REQUEST_BASE = 0x10000
         const val GMAIL_PKG = "com.google.android.gm"
+        const val ETORO_PKG = "com.etoro.openbook"
 
         fun parse(key: String): ChipSpec? {
             val kind = Complication.fromId(key.substringBefore(':')) ?: return null

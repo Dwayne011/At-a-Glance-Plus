@@ -105,6 +105,7 @@ private enum class Need(val text: String) {
     BLUETOOTH("Needs Nearby devices permission"),
     LOCATION("Uses the weather location: allow location in the Weather section"),
     DATE("Choose a date in its settings"),
+    ETORO_KEYS("Add your eToro keys in its settings"),
 }
 
 private fun needs(context: Context, spec: ChipSpec, healthGranted: Set<String>): List<Need> = buildList {
@@ -120,6 +121,7 @@ private fun needs(context: Context, spec: ChipSpec, healthGranted: Set<String>):
         Complication.BUDS -> if (!has(Manifest.permission.BLUETOOTH_CONNECT)) add(Need.BLUETOOTH)
         Complication.SUNSET -> if (!WeatherRepository.hasLocationPermission(context)) add(Need.LOCATION)
         Complication.COUNTDOWN -> if (Prefs.countdownDay(context) == null) add(Need.DATE)
+        Complication.ETORO -> if (!com.ataglanceplus.live.EtoroSource.hasKeys(context)) add(Need.ETORO_KEYS)
         else -> Unit
     }
 }
@@ -167,6 +169,7 @@ private val ADD_GROUPS = listOf(
     "Health" to listOf(Complication.STEPS, Complication.SLEEP, Complication.HEALTH),
     "Phone" to listOf(Complication.BATTERY, Complication.BUDS, Complication.SCREEN_TIME),
     "Time" to listOf(Complication.ALARM, Complication.COUNTDOWN, Complication.SUNSET),
+    "Money" to listOf(Complication.ETORO),
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -247,7 +250,7 @@ internal fun ChipsSection() {
                 grantOverAdb(notifications = need == Need.NOTIFICATIONS, usage = need == Need.USAGE, callLog = false)
             }
             Need.LOCATION -> Unit
-            Need.DATE -> settingsFor = spec
+            Need.DATE, Need.ETORO_KEYS -> settingsFor = spec
         }
     }
 
@@ -681,6 +684,9 @@ private fun ChipSettingsDialog(
                         )
                     }
                 }
+                if (spec.kind == Complication.ETORO) {
+                    item { EtoroKeysSection() }
+                }
                 if (spec.kind == Complication.COUNTDOWN) {
                     item {
                         Text("Count down to", style = MaterialTheme.typography.labelLarge)
@@ -833,5 +839,88 @@ private fun bigExample(kind: Complication): Triple<String, String, String> = whe
     Complication.SCREEN_TIME -> Triple("\"1h 20m\"", "\"1h 20m · YouTube 35m\"", "\"YouTube 35m\" under \"1h 20m\"")
     Complication.SUNSET -> Triple("\"16:38\"", "\"Sunset 16:38 · Sunrise 07:05\"", "\"Sunrise 07:05\" under \"16:38\"")
     Complication.BUDS -> Triple("each device in turn", "every device side by side", "the devices on two rows")
+    Complication.ETORO -> Triple("\"+$412 +6.3%\"", "\"+$412 · +6.3% · $7,020\"", "\"Value $7,020\" under \"+$412 +6.3%\"")
     else -> Triple("", "", "")
+}
+
+/**
+ * The eToro chip's keys: how to make them (a read-only key for the real account), two fields to
+ * paste them into, and a check that shows what eToro answers. The keys are kept encrypted on the
+ * phone and sent only to eToro.
+ */
+@Composable
+private fun EtoroKeysSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var saved by remember { mutableStateOf(com.ataglanceplus.live.EtoroSource.hasKeys(context)) }
+    var apiKey by remember { mutableStateOf("") }
+    var userKey by remember { mutableStateOf("") }
+    var checking by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<String?>(null) }
+
+    suspend fun check() {
+        checking = true
+        result = com.ataglanceplus.live.EtoroSource.refresh(context)
+            ?: com.ataglanceplus.live.EtoroSource.portfolio.value?.let { p ->
+                "Connected. Portfolio value ${SimpleSources.money(p.equity)}, ${p.holdings.size} holdings" +
+                    (if (p.copies.isNotEmpty()) " and ${p.copies.size} copied traders." else ".")
+            }
+        checking = false
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("eToro keys", style = MaterialTheme.typography.labelLarge)
+        Text(
+            if (saved) "Keys saved (encrypted on this phone, sent only to eToro)." else "No keys yet. To make them:",
+            color = if (saved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
+        if (!saved) {
+            Text(
+                "1. Sign in at etoro.com (the website is easiest).\n" +
+                    "2. Open Settings, then Trading, then API Key Management, and choose Create New Key.\n" +
+                    "3. Give it any name. Environment: Real. Permissions: Read only. Then Generate Key and confirm with the SMS code.\n" +
+                    "4. Copy the Public API key and the User key into the fields below. The User key is shown only once, so copy it straight away.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedTextField(
+                value = apiKey,
+                onValueChange = { apiKey = it.trim() },
+                label = { Text("Public API key (x-api-key)") },
+                singleLine = true,
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            )
+            OutlinedTextField(
+                value = userKey,
+                onValueChange = { userKey = it.trim() },
+                label = { Text("User key (x-user-key)") },
+                singleLine = true,
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            )
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (!saved) {
+                Button(
+                    enabled = apiKey.isNotEmpty() && userKey.isNotEmpty() && !checking,
+                    onClick = {
+                        com.ataglanceplus.live.EtoroKeys.save(context, apiKey, userKey)
+                        saved = true
+                        apiKey = ""
+                        userKey = ""
+                        scope.launch { check() }
+                    },
+                ) { Text("Save and test") }
+            } else {
+                OutlinedButton(enabled = !checking, onClick = { scope.launch { check() } }) { Text("Test connection") }
+                TextButton(onClick = {
+                    com.ataglanceplus.live.EtoroKeys.clear(context)
+                    com.ataglanceplus.live.EtoroSource.clear(context)
+                    com.ataglanceplus.complications.ChipValues.set(Complication.ETORO.id, null)
+                    saved = false
+                    result = null
+                }) { Text("Remove keys") }
+            }
+        }
+        if (checking) Text("Asking eToro…", style = MaterialTheme.typography.bodySmall)
+        result?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    }
 }

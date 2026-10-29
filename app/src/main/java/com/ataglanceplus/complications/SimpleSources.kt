@@ -179,6 +179,20 @@ object SimpleSources {
     /** Counts above 99 show as "99+" (spec 7.3, large number state). */
     fun cap(count: Int): String = if (count > 99) "99+" else count.toString()
 
+    /** Dollars, short enough for a chip: "$7,020", "$12.3k", "$1.25M". */
+    fun money(dollars: Double): String {
+        val v = kotlin.math.abs(dollars)
+        val locale = java.util.Locale.getDefault()
+        return when {
+            v < 10_000 -> "$" + String.format(locale, "%,.0f", v)
+            v < 1_000_000 -> "$" + String.format(locale, "%.1fk", v / 1_000)
+            else -> "$" + String.format(locale, "%.2fM", v / 1_000_000)
+        }
+    }
+
+    /** [money] with its sign: "+$412", "−$38". */
+    fun signedMoney(dollars: Double): String = (if (dollars >= 0) "+" else "−") + money(dollars)
+
     fun startOfToday(): Long = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
     private const val DAY_MS = 24 * 60 * 60 * 1000L

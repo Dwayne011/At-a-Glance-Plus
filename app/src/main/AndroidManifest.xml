@@ -68,6 +68,7 @@
         <package android:name="com.whatsapp" />
         <package android:name="com.google.android.apps.healthdata" />
         <package android:name="com.google.android.googlequicksearchbox" />
+        <package android:name="com.etoro.openbook" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="content" android:host="com.android.calendar" />

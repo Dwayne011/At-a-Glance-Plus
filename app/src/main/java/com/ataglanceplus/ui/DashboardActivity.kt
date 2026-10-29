@@ -133,6 +133,7 @@ class DashboardActivity : ComponentActivity() {
                             KIND_STEPS -> StepsDashboard()
                             KIND_SLEEP -> SleepDashboard()
                             KIND_SCREEN -> ScreenDashboard()
+                            KIND_ETORO -> EtoroDashboard()
                             else -> when {
                                 kind?.startsWith(KIND_STOCK_PREFIX) == true -> StockDashboard(kind.removePrefix(KIND_STOCK_PREFIX))
                                 kind?.startsWith(KIND_GAME_PREFIX) == true -> GameDashboard(kind.removePrefix(KIND_GAME_PREFIX))
@@ -156,6 +157,7 @@ class DashboardActivity : ComponentActivity() {
     private suspend fun refreshHome(context: Context, kind: String?) {
         when {
             kind == null -> Unit
+            kind == KIND_ETORO -> com.ataglanceplus.live.EtoroSource.refresh(context)
             kind.startsWith(KIND_STOCK_PREFIX) -> com.ataglanceplus.live.FinanceSource.refresh(context)
             kind.startsWith(KIND_GAME_PREFIX) || kind.startsWith(KIND_RACE_PREFIX) -> {
                 com.ataglanceplus.live.SportsSource.refreshSchedules(context)
@@ -172,6 +174,7 @@ class DashboardActivity : ComponentActivity() {
         const val KIND_STEPS = "steps"
         const val KIND_SLEEP = "sleep"
         const val KIND_SCREEN = "screen"
+        const val KIND_ETORO = "etoro"
         /** Followed by a [com.ataglanceplus.complications.HealthMetric] id: "health:hr". */
         const val KIND_HEALTH_PREFIX = "health:"
         /** Followed by a ticker: "stock:AAPL". */
@@ -896,6 +899,154 @@ private fun Stat(label: String, value: String) {
     Row {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
         Text(value, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+// --- eToro ---
+
+/** How the eToro positions list is ordered. */
+private enum class EtoroSort(val label: String) { VALUE("Value"), PNL("P/L"), PERCENT("P/L %"), NAME("Name") }
+
+/** A row of the eToro dashboard: a holding, a copied trader, or cash. */
+private data class EtoroRow(val name: String, val detail: String?, val invested: Double, val pnl: Double, val isCash: Boolean = false) {
+    val value: Double get() = invested + pnl
+    val pnlPercent: Double get() = if (invested != 0.0) 100 * pnl / invested else 0.0
+}
+
+/**
+ * The user's eToro portfolio: its value with profit/loss on open positions, the value over time
+ * (recorded by this app, since eToro keeps no history for the API), where the money is, and every
+ * holding and copied trader with its profit/loss, in a chosen order.
+ */
+@Composable
+private fun EtoroDashboard() {
+    val context = LocalContext.current
+    val refresh = LocalRefresh.current
+    val load by produceState<Load<Pair<com.ataglanceplus.live.EtoroSource.Portfolio, List<com.ataglanceplus.live.EtoroSource.Snapshot>>>>(Load.Loading, refresh.generation) {
+        value = withContext(Dispatchers.IO) {
+            val source = com.ataglanceplus.live.EtoroSource
+            if (!source.hasKeys(context)) return@withContext Load.Missing("Add your eToro keys in the app's Chips tab: tap the eToro chip, then follow the steps there.")
+            val current = source.portfolio.value
+            val error = if (current == null || System.currentTimeMillis() - current.at > 60_000) source.refresh(context) else null
+            source.portfolio.value?.let { Load.Ready(it to source.history(context)) } ?: Load.Missing(error ?: "eToro did not answer. Pull down to try again.")
+        }
+        refresh.loaded = refresh.generation
+    }
+    var sort by remember { mutableStateOf(EtoroSort.VALUE) }
+    Title("eToro")
+    when (val state = load) {
+        Load.Loading -> Text("Loading…")
+        is Load.Missing -> Text(state.why)
+        is Load.Ready -> {
+            val (p, history) = state.data
+            val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+            fun money(v: Double) = (if (v < 0) "−" else "") + "$" + String.format(locale, "%,.2f", kotlin.math.abs(v))
+            fun change(amount: Double, percent: Double) =
+                (if (amount >= 0) "▲ +" else "▼ −") + "$" + String.format(locale, "%,.2f", kotlin.math.abs(amount)) + String.format(locale, " (%+.2f%%)", percent)
+            Column {
+                Text(money(p.equity), style = MaterialTheme.typography.displaySmall)
+                Text("${change(p.pnl, p.pnlPercent)} on open positions", style = MaterialTheme.typography.bodyLarge, color = if (p.pnl >= 0) UP else DOWN)
+            }
+            ChartCard("Summary") {
+                Stat("Invested", money(p.invested))
+                Stat("Profit/loss", (if (p.pnl >= 0) "+" else "") + money(p.pnl))
+                Stat("Available cash", money(p.cash))
+                Stat("Updated", clock(context, Instant.ofEpochMilli(p.at)))
+            }
+
+            ChartCard("Value over time") {
+                val points = history.map { Reading(Instant.ofEpochMilli(it.at), it.equity) }
+                if (points.size >= 2) {
+                    LineChart(
+                        points = points,
+                        describe = { r ->
+                            val at = r.time.atZone(ZoneId.systemDefault())
+                            "${dayAndDate(at.toLocalDate())} ${clock(context, r.time)} · ${money(r.value)}"
+                        },
+                        format = { "$" + String.format(locale, "%,.0f", it) },
+                        markers = points.size <= 12,
+                    )
+                } else {
+                    Text("Nothing to draw yet.", style = MaterialTheme.typography.bodyMedium)
+                }
+                Text(
+                    "eToro does not share your account's history, so this app records it each time it checks (every 5 minutes while the chip is on). " +
+                        "Recorded since ${dayAndDate(Instant.ofEpochMilli(history.firstOrNull()?.at ?: p.at).atZone(ZoneId.systemDefault()).toLocalDate())}. " +
+                        "Deposits and withdrawals change the value too.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            val rows = p.holdings.map { EtoroRow(it.name, it.symbol?.takeIf { s -> s != it.name }?.let { s -> if (it.positions > 1) "$s · ${it.positions} positions" else s }, it.invested, it.pnl) } +
+                p.copies.map { EtoroRow(it.username, "Copying", it.invested, it.pnl) }
+            ChartCard("Allocation") {
+                val cash = EtoroRow("Cash", null, p.cash.coerceAtLeast(0.0), 0.0, isCash = true)
+                AllocationBars((rows + cash).filter { it.value > 0 }.sortedByDescending { it.value }, locale)
+            }
+
+            ChartCard("Positions") {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EtoroSort.entries.forEach { s -> FilterChip(selected = s == sort, onClick = { sort = s }, label = { Text(s.label) }) }
+                }
+                val ordered = when (sort) {
+                    EtoroSort.VALUE -> rows.sortedByDescending { it.value }
+                    EtoroSort.PNL -> rows.sortedByDescending { it.pnl }
+                    EtoroSort.PERCENT -> rows.sortedByDescending { it.pnlPercent }
+                    EtoroSort.NAME -> rows.sortedBy { it.name.lowercase() }
+                }
+                if (ordered.isEmpty()) Text("No open positions.", style = MaterialTheme.typography.bodyMedium)
+                ordered.forEach { row ->
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(row.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                row.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(money(row.value), style = MaterialTheme.typography.bodyLarge)
+                                Text(change(row.pnl, row.pnlPercent), style = MaterialTheme.typography.bodySmall, color = if (row.pnl >= 0) UP else DOWN)
+                            }
+                        }
+                        Text("Invested ${money(row.invested)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            context.packageManager.getLaunchIntentForPackage(com.ataglanceplus.cards.ChipSpec.ETORO_PKG)?.let { OpenButton("Open eToro", it) }
+        }
+    }
+    Text(
+        "From eToro's API with your read-only key. Profit/loss is on open positions and copies; the percentage is against what is invested in them. Amounts in US dollars.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/**
+ * Where the money is: one bar per holding (largest first), each as a share of the whole, with
+ * anything past the ninth gathered as "Other". One series, so one colour and no legend.
+ */
+@Composable
+private fun AllocationBars(rows: List<EtoroRow>, locale: Locale) {
+    val total = rows.sumOf { it.value }.takeIf { it > 0 } ?: return
+    val shown = if (rows.size > 10) rows.take(9) + EtoroRow("Other (${rows.size - 9})", null, rows.drop(9).sumOf { it.value }, 0.0) else rows
+    val bar = MaterialTheme.colorScheme.primary
+    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        shown.forEach { row ->
+            val share = (row.value / total).toFloat()
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row {
+                    Text(row.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(String.format(locale, "%.1f%%", share * 100), style = MaterialTheme.typography.bodyMedium)
+                }
+                Canvas(modifier = Modifier.fillMaxWidth().height(8.dp)) {
+                    val radius = CornerRadius(size.height / 2)
+                    drawRoundRect(track, size = size, cornerRadius = radius)
+                    drawRoundRect(bar, size = Size((size.width * share).coerceAtLeast(size.height), size.height), cornerRadius = radius)
+                }
+            }
+        }
     }
 }
 
