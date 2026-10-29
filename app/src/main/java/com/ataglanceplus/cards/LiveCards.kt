@@ -554,14 +554,17 @@ object LiveCards {
 
     /**
      * A card of chips that did not fit on the other cards: two rows of up to 4 slots, shared
-     * between the rows, every chip that can be extended shown extended.
+     * between the rows, every chip that can be extended shown extended, and each row's chips
+     * stretched to fill it.
      */
     fun chips(context: Context, aod: Boolean, specs: List<ChipSpec>, index: Int): SmartspaceTarget {
         val views = RemoteViews(context.packageName, R.layout.card_chips)
         if (aod) Style.aodBody(views)
         val (first, second) = Chips.overflowRows(context, specs)
-        Chips.addPlaced(context, views, first, Chips.DEFAULT_STRIP, aod, R.id.complications)
-        Chips.addPlaced(context, views, second, Chips.DEFAULT_STRIP, aod, R.id.complications_2)
+        // The card's inside width: its own width less the body's padding (16 + 18dp).
+        val row = WeatherCard.cardWidthDp(context) - 34f
+        Chips.addOverflowRow(context, views, first, row, aod, R.id.complications)
+        Chips.addOverflowRow(context, views, second, row, aod, R.id.complications_2)
         val summary = Chips.withValues(specs).joinToString(" · ") { (spec, value) -> "${spec.kind.label} ${value.text}" }
         val tap = Style.gated(context, Intent(context, com.ataglanceplus.ui.MainActivity::class.java), REQUEST_BASE + 0xFF00 + index)
         return Style.target(context, "aagp_chips:$index", views, "More", summary, R.drawable.ic_card, tap, 0.5f)

@@ -500,6 +500,70 @@ object Chips {
         }
     }
 
+    /**
+     * A row of the extra chips card: the chips share the row's whole width, and each shows the
+     * most it can in its share: its name and the whole story ("Screen time · 1h 20m · YouTube
+     * 35m"), else the whole story, else the value. Bluetooth devices sit side by side.
+     */
+    fun addOverflowRow(context: Context, views: RemoteViews, placed: List<Placed>, rowWidthDp: Float, aod: Boolean, container: Int) {
+        views.setViewVisibility(container, if (placed.isEmpty()) View.GONE else View.VISIBLE)
+        if (placed.isEmpty()) return
+        val dip = android.util.TypedValue.COMPLEX_UNIT_DIP
+        val px = android.util.TypedValue.COMPLEX_UNIT_PX
+        val style = DEFAULT_STRIP
+        val gap = style.gapDp
+        val width = (rowWidthDp - gap * (placed.size - 1)) / placed.size
+        val inner = width - 2 * style.padDp
+        val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
+        placed.forEachIndexed { i, (spec, value, big) ->
+            val child = RemoteViews(context.packageName, R.layout.include_chip_big)
+            child.setViewLayoutWidth(R.id.chip_zone, width, dip)
+            child.setViewLayoutHeight(R.id.chip_zone, style.zoneHDp.toFloat(), dip)
+            if (i < placed.lastIndex) child.setViewLayoutMargin(R.id.chip_zone, RemoteViews.MARGIN_END, gap.toFloat(), dip)
+            child.setViewLayoutWidth(R.id.chip_pill, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), px)
+            child.setViewLayoutHeight(R.id.chip_pill, style.pillHDp.toFloat(), dip)
+            child.setViewPadding(R.id.chip_pill, dp(context, style.padDp), 0, dp(context, style.padDp), 0)
+            child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else if (value.attention) R.drawable.chip_selector_attention else style.background)
+            child.setViewLayoutWidth(R.id.chip_icon, style.iconDp.toFloat(), dip)
+            child.setViewLayoutHeight(R.id.chip_icon, style.iconDp.toFloat(), dip)
+            child.setTextViewTextSize(R.id.chip_text, android.util.TypedValue.COMPLEX_UNIT_SP, style.textSp)
+            if (value.parts.size > 1) {
+                child.setViewVisibility(R.id.chip_icon, View.GONE)
+                child.setViewVisibility(R.id.chip_text, View.GONE)
+                var used = 0f
+                value.parts.forEachIndexed { k, part ->
+                    val w = 16 + 4 + textWidthDp(context, part.text, 12.5f) + if (k > 0) PART_GAP_DP else 0
+                    if (k > 0 && used + w > inner) return@forEachIndexed
+                    used += w
+                    child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0))
+                }
+            } else {
+                val name = label(context, spec)
+                val story = if (big) value.wide ?: value.text else value.text
+                val room = inner - style.iconDp - 4
+                // The sun chip's story names itself ("Sunset 16:38 · Sunrise 07:05").
+                val named = if (spec.kind == Complication.SUNSET) null else "$name · $story"
+                val text = listOfNotNull(named, story, value.text).firstOrNull { textWidthDp(context, it, style.textSp) <= room } ?: value.text
+                child.setTextViewText(R.id.chip_text, text)
+                look(child, spec, value, aod, textColour)
+                shrink(context, child, R.id.chip_text, text, style.textSp, room, 9f)
+            }
+            child.setContentDescription(R.id.chip_zone, "${label(context, spec)}: ${value.wide ?: value.text}")
+            child.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
+            views.addView(container, child)
+        }
+    }
+
+    /** A chip's name as a reader would say it: "Screen time", "Heart rate", "Gmail", an app's name. */
+    private fun label(context: Context, spec: ChipSpec): String = when (spec.kind) {
+        Complication.HEALTH -> com.ataglanceplus.complications.HealthMetric.fromId(spec.arg)?.label ?: spec.kind.label
+        Complication.GMAIL -> "Gmail"
+        Complication.APP_NOTIFICATIONS -> spec.arg?.let { pkg ->
+            runCatching { context.packageManager.getApplicationInfo(pkg, 0).loadLabel(context.packageManager).toString() }.getOrNull()
+        } ?: spec.kind.label
+        else -> spec.kind.label
+    }
+
     /** One Bluetooth device: its icon and level. */
     private fun partView(context: Context, part: ChipValues.Part, aod: Boolean, gap: Boolean = false): RemoteViews {
         val row = RemoteViews(context.packageName, R.layout.include_chip_part)

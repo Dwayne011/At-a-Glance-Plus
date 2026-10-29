@@ -11,7 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,9 +55,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -287,7 +289,7 @@ internal fun ChipsSection() {
 
     Section("Your chips") {
         Text(
-            "Most important first: drag ≡ to reorder. Chips with something to report fill the weather card, then other cards, then an extra chips card. Tap a chip for its settings.",
+            "Most important first: press and hold ≡, then drag to reorder. Chips with something to report fill the weather card, then other cards, then an extra chips card. Tap a chip for its settings.",
             style = MaterialTheme.typography.bodySmall
         )
         if (grantMessage.isNotEmpty()) {
@@ -445,13 +447,14 @@ private fun ChipRow(icon: Int, title: String, value: String?, status: String?, o
         if (value != null) {
             Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
         }
-        Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
     }
 }
 
 /**
- * The chips in order, each with a ≡ handle: drag it up or down to move the chip. Rows swap as the
- * dragged one passes the middle of its neighbour, and the order is saved when it is let go.
+ * The chips in order, each with a ≡ handle on the right. Press and hold the handle to lift a chip
+ * (a buzz says it is lifted), then drag it up or down; rows swap as it passes the middle of its
+ * neighbour (a light tick each time), and the order is saved when it is let go. Holding first
+ * means a scroll that starts on a handle never moves a chip.
  */
 @Composable
 private fun ReorderableChips(chips: List<ChipSpec>, onReorder: (List<ChipSpec>) -> Unit, row: @Composable (ChipSpec) -> Unit) {
@@ -459,6 +462,7 @@ private fun ReorderableChips(chips: List<ChipSpec>, onReorder: (List<ChipSpec>) 
     var dragging by remember { mutableStateOf<String?>(null) }
     var offset by remember { mutableFloatStateOf(0f) }
     val heights = remember { mutableMapOf<String, Int>() }
+    val haptics = LocalHapticFeedback.current
     Column {
         order.forEach { spec ->
             key(spec.key) {
@@ -472,12 +476,17 @@ private fun ReorderableChips(chips: List<ChipSpec>, onReorder: (List<ChipSpec>) 
                         .graphicsLayer { translationY = if (lifted) offset else 0f }
                         .background(if (lifted) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent, RoundedCornerShape(12.dp))
                 ) {
+                    Box(modifier = Modifier.weight(1f)) { row(spec) }
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(48.dp)
                             .pointerInput(spec.key) {
-                                detectDragGestures(
-                                    onDragStart = { dragging = spec.key; offset = 0f },
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        dragging = spec.key
+                                        offset = 0f
+                                    },
                                     onDragEnd = { dragging = null; offset = 0f; onReorder(order) },
                                     onDragCancel = { dragging = null; offset = 0f; order = chips },
                                 ) { change, amount ->
@@ -489,17 +498,18 @@ private fun ReorderableChips(chips: List<ChipSpec>, onReorder: (List<ChipSpec>) 
                                     if (next != null && offset > (heights[next.key] ?: 0) / 2f) {
                                         offset -= heights[next.key] ?: 0
                                         order = order.toMutableList().apply { add(index + 1, removeAt(index)) }
+                                        haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
                                     } else if (previous != null && offset < -(heights[previous.key] ?: 0) / 2f) {
                                         offset += heights[previous.key] ?: 0
                                         order = order.toMutableList().apply { add(index - 1, removeAt(index)) }
+                                        haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
                                     }
                                 }
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("≡", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("≡", style = MaterialTheme.typography.titleLarge, color = if (lifted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Box(modifier = Modifier.weight(1f)) { row(spec) }
                 }
             }
         }

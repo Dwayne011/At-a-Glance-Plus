@@ -169,7 +169,8 @@ object WeatherCard {
     private fun anchorRowDp(context: Context, layout: WeatherLayout): Float =
         cardWidthDp(context) - 30f - rightWidthDp(layout)
 
-    private fun cardWidthDp(context: Context): Float = (screenDp(context) - LAUNCHER_MARGINS_DP) / LAUNCHER_SCALE
+    /** The card's width in its own dp (see [anchorRowDp]). */
+    fun cardWidthDp(context: Context): Float = (screenDp(context) - LAUNCHER_MARGINS_DP) / LAUNCHER_SCALE
 
     private const val LAUNCHER_MARGINS_DP = 38f
     private const val LAUNCHER_SCALE = 78f / 88f
