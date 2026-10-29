@@ -133,12 +133,21 @@ object WeatherCard {
     }
 
     /**
-     * Width of the row under the temperature, in dp: the card is the screen's width less the
-     * launcher's margins (about 21dp each side on Pixel Launcher), less the card's padding
-     * (16 + 14) and the right side. The launcher does not tell the app the card's real width.
+     * Width of the row under the temperature, in the card's own dp.
+     *
+     * Pixel Launcher leaves about 19dp each side of the card, and then shrinks the whole card to
+     * fit its At a Glance slot: the 88dp-tall card is drawn about 78dp tall (measured on a Pixel,
+     * 411dp screen). Everything inside is laid out before that shrinking, so in the card's own
+     * units it is wider than it looks: the visible width divided by 78/88. From that come the
+     * card's padding (16 + 14) and the right side. The launcher does not report the real width.
      */
     private fun anchorRowDp(context: Context, layout: WeatherLayout): Float =
-        screenDp(context) - 42f - 30f - rightWidthDp(layout)
+        cardWidthDp(context) - 30f - rightWidthDp(layout)
+
+    private fun cardWidthDp(context: Context): Float = (screenDp(context) - LAUNCHER_MARGINS_DP) / LAUNCHER_SCALE
+
+    private const val LAUNCHER_MARGINS_DP = 38f
+    private const val LAUNCHER_SCALE = 78f / 88f
 
     /** The numbers behind the fitting, for the Chips tab, so a wrong guess can be seen and fixed. */
     fun fitReport(context: Context): String {
@@ -147,7 +156,8 @@ object WeatherCard {
             val text = value.parts.maxByOrNull { it.text.length }?.text ?: value.text
             "${spec.kind.id} ${Chips.ANCHOR.widthDp(context, text).toInt()}"
         }
-        return "Fitting: screen ${screenDp(context).toInt()}dp, room under the temperature ${anchorRowDp(context, layout).toInt()}dp " +
+        return "Fitting: screen ${screenDp(context).toInt()}dp, card ${cardWidthDp(context).toInt()}dp before the launcher shrinks it, " +
+            "room under the temperature ${anchorRowDp(context, layout).toInt()}dp " +
             "(${layout.label}), fits ${anchorCount(context, layout, Prefs.chips(context).orEmpty())}. Pill widths: ${pills.ifEmpty { "none" }}."
     }
 
