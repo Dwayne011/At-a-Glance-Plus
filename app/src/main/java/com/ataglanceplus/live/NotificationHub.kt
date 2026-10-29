@@ -137,7 +137,11 @@ object NotificationHub {
      */
     private fun timerFrom(sbn: StatusBarNotification): TimerNow? {
         val n = sbn.notification
-        val countdown = n.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN) && n.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)
+        val chronometer = n.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)
+        // A clock app's ticking time that ends in the future is a timer, even without the
+        // count-down flag (some post it as a Live Update).
+        val countdown = chronometer && (n.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN) ||
+            ("clock" in sbn.packageName && n.`when` > System.currentTimeMillis()))
         val toggle = n.actions?.firstOrNull { action ->
             val label = action.title?.toString()?.lowercase().orEmpty()
             "pause" in label || "resume" in label || "start" in label

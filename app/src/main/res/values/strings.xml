@@ -23,4 +23,8 @@
     <string name="pairing_rejected">The phone rejected the pairing. Start again.</string>
     <string name="boot_waiting">Waiting for Wi-Fi to re-activate At a Glance</string>
     <string name="boot_activating">Re-activating At a Glance</string>
+    <string name="update_channel">After an update</string>
+    <string name="update_title">Updated to %1$s</string>
+    <string name="update_text">Activate to switch At a Glance back on (needs Wi-Fi).</string>
+    <string name="update_activate">Activate</string>
 </resources>

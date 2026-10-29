@@ -41,6 +41,46 @@ class BootReceiver : BroadcastReceiver() {
     }
 }
 
+/**
+ * Updating the app stops its At a Glance service, so after an update a notification offers to
+ * re-activate: Activate runs the same activation as after a restart; tapping it opens the app.
+ */
+class UpdateReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        if (!Prefs.isPaired(context)) return
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL, context.getString(R.string.update_channel), NotificationManager.IMPORTANCE_DEFAULT)
+        )
+        val activate = PendingIntent.getForegroundService(
+            context, 0, Intent(context, BootActivationService::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val open = PendingIntent.getActivity(
+            context, 0, Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val notification = Notification.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.ic_card)
+            .setContentTitle(context.getString(R.string.update_title, version(context)))
+            .setContentText(context.getString(R.string.update_text))
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .addAction(Notification.Action.Builder(null, context.getString(R.string.update_activate), activate).build())
+            .build()
+        manager.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun version(context: Context): String =
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "a new version"
+
+    companion object {
+        private const val CHANNEL = "update"
+        const val NOTIFICATION_ID = 12
+    }
+}
+
 /** Foreground service so the boot-time activation is not killed while it waits for Wi-Fi. */
 class BootActivationService : Service() {
 
@@ -52,10 +92,14 @@ class BootActivationService : Service() {
             NotificationChannel(CHANNEL, getString(R.string.boot_channel), NotificationManager.IMPORTANCE_LOW)
         )
         startForeground(NOTIFICATION_ID, notification(getString(R.string.boot_waiting)), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        // Started from the after-update notification: that one has done its job.
+        manager.cancel(UpdateReceiver.NOTIFICATION_ID)
 
         scope.launch {
             try {
-                Wadb.enableWirelessDebugging(this@BootActivationService)
+                // Needs the secure-settings permission (granted at the first activation); without
+                // it, wireless debugging must already be on.
+                if (Wadb.canWriteSecureSettings(this@BootActivationService)) Wadb.enableWirelessDebugging(this@BootActivationService)
                 if (!Wadb.awaitWifi(this@BootActivationService, WIFI_TIMEOUT_MS)) {
                     Log.w(TAG, "no Wi-Fi within timeout, giving up")
                     return@launch

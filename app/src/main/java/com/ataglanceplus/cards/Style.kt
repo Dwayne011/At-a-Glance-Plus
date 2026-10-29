@@ -88,7 +88,7 @@ object Style {
             .setPendingIntent(tap)
             .build()
         val base = SmartspaceAction.Builder("${id}_base", "").build()
-        val template = BaseTemplateData.Builder(SmartspaceTarget.UI_TEMPLATE_DEFAULT)
+        val builder = BaseTemplateData.Builder(SmartspaceTarget.UI_TEMPLATE_DEFAULT)
             .setPrimaryItem(
                 BaseTemplateData.SubItemInfo.Builder()
                     .setText(Text.Builder(title).build())
@@ -101,12 +101,16 @@ object Style {
                     )
                     .build()
             )
-            .setSubtitleItem(
+        // Android refuses an item with nothing in it, so a card with no second line (a live update
+        // with only a title) leaves the subtitle out rather than failing.
+        if (subtitle.isNotBlank()) {
+            builder.setSubtitleItem(
                 BaseTemplateData.SubItemInfo.Builder()
                     .setText(Text.Builder(subtitle).build())
                     .build()
             )
-            .build()
+        }
+        val template = builder.build()
         return SmartspaceTarget.Builder(
             id,
             ComponentName(context, AtAGlanceService::class.java),
