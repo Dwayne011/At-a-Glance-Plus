@@ -13,6 +13,8 @@ import com.ataglanceplus.R
 import com.ataglanceplus.service.AtAGlanceService
 import com.ataglanceplus.ui.MainActivity
 import com.ataglanceplus.weather.Weather
+import com.ataglanceplus.weather.WeatherCondition
+import com.ataglanceplus.weather.WeatherLook
 import com.ataglanceplus.weather.WeatherRepository
 import java.util.Date
 import java.util.Locale
@@ -47,6 +49,8 @@ object WeatherCard {
         @DrawableRes val icon: Int,
         @DrawableRes val aodIcon: Int,
         @DrawableRes val background: Int,
+        val conditions: WeatherCondition,
+        val isDay: Boolean,
     )
 
     /** The date in the phone's locale, e.g. "Wed 28 Oct" in the UK, "Wed, Oct 28" in the US. */
@@ -80,8 +84,13 @@ object WeatherCard {
             Style.aodBody(views, R.id.weather_temp, R.id.weather_title, R.id.weather_detail)
             views.setImageViewResource(R.id.weather_icon, reading.aodIcon)
         } else {
-            views.setInt(R.id.card_body, "setBackgroundResource", reading.background)
             views.setImageViewResource(R.id.weather_icon, reading.icon)
+            val look = Prefs.weatherLook(context)
+            if (look == WeatherLook.STANDARD) {
+                views.setInt(R.id.card_body, "setBackgroundResource", reading.background)
+            } else {
+                scene(context, views, reading, animated = look == WeatherLook.ANIMATED)
+            }
         }
         forecast(context, views, weather, if (layout == WeatherLayout.GRID) 2 else 3, aod, layout)
 
@@ -107,6 +116,28 @@ object WeatherCard {
         val tap = weatherIntent(context)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, TARGET_ID, views, "${reading.temp} ${reading.condition}", reading.detail, reading.icon, tap, 2f)
+    }
+
+    /**
+     * A scene behind the card: the sky for the conditions and time of day, and the weather over
+     * it, still or moving. Moving layers are added only when used, so a still card loads none.
+     */
+    private fun scene(context: Context, views: RemoteViews, reading: Reading, animated: Boolean) {
+        views.setViewVisibility(R.id.weather_scene, View.VISIBLE)
+        views.setInt(R.id.card_body, "setBackgroundResource", R.drawable.card_bg_scene_border)
+        views.setImageViewResource(R.id.scene_sky, reading.conditions.sceneSky(reading.isDay))
+        val layers = reading.conditions.sceneLayers(reading.isDay)
+        if (animated) {
+            layers.forEach { views.addView(R.id.scene_anim, RemoteViews(context.packageName, it.animated)) }
+        } else {
+            val stills = layers.mapNotNull { it.still }
+            listOf(R.id.scene_a, R.id.scene_b, R.id.scene_c).forEachIndexed { i, id ->
+                stills.getOrNull(i)?.let {
+                    views.setImageViewResource(id, it)
+                    views.setViewVisibility(id, View.VISIBLE)
+                }
+            }
+        }
     }
 
     /** Most chips under the temperature. */
@@ -246,6 +277,8 @@ object WeatherCard {
             icon = condition.icon(isDay),
             aodIcon = condition.aodIcon(isDay),
             background = condition.background(isDay),
+            conditions = condition,
+            isDay = isDay,
         )
     }
 

@@ -36,6 +36,29 @@ enum class WeatherCondition(val label: String, @DrawableRes val dayIcon: Int, @D
         THUNDER -> R.drawable.card_bg_weather_thunder
     }
 
+    /** The scene's sky (Scenes looks). */
+    @DrawableRes
+    fun sceneSky(isDay: Boolean): Int = when (this) {
+        CLEAR -> if (isDay) R.drawable.scene_sky_clear_day else R.drawable.scene_sky_clear_night
+        PARTLY_CLOUDY -> if (isDay) R.drawable.scene_sky_partly_day else R.drawable.scene_sky_partly_night
+        CLOUDY -> if (isDay) R.drawable.scene_sky_cloudy_day else R.drawable.scene_sky_cloudy_night
+        FOG -> if (isDay) R.drawable.scene_sky_fog_day else R.drawable.scene_sky_fog_night
+        DRIZZLE, RAIN -> if (isDay) R.drawable.scene_sky_rain_day else R.drawable.scene_sky_rain_night
+        SNOW -> if (isDay) R.drawable.scene_sky_snow_day else R.drawable.scene_sky_snow_night
+        THUNDER -> if (isDay) R.drawable.scene_sky_thunder_day else R.drawable.scene_sky_thunder_night
+    }
+
+    /** The weather drawn over the sky, back to front (Scenes looks). */
+    fun sceneLayers(isDay: Boolean): List<SceneLayer> = when (this) {
+        CLEAR -> listOf(if (isDay) SceneLayer.SUN else SceneLayer.STARS)
+        PARTLY_CLOUDY -> listOf(if (isDay) SceneLayer.SUN else SceneLayer.STARS, if (isDay) SceneLayer.CLOUDS_LIGHT else SceneLayer.CLOUDS_LIGHT_NIGHT)
+        CLOUDY -> listOf(if (isDay) SceneLayer.CLOUDS_HEAVY else SceneLayer.CLOUDS_HEAVY_NIGHT)
+        FOG -> listOf(SceneLayer.FOG)
+        DRIZZLE, RAIN -> listOf(if (isDay) SceneLayer.CLOUDS_HEAVY else SceneLayer.CLOUDS_HEAVY_NIGHT, SceneLayer.RAIN)
+        SNOW -> listOf(if (isDay) SceneLayer.CLOUDS_HEAVY else SceneLayer.CLOUDS_HEAVY_NIGHT, SceneLayer.SNOW)
+        THUNDER -> listOf(if (isDay) SceneLayer.CLOUDS_HEAVY else SceneLayer.CLOUDS_HEAVY_NIGHT, SceneLayer.RAIN, SceneLayer.BOLT)
+    }
+
     companion object {
         fun fromWmo(code: Int): WeatherCondition = when (code) {
             0, 1 -> CLEAR
@@ -50,3 +73,24 @@ enum class WeatherCondition(val label: String, @DrawableRes val dayIcon: Int, @D
         }
     }
 }
+
+/**
+ * A layer of weather over a scene's sky: a still image (Scenes) and its animated form
+ * (Animated scenes), added to the card only when needed. Lightning has no still form.
+ */
+enum class SceneLayer(@DrawableRes val still: Int?, val animated: Int) {
+    SUN(R.drawable.scene_sun, R.layout.include_scene_sun),
+    STARS(R.drawable.scene_stars, R.layout.include_scene_stars),
+    CLOUDS_LIGHT(R.drawable.scene_clouds_light, R.layout.include_scene_clouds_light),
+    CLOUDS_LIGHT_NIGHT(R.drawable.scene_clouds_light_night, R.layout.include_scene_clouds_light_night),
+    CLOUDS_HEAVY(R.drawable.scene_clouds_heavy, R.layout.include_scene_clouds_heavy),
+    CLOUDS_HEAVY_NIGHT(R.drawable.scene_clouds_heavy_night, R.layout.include_scene_clouds_heavy_night),
+    FOG(R.drawable.scene_fog, R.layout.include_scene_fog),
+    RAIN(R.drawable.scene_rain, R.layout.include_scene_rain),
+    SNOW(R.drawable.scene_snow, R.layout.include_scene_snow),
+    BOLT(null, R.layout.include_scene_bolt),
+}
+
+/** The weather card's look: the plain gradient, a still scene, or a moving one. */
+enum class WeatherLook(val label: String) { STANDARD("Standard"), SCENES("Scenes"), ANIMATED("Animated scenes") }
+

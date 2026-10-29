@@ -19,6 +19,7 @@ object Prefs {
     private const val KEY_CALENDAR_ALL_DAY = "calendar_all_day"
     private const val KEY_COMP_LAYOUT = "comp_layout"
     private const val KEY_WEATHER_LAYOUT = "weather_layout"
+    private const val KEY_WEATHER_LOOK = "weather_look"
     private const val KEY_CHIPS = "chips"
     private const val KEY_DISMISSED = "dismissed_cards"
     private const val KEY_CHIP_APP = "chip_app_"
@@ -121,6 +122,15 @@ object Prefs {
     }
 
     /** How chips sit on the other cards, following the weather card's arrangement. */
+    /** The weather card's look; a still scene unless chosen otherwise. */
+    fun weatherLook(context: Context): com.ataglanceplus.weather.WeatherLook =
+        runCatching { com.ataglanceplus.weather.WeatherLook.valueOf(get(context).getString(KEY_WEATHER_LOOK, null)!!) }
+            .getOrDefault(com.ataglanceplus.weather.WeatherLook.SCENES)
+
+    fun setWeatherLook(context: Context, look: com.ataglanceplus.weather.WeatherLook) {
+        get(context).edit().putString(KEY_WEATHER_LOOK, look.name).apply()
+    }
+
     fun complicationLayout(context: Context): ComplicationLayout = weatherLayout(context).others
 
     /** The user's chosen weather-card chips in the order picked, or null to use the spec's defaults. */

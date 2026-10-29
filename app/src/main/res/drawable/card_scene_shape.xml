@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The scene's outline: the card's rounded corners, which the scene is clipped to. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FF1B2538" />
+    <corners android:radius="24dp" />
+</shape>

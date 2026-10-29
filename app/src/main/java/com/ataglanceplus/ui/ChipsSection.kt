@@ -86,6 +86,7 @@ import com.ataglanceplus.complications.SimpleSources
 import com.ataglanceplus.live.CalendarSource
 import com.ataglanceplus.wadb.Activator
 import com.ataglanceplus.wadb.Wadb
+import com.ataglanceplus.weather.WeatherLook
 import com.ataglanceplus.weather.WeatherRepository
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -260,6 +261,25 @@ internal fun ChipsSection() {
                 WeatherLayout.SPLIT -> "Next 3 hours in a row; chips under the temperature and 2 wide chips under the forecast."
                 WeatherLayout.GRID -> "Next 2 hours in a box; chips under the temperature and a 2 x 2 grid of chips."
                 WeatherLayout.NONE -> "Next 3 hours, and no chips anywhere."
+            },
+            style = MaterialTheme.typography.bodySmall
+        )
+        Text("Look", style = MaterialTheme.typography.labelLarge)
+        val look = remember(version) { Prefs.weatherLook(context) }
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            WeatherLook.entries.forEachIndexed { index, option ->
+                SegmentedButton(
+                    selected = look == option,
+                    onClick = { Prefs.setWeatherLook(context, option) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = WeatherLook.entries.size)
+                ) { Text(if (option == WeatherLook.ANIMATED) "Animated" else option.label, maxLines = 1) }
+            }
+        }
+        Text(
+            when (look) {
+                WeatherLook.STANDARD -> "A plain background, coloured for the weather."
+                WeatherLook.SCENES -> "A picture of the weather and time of day behind the card: sun, stars, clouds, fog, rain or snow."
+                WeatherLook.ANIMATED -> "The same scenes, moving: clouds drift, rain and snow fall, stars twinkle, lightning flashes. Uses more battery while the card is on screen."
             },
             style = MaterialTheme.typography.bodySmall
         )
