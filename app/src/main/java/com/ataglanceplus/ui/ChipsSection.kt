@@ -350,7 +350,7 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                 item {
                     Text("When tapped, opens", style = MaterialTheme.typography.labelLarge)
                     Text(appLabel(context, opens) ?: spec.defaultAppName(context)?.let { "$it (default)" } ?: "Its usual app or screen")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         OutlinedButton(onClick = {
                             onPickApp { pkg ->
                                 Prefs.setChipApp(context, spec.key, pkg)

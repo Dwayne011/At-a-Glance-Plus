@@ -39,6 +39,7 @@ Every card except weather appears only while it has something real to show.
 | Calendar | The phone's visible calendars | From a chosen lead time (1 h by default) until the end, for events of 4 h or less; all-day events optional |
 | Finance | Yahoo Finance's public chart feed for the user's tickers (Google Finance has no public data) | On big moves, every few hours for 10 minutes, and/or in time windows, as chosen |
 | Sports | ESPN's public scoreboard feed (unofficial) for followed teams and Formula 1; live scores refresh every 30 s | During a game, for a chosen time before and after it, and the next fixture if switched on; one card per game. Tapping opens Google's page for the game (ESPN's if chosen); Next on the F1 card steps through the weekend's sessions for a minute |
+| Torch | The phone's torch, however it was turned on | While it is on. A tap turns it off; brightness by tapping a step of the bar or − / + (cards cannot follow a drag, so there is no slider) |
 | Extra chips | Chips that have something to report but no room on the cards on show | Only then |
 | Wallet | None yet (needs the place rules engine) | Never, for now |
 

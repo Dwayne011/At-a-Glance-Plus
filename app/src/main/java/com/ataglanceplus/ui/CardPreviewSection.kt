@@ -98,7 +98,7 @@ internal fun CardPreviewSection(maxCards: Int) {
                 "Media, live updates, navigation, timers and the message pop-up read what is on screen in your notifications. Nothing leaves the phone.",
                 style = MaterialTheme.typography.bodySmall
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Button(enabled = !busy, onClick = {
                     scope.launch {
                         grantMessage = "Granting over wireless debugging…"

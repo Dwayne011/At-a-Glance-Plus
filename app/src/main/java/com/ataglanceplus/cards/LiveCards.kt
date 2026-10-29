@@ -29,6 +29,8 @@ import com.ataglanceplus.live.Quote
 import com.ataglanceplus.live.SportsPhase
 import com.ataglanceplus.live.SportsShowing
 import com.ataglanceplus.live.SportsSource
+import com.ataglanceplus.live.TorchNow
+import com.ataglanceplus.live.TorchSource
 import com.ataglanceplus.ui.UnlockGateActivity
 import java.util.Date
 import java.util.Locale
@@ -43,6 +45,7 @@ enum class CardType(val id: String, val label: String, val detail: String) {
     MESSAGES("messages", "Message pop-up", "New messages show for 4.5 seconds in place of the first card"),
     FINANCE("finance", "Finance", "Your stocks, when the rules below say so; one page each, taking turns"),
     SPORTS("sports", "Sports", "Your teams' games: live scores, results, kick-off times and the next fixture"),
+    TORCH("torch", "Torch", "While the torch is on: tap to turn it off, and set its brightness"),
 }
 
 /**
@@ -484,6 +487,61 @@ object LiveCards {
             minutes < 60 -> "in $minutes min"
             else -> "in ${minutes / 60} h ${minutes % 60} min"
         }
+    }
+
+    // --- Torch ---
+
+    private val TORCH_STEPS = intArrayOf(
+        R.id.torch_step_1, R.id.torch_step_2, R.id.torch_step_3, R.id.torch_step_4,
+        R.id.torch_step_5, R.id.torch_step_6, R.id.torch_step_7, R.id.torch_step_8,
+    )
+    private val TORCH_SEGS = intArrayOf(
+        R.id.torch_seg_1, R.id.torch_seg_2, R.id.torch_seg_3, R.id.torch_seg_4,
+        R.id.torch_seg_5, R.id.torch_seg_6, R.id.torch_seg_7, R.id.torch_seg_8,
+    )
+
+    /**
+     * While the torch is on. A tap anywhere but the controls turns it off, without unlocking (like
+     * the quick settings tile). The bar's steps and − / + set the brightness.
+     */
+    fun torch(context: Context, aod: Boolean, torch: TorchNow): SmartspaceTarget {
+        val views = RemoteViews(context.packageName, R.layout.card_torch)
+        val (lit, count) = TorchSource.steps(torch)
+        val dimmable = count > 1
+        val detail = if (dimmable) "Brightness $lit of $count · tap to turn off" else "Tap to turn off"
+        views.setTextViewText(R.id.torch_detail, detail)
+        if (dimmable) {
+            TORCH_STEPS.forEachIndexed { i, id ->
+                val step = i + 1
+                if (step > count) {
+                    views.setViewVisibility(id, View.GONE)
+                    return@forEachIndexed
+                }
+                val on = step <= lit
+                views.setImageViewResource(
+                    TORCH_SEGS[i],
+                    if (aod) (if (on) R.drawable.aod_segment_on else R.drawable.aod_segment_off) else if (on) R.drawable.torch_seg_on else R.drawable.torch_seg_off
+                )
+                views.setOnClickPendingIntent(id, CardActionReceiver.torchStep(context, step))
+            }
+            views.setOnClickPendingIntent(R.id.torch_down, CardActionReceiver.torchNudge(context, -1))
+            views.setOnClickPendingIntent(R.id.torch_up, CardActionReceiver.torchNudge(context, +1))
+        } else {
+            views.setViewVisibility(R.id.torch_controls, View.GONE)
+        }
+        if (aod) {
+            Style.aodBody(views, R.id.torch_title, R.id.torch_detail)
+            views.setInt(R.id.torch_badge, "setBackgroundResource", R.drawable.aod_outline_oval)
+            views.setImageViewResource(R.id.torch_icon, R.drawable.ic_torch_aod)
+            views.setInt(R.id.torch_down_bg, "setBackgroundResource", R.drawable.aod_outline_oval)
+            views.setInt(R.id.torch_up_bg, "setBackgroundResource", R.drawable.aod_outline_oval)
+            views.setImageViewResource(R.id.torch_down_icon, R.drawable.ic_minus_aod)
+            views.setImageViewResource(R.id.torch_up_icon, R.drawable.ic_plus_aod)
+        }
+        val off = CardActionReceiver.action(context, CardActionReceiver.ACTION_TORCH_OFF)
+        Style.holdBar(views, pinned = false, aod = aod)
+        views.setOnClickPendingIntent(R.id.card_root, off)
+        return Style.target(context, targetId("torch"), views, "Torch on", detail, R.drawable.ic_torch, off, 2f)
     }
 
     // --- Extra chips ---

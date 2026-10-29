@@ -8,6 +8,7 @@ import android.net.Uri
 import com.ataglanceplus.Prefs
 import com.ataglanceplus.live.MediaSource
 import com.ataglanceplus.live.SportsRules
+import com.ataglanceplus.live.TorchSource
 
 /**
  * In-card buttons that do not open anything: dismiss, and the media controls. They work without
@@ -22,6 +23,9 @@ class CardActionReceiver : BroadcastReceiver() {
             ACTION_MEDIA_TOGGLE -> MediaSource.togglePlay()
             ACTION_MEDIA_PREV -> MediaSource.previous()
             ACTION_MEDIA_NEXT -> MediaSource.next()
+            ACTION_TORCH_OFF -> TorchSource.turnOff(context)
+            ACTION_TORCH_STEP -> TorchSource.setStep(context, intent.getIntExtra(EXTRA_VALUE, 1))
+            ACTION_TORCH_NUDGE -> TorchSource.nudge(context, intent.getIntExtra(EXTRA_VALUE, 0))
             ACTION_SPORTS_STEP -> intent.getStringExtra(EXTRA_EVENT)?.let { Prefs.stepSportsRace(context, it, SportsRules.STEP_LASTS) }
         }
     }
@@ -33,7 +37,11 @@ class CardActionReceiver : BroadcastReceiver() {
         const val ACTION_MEDIA_NEXT = "com.ataglanceplus.action.MEDIA_NEXT"
         const val ACTION_SPORTS_STEP = "com.ataglanceplus.action.SPORTS_STEP"
         private const val EXTRA_CARD = "card"
+        const val ACTION_TORCH_OFF = "com.ataglanceplus.action.TORCH_OFF"
+        const val ACTION_TORCH_STEP = "com.ataglanceplus.action.TORCH_STEP"
+        const val ACTION_TORCH_NUDGE = "com.ataglanceplus.action.TORCH_NUDGE"
         private const val EXTRA_EVENT = "event"
+        private const val EXTRA_VALUE = "value"
 
         fun action(context: Context, action: String): PendingIntent {
             val intent = Intent(context, CardActionReceiver::class.java).setAction(action)
@@ -46,6 +54,21 @@ class CardActionReceiver : BroadcastReceiver() {
                 .setAction(ACTION_DISMISS)
                 .setData(Uri.Builder().scheme("aagp").authority("dismiss").appendPath(instanceKey).build())
                 .putExtra(EXTRA_CARD, instanceKey)
+            return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        }
+
+        /** A step of the torch card's brightness bar (1 = dimmest). */
+        fun torchStep(context: Context, step: Int): PendingIntent = valued(context, ACTION_TORCH_STEP, "step", step)
+
+        /** The torch card's − (−1) and + (+1). */
+        fun torchNudge(context: Context, by: Int): PendingIntent = valued(context, ACTION_TORCH_NUDGE, "nudge", by)
+
+        /** The data URI keeps each value's PendingIntent separate. */
+        private fun valued(context: Context, action: String, kind: String, value: Int): PendingIntent {
+            val intent = Intent(context, CardActionReceiver::class.java)
+                .setAction(action)
+                .setData(Uri.Builder().scheme("aagp").authority("torch").appendPath(kind).appendPath(value.toString()).build())
+                .putExtra(EXTRA_VALUE, value)
             return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
 

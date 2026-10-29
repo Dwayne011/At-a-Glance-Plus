@@ -25,6 +25,7 @@ data class CardData(
     val calendar: CalendarNow?,
     val quotes: List<Quote>,
     val sports: List<com.ataglanceplus.live.SportsShowing>,
+    val torch: com.ataglanceplus.live.TorchNow?,
     val message: IncomingMessage?,
     val messageRemainingMs: Long,
 )
@@ -38,7 +39,7 @@ object CardDeck {
     private const val PER_CHIPS_CARD = 2 * Chips.MAX_BOTTOM
 
     /**
-     * Cards with something real to show, most time-sensitive first: a new message, navigation,
+     * Cards with something real to show, most time-sensitive first: a new message, the torch while it is on, navigation,
      * live updates, live games, a timer or alarm, media, the next calendar event, other sports
      * cards (before, after, next game), finance, then the weather
      * card, which is always there and cannot be dismissed. Switched-off types and dismissed
@@ -57,6 +58,7 @@ object CardDeck {
         val dismissed = Prefs.dismissed(context)
         fun on(type: CardType) = Prefs.cardEnabled(context, type)
 
+        val torch = data.torch?.takeIf { on(CardType.TORCH) && "torch" !in dismissed }
         val nav = data.nav?.takeIf { on(CardType.NAV) && "nav:${it.key}" !in dismissed }
         val live = if (on(CardType.LIVE)) data.live.filter { "live:${it.key}" !in dismissed }.take(MAX_LIVE) else emptyList()
         val timer = data.timer?.takeIf { on(CardType.TIMER) && "timer:${it.key}" !in dismissed }
@@ -86,6 +88,8 @@ object CardDeck {
                 val hideText = surface == AtAGlanceService.SURFACE_LOCKSCREEN && !LiveCards.lockScreenShowsPrivate(context)
                 add(LiveCards.island(context, aod, data.message, data.messageRemainingMs, hideText))
             }
+            // The torch first: it is on now, and the card is how to turn it off.
+            torch?.let { add(LiveCards.torch(context, aod, it)) }
             nav?.let { add(LiveCards.nav(context, aod, it, navChips)) }
             live.forEach { add(LiveCards.live(context, aod, it)) }
             liveSports.forEach { add(sportsCard(context, aod, it)) }
@@ -110,6 +114,7 @@ object CardDeck {
 
     /** Instance keys of everything that exists now, dismissed or not, so stale dismissals can be forgotten. */
     fun activeInstances(context: Context, data: CardData): Set<String> = buildSet {
+        data.torch?.let { add("torch") }
         data.nav?.let { add("nav:${it.key}") }
         data.live.forEach { add("live:${it.key}") }
         data.timer?.let { add("timer:${it.key}") }

@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Torch, shown only while it is on. A tap on the card turns it off. Brightness: tap a step of
+    the bar to jump to it, or − and + to go one step. Cards cannot follow a drag, so there is no
+    slider; each step and button fills the card's height to be easy to hit.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_root"
+    style="@style/AagCardRoot">
+
+    <LinearLayout
+        android:id="@+id/card_body"
+        style="@style/AagCardBody"
+        android:background="@drawable/card_bg_torch"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingEnd="10dp">
+
+        <FrameLayout
+            android:id="@+id/torch_badge"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/torch_button_bg">
+
+            <ImageView
+                android:id="@+id/torch_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_torch" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="11dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/torch_title"
+                style="@style/AagText.Title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Torch on" />
+
+            <TextView
+                android:id="@+id/torch_detail"
+                style="@style/AagText.Detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFEF08A" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/torch_controls"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+        <FrameLayout
+            android:id="@+id/torch_down"
+            android:layout_width="40dp"
+            android:layout_height="match_parent"
+            android:contentDescription="Dimmer">
+
+            <FrameLayout
+                android:id="@+id/torch_down_bg"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center"
+                android:background="@drawable/torch_button_bg">
+
+                <ImageView
+                    android:id="@+id/torch_down_icon"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_minus" />
+            </FrameLayout>
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/torch_levels"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:id="@+id/torch_step_1"
+                android:layout_width="13dp"
+                android:layout_height="match_parent"
+                android:contentDescription="Brightness 1">
+
+                <ImageView
+                    android:id="@+id/torch_seg_1"
+                    android:layout_width="7dp"
+                    android:layout_height="12dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/torch_seg_off" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/torch_step_2"
+                android:layout_width="13dp"
+                android:layout_height="match_parent"
+                android:contentDescription="Brightness 2">
+
+                <ImageView
+                    android:id="@+id/torch_seg_2"
+                    android:layout_width="7dp"
+                    android:layout_height="14dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/torch_seg_off" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/torch_step_3"
+                android:layout_width="13dp"
+                android:layout_height="match_parent"
+                android:contentDescription="Brightness 3">
+
+                <ImageView
+                    android:id="@+id/torch_seg_3"
+                    android:layout_width="7dp"
+                    android:layout_height="16dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/torch_seg_off" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/torch_step_4"
+                android:layout_width="13dp"
+                android:layout_height="match_parent"
+                android:contentDescription="Brightness 4">
+
+                <ImageView
+                    android:id="@+id/torch_seg_4"
+                    android:layout_width="7dp"
+                    android:layout_height="18dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/torch_seg_off" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/torch_step_5"
+                android:layout_width="13dp"
+                android:layout_height="match_parent"
+                android:contentDescription="Brightness 5">
+
+                <ImageView
+                    android:id="@+id/torch_seg_5"
+                    android:layout_width="7dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/torch_seg_off" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/torch_step_6"
+                android:layout_width="13dp"
+                android:layout_height="match_parent"
+                android:contentDescription="Brightness 6">
+
+                <ImageView
+                    android:id="@+id/torch_seg_6"
+                    android:layout_width="7dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/torch_seg_off" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/torch_step_7"
+                android:layout_width="13dp"
+                android:layout_height="match_parent"
+                android:contentDescription="Brightness 7">
+
+                <ImageView
+                    android:id="@+id/torch_seg_7"
+                    android:layout_width="7dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/torch_seg_off" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/torch_step_8"
+                android:layout_width="13dp"
+                android:layout_height="match_parent"
+                android:contentDescription="Brightness 8">
+
+                <ImageView
+                    android:id="@+id/torch_seg_8"
+                    android:layout_width="7dp"
+                    android:layout_height="26dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/torch_seg_off" />
+            </FrameLayout>
+
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/torch_up"
+            android:layout_width="40dp"
+            android:layout_height="match_parent"
+            android:contentDescription="Brighter">
+
+            <FrameLayout
+                android:id="@+id/torch_up_bg"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center"
+                android:background="@drawable/torch_button_bg">
+
+                <ImageView
+                    android:id="@+id/torch_up_icon"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_plus" />
+            </FrameLayout>
+        </FrameLayout>
+
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Hold ring (spec 6.3): traces the card's edge while it is held, until the launcher's menu opens. -->
+    <ImageView
+        android:id="@+id/hold_bar"
+        android:layout_width="match_parent"
+        android:layout_height="76dp"
+        android:layout_gravity="center_vertical"
+        android:contentDescription="@null"
+        android:duplicateParentState="true"
+        android:scaleType="fitXY"
+        android:src="@drawable/hold_bar_red_400" />
+</FrameLayout>

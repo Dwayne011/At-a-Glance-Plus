@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -206,7 +207,7 @@ private fun StatusScreen() {
                                 }
                             }) { Text("Pair with this phone") }
                         } else {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Button(enabled = !busy, onClick = {
                                     scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) }
                                 }) { Text("Activate") }
@@ -345,7 +346,7 @@ private fun ProblemsSection() {
         } else {
             Text("Errors this app recorded, newest first:", style = MaterialTheme.typography.bodySmall)
             Text(log.take(4000), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Button(onClick = { copy(context, "At a Glance Plus errors", log) }) { Text("Copy errors") }
                 OutlinedButton(onClick = {
                     com.ataglanceplus.CrashLog.clear(context)

@@ -34,6 +34,7 @@ import com.ataglanceplus.live.MediaSource
 import com.ataglanceplus.live.NotificationHub
 import com.ataglanceplus.live.SportsRules
 import com.ataglanceplus.live.SportsSource
+import com.ataglanceplus.live.TorchSource
 import com.ataglanceplus.weather.WeatherRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -135,6 +136,8 @@ class AtAGlanceService : SmartspaceService() {
         restartFinance()
         scope.launch { SportsSource.games.drop(1).collect { pushAll() } }
         scope.launch { SportsSource.races.drop(1).collect { pushAll() } }
+        TorchSource.start(this)
+        scope.launch { TorchSource.torch.drop(1).collect { pushAll() } }
         restartSports()
         // The media track bar cannot move by itself; nudge it while playing.
         scope.launch {
@@ -201,6 +204,7 @@ class AtAGlanceService : SmartspaceService() {
         contentResolver.unregisterContentObserver(calendarObserver)
         media.stop()
         engine.stop()
+        TorchSource.stop(this)
         scope.cancel()
         sessions.keys.forEach { ServiceState.sessionDestroyed(it.id) }
         sessions.clear()
@@ -299,6 +303,7 @@ class AtAGlanceService : SmartspaceService() {
         media = MediaSource.now.value,
         calendar = calendar,
         quotes = FinanceSource.quotes.value,
+        torch = TorchSource.torch.value,
         sports = runCatching { SportsRules.showing(this, SportsSource.games.value, SportsSource.races.value) }.getOrDefault(emptyList()),
         message = message,
         messageRemainingMs = (messageUntil - System.currentTimeMillis()).coerceAtLeast(0L),
