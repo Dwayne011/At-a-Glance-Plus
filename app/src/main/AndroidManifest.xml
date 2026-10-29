@@ -66,7 +66,7 @@
             <action android:name="android.settings.BLUETOOTH_SETTINGS" />
         </intent>
         <intent>
-            <action android:name="android.health.connect.action.HEALTH_HOME_SETTINGS" />
+            <action android:name="android.health.connect.action.MANAGE_HEALTH_DATA" />
         </intent>
     </queries>
 

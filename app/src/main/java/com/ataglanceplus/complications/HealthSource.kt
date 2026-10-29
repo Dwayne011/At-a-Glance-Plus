@@ -67,22 +67,24 @@ object HealthSource {
         else String.format(java.util.Locale.getDefault(), "%.1fk", steps / 1000.0)
 
     /**
-     * Sleep that ended after 18:00 yesterday, minus time marked awake or out of bed.
+     * Last night's sleep, as Health Connect's "Today" shows it: sleep ending today that started
+     * before midday (so an evening nap yesterday, or one this afternoon, is not added). Sleep
+     * recorded by more than one app is counted once, and time marked awake or out of bed is
+     * taken off.
      */
     suspend fun sleep(context: Context, granted: Set<String>): ChipValues.Value? {
         if (SLEEP !in granted) return null
         return try {
-            val from = Instant.ofEpochMilli(SimpleSources.startOfToday()).minus(Duration.ofHours(6))
+            val today = Instant.ofEpochMilli(SimpleSources.startOfToday())
+            val midday = today.plus(Duration.ofHours(12))
             val sessions = HealthConnectClient.getOrCreate(context).readRecords(
-                ReadRecordsRequest(SleepSessionRecord::class, TimeRangeFilter.between(from.minus(Duration.ofHours(18)), Instant.now()))
-            ).records.filter { it.endTime.isAfter(from) }
+                ReadRecordsRequest(SleepSessionRecord::class, TimeRangeFilter.between(today.minus(Duration.ofHours(18)), Instant.now()))
+            ).records.filter { it.endTime.isAfter(today) && it.startTime.isBefore(midday) }
+            if (sessions.isEmpty()) return null
             val awake = setOf(SleepSessionRecord.STAGE_TYPE_AWAKE, SleepSessionRecord.STAGE_TYPE_OUT_OF_BED)
-            val minutes = sessions.sumOf { session ->
-                val total = Duration.between(session.startTime, session.endTime)
-                val awakeTime = session.stages.filter { it.stage in awake }
-                    .fold(Duration.ZERO) { sum, stage -> sum + Duration.between(stage.startTime, stage.endTime) }
-                (total - awakeTime).toMinutes()
-            }
+            val asleep = merged(sessions.map { it.startTime to it.endTime })
+            val awakeTimes = merged(sessions.flatMap { s -> s.stages.filter { it.stage in awake }.map { it.startTime to it.endTime } })
+            val minutes = (total(asleep) - total(awakeTimes).coerceAtMost(total(asleep))).toMinutes()
             if (minutes <= 0) return null
             // For a big chip: from going to sleep to waking.
             val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
@@ -95,4 +97,16 @@ object HealthSource {
             null
         }
     }
+
+    /** Overlapping spans joined into one, so time recorded twice counts once. */
+    private fun merged(spans: List<Pair<Instant, Instant>>): List<Pair<Instant, Instant>> =
+        spans.sortedBy { it.first }.fold(mutableListOf()) { out, (start, end) ->
+            val last = out.lastOrNull()
+            if (last != null && !start.isAfter(last.second)) out[out.size - 1] = last.first to maxOf(last.second, end)
+            else out += start to end
+            out
+        }
+
+    private fun total(spans: List<Pair<Instant, Instant>>): Duration =
+        spans.fold(Duration.ZERO) { sum, (start, end) -> sum + Duration.between(start, end) }
 }

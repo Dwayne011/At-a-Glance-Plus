@@ -90,10 +90,27 @@ data class ChipSpec(val kind: Complication, val arg: String? = null) {
     /** This chip's usual screen, when the user has not chosen an app. */
     private fun defaultIntent(context: Context): Intent? = when (kind) {
         Complication.ALARM -> Intent(AlarmClock.ACTION_SHOW_ALARMS)
-        Complication.STEPS, Complication.SLEEP -> Intent("android.health.connect.action.HEALTH_HOME_SETTINGS")
+        // Health Connect's data screen, one tap from Steps or Sleep: it has no way in to one
+        // data type.
+        Complication.STEPS, Complication.SLEEP -> Intent("android.health.connect.action.MANAGE_HEALTH_DATA")
+        Complication.SCREEN_TIME -> wellbeingDashboard(context)
         Complication.BATTERY -> Intent(Intent.ACTION_POWER_USAGE_SUMMARY)
         Complication.BUDS -> Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
         else -> defaultPackage()?.let { context.packageManager.getLaunchIntentForPackage(it) }
+    }
+
+    /**
+     * Digital Wellbeing's activity details (the screen-time chart), when this version has that
+     * screen and lets other apps open it; otherwise null, and Digital Wellbeing opens as usual.
+     * It has no documented way in, so the screen is looked up by name.
+     */
+    private fun wellbeingDashboard(context: Context): Intent? {
+        val pkg = "com.google.android.apps.wellbeing"
+        val activities = runCatching {
+            context.packageManager.getPackageInfo(pkg, android.content.pm.PackageManager.PackageInfoFlags.of(android.content.pm.PackageManager.GET_ACTIVITIES.toLong())).activities
+        }.getOrNull() ?: return null
+        val screen = activities.firstOrNull { it.exported && it.enabled && "dashboard" in it.name.lowercase() } ?: return null
+        return Intent().setClassName(pkg, screen.name)
     }
 
     /**
