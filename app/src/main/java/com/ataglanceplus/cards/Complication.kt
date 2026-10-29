@@ -266,6 +266,9 @@ object Chips {
     val WIDE = ChipStyle(R.layout.include_chip_wide, 12f, 14, 6, 84, 56, zoneWDp = 84)
     val GRID = ChipStyle(R.layout.include_chip_grid, 11f, 13, 5, 48, 56, gapDp = 0, zoneWDp = 48, zoneHDp = 27)
 
+    /** Room kept spare when choosing text for the extra chips card, whose real width is estimated. */
+    private const val TEXT_SPARE_DP = 12
+
     /** Space between devices on a 2-slot Bluetooth chip. */
     private const val PART_GAP_DP = 8
 
@@ -512,12 +515,14 @@ object Chips {
         val px = android.util.TypedValue.COMPLEX_UNIT_PX
         val style = DEFAULT_STRIP
         val gap = style.gapDp
-        val width = (rowWidthDp - gap * (placed.size - 1)) / placed.size
+        // The chips share the row by weight (include_chip_big_fill), so they always fit it; the
+        // width here only decides how much text to try, with a little to spare in case the card
+        // is narrower than estimated.
+        val width = (rowWidthDp - gap * (placed.size - 1)) / placed.size - TEXT_SPARE_DP
         val inner = width - 2 * style.padDp
         val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
         placed.forEachIndexed { i, (spec, value, big) ->
-            val child = RemoteViews(context.packageName, R.layout.include_chip_big)
-            child.setViewLayoutWidth(R.id.chip_zone, width, dip)
+            val child = RemoteViews(context.packageName, R.layout.include_chip_big_fill)
             child.setViewLayoutHeight(R.id.chip_zone, style.zoneHDp.toFloat(), dip)
             if (i < placed.lastIndex) child.setViewLayoutMargin(R.id.chip_zone, RemoteViews.MARGIN_END, gap.toFloat(), dip)
             child.setViewLayoutWidth(R.id.chip_pill, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), px)
@@ -566,8 +571,7 @@ object Chips {
         val style = DEFAULT_STRIP
         val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
         views.setViewVisibility(container, View.VISIBLE)
-        val child = RemoteViews(context.packageName, R.layout.include_chip_big)
-        child.setViewLayoutWidth(R.id.chip_zone, widthDp, dip)
+        val child = RemoteViews(context.packageName, R.layout.include_chip_big_fill)
         child.setViewLayoutHeight(R.id.chip_zone, heightDp, dip)
         child.setViewLayoutWidth(R.id.chip_pill, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), px)
         child.setViewLayoutHeight(R.id.chip_pill, heightDp - 8, dip)
@@ -575,7 +579,7 @@ object Chips {
         child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else if (value.attention) R.drawable.chip_selector_attention else style.background)
         child.setViewLayoutWidth(R.id.chip_icon, 20f, dip)
         child.setViewLayoutHeight(R.id.chip_icon, 20f, dip)
-        val inner = widthDp - 32
+        val inner = widthDp - 32 - TEXT_SPARE_DP
         if (value.parts.size > 1) {
             child.setViewVisibility(R.id.chip_icon, View.GONE)
             child.setViewVisibility(R.id.chip_text, View.GONE)

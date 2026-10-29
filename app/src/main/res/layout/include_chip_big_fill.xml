@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A chip on the extra chips card: the same as include_chip_big, but the chips in a row share its
+    width equally (layout_weight), so they always fill it exactly, whatever the card's real width.
+    Added into a card with RemoteViews.addView, so ids are local to each chip.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chip_zone"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1">
+
+    <LinearLayout
+        android:id="@+id/chip_pill"
+        android:layout_width="wrap_content"
+        android:layout_height="24dp"
+        android:layout_gravity="center"
+        android:background="@drawable/chip_selector_hybrid"
+        android:duplicateParentState="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <LinearLayout
+            android:id="@+id/chip_row"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/chip_icon"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/chip_text"
+                style="@style/AagText.Chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:ellipsize="end"
+                android:maxWidth="400dp"
+                android:singleLine="true"
+                android:textColor="#FFE2E2E6"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Tall: the second line. -->
+        <TextView
+            android:id="@+id/chip_detail"
+            style="@style/AagText.Chip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxWidth="400dp"
+            android:singleLine="true"
+            android:textColor="#B3E2E2E6"
+            android:textSize="10.5sp"
+            android:visibility="gone" />
+
+        <!-- Tall Bluetooth chip: the devices after the first. -->
+        <LinearLayout
+            android:id="@+id/chip_row2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:visibility="gone" />
+    </LinearLayout>
+</FrameLayout>
