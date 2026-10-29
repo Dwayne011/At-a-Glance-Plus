@@ -402,7 +402,7 @@ object LiveCards {
                 R.id.sports_league, R.id.sports_status, R.id.sports_note
             )
         }
-        val tap = gameTap(context, "${game.home.name} vs ${game.away.name}", game.link, key)
+        val tap = gameTap(context, "${game.home.name} vs ${game.away.name}", game.link, key, com.ataglanceplus.ui.DashboardActivity.KIND_GAME_PREFIX + game.eventId)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         val title = "${game.home.abbr} ${game.home.score ?: ""} ${game.away.abbr} ${game.away.score ?: ""}".trim()
@@ -439,7 +439,7 @@ object LiveCards {
             views.setInt(R.id.race_badge_text, "setBackgroundResource", R.drawable.aod_outline_r14)
             views.setImageViewResource(R.id.race_icon, R.drawable.ic_nav_flag_aod)
         }
-        val tap = gameTap(context, "F1 ${session.eventName} ${session.session}", session.link, key)
+        val tap = gameTap(context, "F1 ${session.eventName} ${session.session}", session.link, key, com.ataglanceplus.ui.DashboardActivity.KIND_RACE_PREFIX + session.eventId)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, targetId(key), views, title, detail.toString(), R.drawable.ic_nav_flag, tap, if (showing.phase == SportsPhase.LIVE) 1.65f else 1.2f)
@@ -449,16 +449,25 @@ object LiveCards {
      * After unlocking: Google's results for the game (scores, stats and highlights, in the Google
      * app when installed), or ESPN's page if the user prefers it.
      */
-    private fun gameTap(context: Context, search: String, link: String?, key: String): PendingIntent {
+    private fun gameTap(context: Context, search: String, link: String?, key: String, dashboard: String): PendingIntent {
         val code = REQUEST_BASE + (key.hashCode() and 0xFFFF)
-        if (Prefs.sportsOpenGoogle(context) || link == null) {
-            val app = Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, search).setPackage(GOOGLE_APP)
-            val intent = if (app.resolveActivity(context.packageManager) != null) app
-            else Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/search?q=" + android.net.Uri.encode(search)))
-            return Style.gated(context, intent, code)
-        }
-        return Style.gated(context, Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)), code)
+        val open = Prefs.sportsOpen(context)
+        if (open == Prefs.SportsOpen.DASHBOARD) return Style.gated(context, com.ataglanceplus.ui.DashboardActivity.intent(context, dashboard), code)
+        if (open == Prefs.SportsOpen.ESPN && link != null) return Style.gated(context, Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)), code)
+        return Style.gated(context, googleSearch(context, search), code)
     }
+
+    /** Google's results for [search], in the Google app when installed. */
+    fun googleSearch(context: Context, search: String): Intent {
+        val app = Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, search).setPackage(GOOGLE_APP)
+        return if (app.resolveActivity(context.packageManager) != null) app
+        else Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/search?q=" + android.net.Uri.encode(search)))
+    }
+
+    /** A stock's dashboard in this app, or its Google Finance page. */
+    private fun stockTap(context: Context, quote: Quote): Intent =
+        if (Prefs.financeOpensDashboard(context)) com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_STOCK_PREFIX + quote.symbol)
+        else Intent(Intent.ACTION_VIEW, android.net.Uri.parse(FinanceSource.googleFinanceUrl(quote)))
 
     private const val GOOGLE_APP = "com.google.android.googlequicksearchbox"
 
@@ -591,14 +600,14 @@ object LiveCards {
             }
             chart(quote, colour)?.let { page.setImageViewBitmap(R.id.finance_chart, it) }
             if (!aod) {
-                val open = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(FinanceSource.googleFinanceUrl(quote)))
+                val open = stockTap(context, quote)
                 page.setOnClickPendingIntent(R.id.finance_page, Style.gated(context, open, REQUEST_BASE + ("stock:" + quote.symbol).hashCode().and(0xFFFF)))
             }
             views.addView(R.id.finance_flipper, page)
         }
         val first = ordered.first()
         val tap = Style.gated(
-            context, Intent(Intent.ACTION_VIEW, android.net.Uri.parse(FinanceSource.googleFinanceUrl(first))),
+            context, stockTap(context, first),
             REQUEST_BASE + ("stock:" + first.symbol).hashCode().and(0xFFFF)
         )
         Style.holdBar(views, pinned = false, aod = aod)

@@ -300,6 +300,9 @@ private fun FinanceSettings(settingsVersion: Int) {
     }
 
     Text("Show the card", style = MaterialTheme.typography.labelLarge)
+    SwitchRow("Open stocks in this app", "Tapping a stock shows its dashboard here. Off: its Google Finance page.", Prefs.financeOpensDashboard(context)) {
+        Prefs.setFinanceOpensDashboard(context, it)
+    }
     SwitchRow("On big moves", "When a stock has moved this much today.", Prefs.financeOnMoves(context)) { Prefs.setFinanceOnMoves(context, it) }
     if (Prefs.financeOnMoves(context)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -424,8 +427,16 @@ private fun SportsSettings(settingsVersion: Int) {
     SwitchRow("Next game when nothing's on", "Otherwise each team's card only shows around its games.", Prefs.sportsNextAlways(context)) {
         Prefs.setSportsNextAlways(context, it)
     }
-    SwitchRow("Open games in Google", "Tapping a card shows Google's page for the game. Off: ESPN's.", Prefs.sportsOpenGoogle(context)) {
-        Prefs.setSportsOpenGoogle(context, it)
+    Text("Tapping a game opens", style = MaterialTheme.typography.bodySmall)
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        val open = Prefs.sportsOpen(context)
+        Prefs.SportsOpen.entries.forEachIndexed { index, option ->
+            SegmentedButton(
+                selected = open == option,
+                onClick = { Prefs.setSportsOpen(context, option) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = Prefs.SportsOpen.entries.size)
+            ) { Text(option.label) }
+        }
     }
     Text("Scores refresh every 30 seconds during a game. From ESPN's free public feed, which is unofficial and could change.", style = MaterialTheme.typography.bodySmall)
 }

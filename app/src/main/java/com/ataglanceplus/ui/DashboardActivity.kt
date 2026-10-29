@@ -28,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -38,6 +39,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -63,8 +65,6 @@ import com.ataglanceplus.complications.HealthSource
 import com.ataglanceplus.complications.MetricShape
 import com.ataglanceplus.complications.Reading
 import com.ataglanceplus.complications.SimpleSources
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -72,6 +72,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * A small dashboard for a chip's data, opened by tapping the chip: steps (today by hour and the
@@ -100,7 +102,12 @@ class DashboardActivity : ComponentActivity() {
                             KIND_STEPS -> StepsDashboard()
                             KIND_SLEEP -> SleepDashboard()
                             KIND_SCREEN -> ScreenDashboard()
-                            else -> HealthMetric.fromId(kind?.removePrefix(KIND_HEALTH_PREFIX))?.let { MetricDashboard(it) } ?: Text("Nothing to show.")
+                            else -> when {
+                                kind?.startsWith(KIND_STOCK_PREFIX) == true -> StockDashboard(kind.removePrefix(KIND_STOCK_PREFIX))
+                                kind?.startsWith(KIND_GAME_PREFIX) == true -> GameDashboard(kind.removePrefix(KIND_GAME_PREFIX))
+                                kind?.startsWith(KIND_RACE_PREFIX) == true -> RaceDashboard(kind.removePrefix(KIND_RACE_PREFIX))
+                                else -> HealthMetric.fromId(kind?.removePrefix(KIND_HEALTH_PREFIX))?.let { MetricDashboard(it) } ?: Text("Nothing to show.")
+                            }
                         }
                     }
                 }
@@ -115,6 +122,11 @@ class DashboardActivity : ComponentActivity() {
         const val KIND_SCREEN = "screen"
         /** Followed by a [com.ataglanceplus.complications.HealthMetric] id: "health:hr". */
         const val KIND_HEALTH_PREFIX = "health:"
+        /** Followed by a ticker: "stock:AAPL". */
+        const val KIND_STOCK_PREFIX = "stock:"
+        /** Followed by an ESPN event id. */
+        const val KIND_GAME_PREFIX = "game:"
+        const val KIND_RACE_PREFIX = "race:"
 
         fun intent(context: Context, kind: String): Intent =
             Intent(context, DashboardActivity::class.java).putExtra(EXTRA_KIND, kind).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -592,6 +604,271 @@ private fun RangeChart(ranges: List<Pair<Double, Double>?>, describe: (Int) -> S
                     }
                 }
                 if (axis.isNotEmpty()) AxisLabels(axis, ranges.size)
+            }
+        }
+    }
+}
+
+// --- Finance ---
+
+/** Up and down: the reserved good and critical colours, always with an arrow and a sign. */
+private val UP = Color(0xFF0CA30C)
+private val DOWN = Color(0xFFD03B3B)
+
+/**
+ * A stock: the user's stocks to switch between, the price and its change over the chosen range,
+ * the price over that range, and the day's figures. Links on to Google Finance.
+ */
+@Composable
+private fun StockDashboard(initial: String) {
+    val context = LocalContext.current
+    val tickers = remember { Prefs.financeTickers(context).ifEmpty { listOf(initial) } }
+    var symbol by remember { mutableStateOf(initial) }
+    var range by remember { mutableStateOf(com.ataglanceplus.live.FinanceSource.Range.DAY) }
+    val load by produceState<Load<com.ataglanceplus.live.FinanceSource.History>>(Load.Loading, symbol, range) {
+        value = Load.Loading
+        value = withContext(Dispatchers.IO) {
+            com.ataglanceplus.live.FinanceSource.history(symbol, range)?.let { Load.Ready(it) }
+                ?: Load.Missing("Yahoo Finance did not answer. Try again in a moment.")
+        }
+    }
+    Title("Stocks")
+    if (tickers.size > 1) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            tickers.forEach { t -> FilterChip(selected = t == symbol, onClick = { symbol = t }, label = { Text(t) }) }
+        }
+    }
+    when (val state = load) {
+        Load.Loading -> Text("Loading…")
+        is Load.Missing -> Text(state.why)
+        is Load.Ready -> {
+            val h = state.data
+            val q = h.quote
+            // The screen's locale, read so prices redraw if the phone's language changes.
+            val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+            fun money(v: Double) = String.format(locale, "%,.2f", v)
+            Column {
+                Text(q.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${q.symbol} · ${h.exchangeName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            val change = h.rangeChange
+            val base = q.price - change
+            val percent = if (base != 0.0) 100 * change / base else 0.0
+            Column {
+                Text("${money(q.price)} ${q.currency}", style = MaterialTheme.typography.displaySmall)
+                Text(
+                    (if (change >= 0) "▲ +" else "▼ −") + money(kotlin.math.abs(change)) +
+                        String.format(locale, " (%+.2f%%) ", percent) + if (range == com.ataglanceplus.live.FinanceSource.Range.DAY) "today" else "over ${range.label}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (change >= 0) UP else DOWN,
+                )
+            }
+            ChartCard("Price") {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.ataglanceplus.live.FinanceSource.Range.entries.forEach { r ->
+                        FilterChip(selected = r == range, onClick = { range = r }, label = { Text(r.label) })
+                    }
+                }
+                val points = h.points.map { (t, v) -> Reading(Instant.ofEpochMilli(t), v) }
+                if (points.size >= 2) {
+                    LineChart(
+                        points = points,
+                        describe = { r ->
+                            val at = r.time.atZone(ZoneId.systemDefault())
+                            val whenText = if (range.ordinal <= com.ataglanceplus.live.FinanceSource.Range.WEEK.ordinal) "${dayAndDate(at.toLocalDate())} ${clock(context, r.time)}" else dayAndDate(at.toLocalDate())
+                            "$whenText · ${money(r.value)}"
+                        },
+                        format = { money(it) },
+                        markers = false,
+                    )
+                } else {
+                    Text("No prices for this range yet.", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            ChartCard("Today") {
+                Stat("Previous close", money(q.previousClose))
+                if (h.dayLow != null && h.dayHigh != null) Stat("Day's range", "${money(h.dayLow)} – ${money(h.dayHigh)}")
+                if (h.yearLow != null && h.yearHigh != null) Stat("52-week range", "${money(h.yearLow)} – ${money(h.yearHigh)}")
+                h.volume?.let { Stat("Volume", numbers.format(it)) }
+            }
+            OpenButton("Open in Google Finance", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(com.ataglanceplus.live.FinanceSource.googleFinanceUrl(q))))
+        }
+    }
+    Text("Prices from Yahoo Finance's free feed; some exchanges are 15 minutes behind.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun Stat(label: String, value: String) {
+    Row {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+// --- Sports ---
+
+/** The followed team (or series) a game or session belongs to, and its games or sessions. */
+private suspend fun ensureSports(context: Context) {
+    if (com.ataglanceplus.live.SportsSource.games.value.isEmpty() && com.ataglanceplus.live.SportsSource.races.value.isEmpty()) {
+        runCatching { com.ataglanceplus.live.SportsSource.refreshSchedules(context) }
+    }
+}
+
+/**
+ * A game: the scoreboard (live, final or kick-off), then the followed team's next fixtures and
+ * latest results. Links on to Google and ESPN.
+ */
+@Composable
+private fun GameDashboard(eventId: String) {
+    val context = LocalContext.current
+    val load by produceState<Load<Pair<com.ataglanceplus.live.Followed?, List<com.ataglanceplus.live.Game>>>>(Load.Loading, eventId) {
+        withContext(Dispatchers.IO) { ensureSports(context) }
+        val all = com.ataglanceplus.live.SportsSource.games.value
+        val key = all.entries.firstOrNull { (_, games) -> games.any { it.eventId == eventId } }?.key
+        value = if (key == null) Load.Missing("This game is no longer in your teams' fixtures.")
+        else Load.Ready(Prefs.sportsFollowed(context).firstOrNull { it.key == key } to all.getValue(key))
+    }
+    when (val state = load) {
+        Load.Loading -> { Title("Game"); Text("Loading…") }
+        is Load.Missing -> { Title("Game"); Text(state.why) }
+        is Load.Ready -> {
+            val (team, games) = state.data
+            val game = games.first { it.eventId == eventId }
+            Title(team?.name ?: game.leagueName)
+            Scoreboard(game)
+            val upcoming = games.filter { it.state == "pre" && it.eventId != eventId }.sortedBy { it.start }.take(5)
+            if (upcoming.isNotEmpty()) {
+                ChartCard("Next games") {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { upcoming.forEach { FixtureRow(it, team) } }
+                }
+            }
+            val results = games.filter { it.state == "post" && it.eventId != eventId }.sortedByDescending { it.start }.take(5)
+            if (results.isNotEmpty()) {
+                ChartCard("Results") {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { results.forEach { FixtureRow(it, team) } }
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OpenButton("Open in Google", com.ataglanceplus.cards.LiveCards.googleSearch(context, "${game.home.name} vs ${game.away.name}"))
+                game.link?.let { OpenButton("ESPN", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it))) }
+            }
+        }
+    }
+    Text("Scores from ESPN's free public feed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun Scoreboard(game: com.ataglanceplus.live.Game) {
+    val context = LocalContext.current
+    val scored = game.state != "pre"
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(game.leagueName, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TeamBlock(game.home, Modifier.weight(1f))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (scored) {
+                        Text("${game.home.score ?: "0"} – ${game.away.score ?: "0"}", style = MaterialTheme.typography.displaySmall)
+                    } else {
+                        Text(clock(context, Instant.ofEpochMilli(game.start)), style = MaterialTheme.typography.headlineMedium)
+                    }
+                    Text(
+                        when (game.state) {
+                            "in" -> "LIVE · ${game.status}"
+                            "post" -> game.status
+                            else -> dayAndDate(Instant.ofEpochMilli(game.start).atZone(ZoneId.systemDefault()).toLocalDate())
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (game.state == "in") DOWN else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TeamBlock(game.away, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TeamBlock(side: com.ataglanceplus.live.Side, modifier: Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        val logo = remember(side.logoUrl) { com.ataglanceplus.live.SportsSource.logo(side.logoUrl)?.asImageBitmap() }
+        if (logo != null) Image(logo, contentDescription = null, modifier = Modifier.size(48.dp)) else Spacer(Modifier.size(48.dp))
+        Text(side.name, style = MaterialTheme.typography.bodyMedium, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+/** A fixture or result from the followed team's side: when, home or away, the opponent, and the score with W, D or L. */
+@Composable
+private fun FixtureRow(game: com.ataglanceplus.live.Game, team: com.ataglanceplus.live.Followed?) {
+    val context = LocalContext.current
+    val home = team?.teamId == null || game.home.id == team.teamId
+    val us = if (home) game.home else game.away
+    val them = if (home) game.away else game.home
+    val date = Instant.ofEpochMilli(game.start)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val logo = remember(them.logoUrl) { com.ataglanceplus.live.SportsSource.logo(them.logoUrl)?.asImageBitmap() }
+        if (logo != null) Image(logo, contentDescription = null, modifier = Modifier.size(28.dp)) else Spacer(Modifier.size(28.dp))
+        Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+            Text((if (home) "vs " else "at ") + them.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                dayAndDate(date.atZone(ZoneId.systemDefault()).toLocalDate()) + if (game.state == "pre") " · ${clock(context, date)}" else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (game.state == "post") {
+            val outcome = when {
+                us.winner -> "W"
+                them.winner -> "L"
+                else -> "D"
+            }
+            Text("$outcome ${us.score ?: "?"}–${them.score ?: "?"}", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+/** A race weekend: each session's time, and its leaders once it has started. */
+@Composable
+private fun RaceDashboard(eventId: String) {
+    val context = LocalContext.current
+    val load by produceState<Load<List<com.ataglanceplus.live.RaceSession>>>(Load.Loading, eventId) {
+        withContext(Dispatchers.IO) { ensureSports(context) }
+        val sessions = com.ataglanceplus.live.SportsSource.races.value.values.flatten().filter { it.eventId == eventId }.sortedBy { it.start }
+        value = if (sessions.isEmpty()) Load.Missing("This race weekend is no longer in the calendar.") else Load.Ready(sessions)
+    }
+    when (val state = load) {
+        Load.Loading -> { Title("Formula 1"); Text("Loading…") }
+        is Load.Missing -> { Title("Formula 1"); Text(state.why) }
+        is Load.Ready -> {
+            val sessions = state.data
+            Title(sessions.first().eventName)
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    sessions.forEach { s ->
+                        val start = Instant.ofEpochMilli(s.start)
+                        Column {
+                            Row {
+                                Text(s.session, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                                Text(
+                                    when (s.state) {
+                                        "in" -> "LIVE"
+                                        "post" -> "Finished"
+                                        else -> "${dayAndDate(start.atZone(ZoneId.systemDefault()).toLocalDate())} ${clock(context, start)}"
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (s.state == "in") DOWN else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (s.top.isNotEmpty() && s.state != "pre") {
+                                Text(s.top.mapIndexed { i, n -> "${i + 1} $n" }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OpenButton("Open in Google", com.ataglanceplus.cards.LiveCards.googleSearch(context, "F1 ${sessions.first().eventName}"))
+                sessions.first().link?.let { OpenButton("ESPN", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it))) }
             }
         }
     }

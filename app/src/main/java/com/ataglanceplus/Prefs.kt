@@ -37,7 +37,8 @@ object Prefs {
     private const val KEY_SPORTS_AFTER = "sports_after_hours"
     private const val KEY_SPORTS_NEXT = "sports_next_always"
     private const val KEY_SPORTS_STEP = "sports_race_step"
-    private const val KEY_SPORTS_OPEN_GOOGLE = "sports_open_google"
+    private const val KEY_SPORTS_OPEN = "sports_open"
+    private const val KEY_FINANCE_OPEN = "finance_open"
     private const val KEY_FIN_TICKERS = "finance_tickers"
     private const val KEY_FIN_REFRESH = "finance_refresh_minutes"
     private const val KEY_FIN_MOVES = "finance_show_moves"
@@ -360,11 +361,21 @@ object Prefs {
         get(context).edit().putString(KEY_SPORTS_STEP, "$eventId|$next|$now").apply()
     }
 
-    /** Tapping a sports card opens Google's page for the game (else ESPN's). */
-    fun sportsOpenGoogle(context: Context): Boolean = get(context).getBoolean(KEY_SPORTS_OPEN_GOOGLE, true)
+    /** What tapping a sports card opens: this app's dashboard, Google's page for the game, or ESPN's. */
+    enum class SportsOpen(val label: String) { DASHBOARD("Dashboard"), GOOGLE("Google"), ESPN("ESPN") }
 
-    fun setSportsOpenGoogle(context: Context, on: Boolean) {
-        get(context).edit().putBoolean(KEY_SPORTS_OPEN_GOOGLE, on).apply()
+    fun sportsOpen(context: Context): SportsOpen =
+        runCatching { SportsOpen.valueOf(get(context).getString(KEY_SPORTS_OPEN, null)!!) }.getOrDefault(SportsOpen.DASHBOARD)
+
+    fun setSportsOpen(context: Context, open: SportsOpen) {
+        get(context).edit().putString(KEY_SPORTS_OPEN, open.name).apply()
+    }
+
+    /** Tapping a stock opens this app's dashboard (else its Google Finance page). */
+    fun financeOpensDashboard(context: Context): Boolean = get(context).getBoolean(KEY_FINANCE_OPEN, true)
+
+    fun setFinanceOpensDashboard(context: Context, on: Boolean) {
+        get(context).edit().putBoolean(KEY_FINANCE_OPEN, on).apply()
     }
 
     fun isSportsFollowKey(key: String?): Boolean = key == KEY_SPORTS_FOLLOWED

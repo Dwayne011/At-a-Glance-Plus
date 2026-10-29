@@ -101,6 +101,69 @@ object FinanceSource {
         }
     }
 
+    /** A chart range for the dashboard, and the step between its prices. */
+    enum class Range(val label: String, val range: String, val interval: String) {
+        DAY("1D", "1d", "5m"), WEEK("5D", "5d", "30m"), MONTH("1M", "1mo", "1d"), HALF_YEAR("6M", "6mo", "1d"), YEAR("1Y", "1y", "1wk"),
+    }
+
+    /** A stock over a [Range], with the day's figures, for the dashboard. */
+    data class History(
+        val quote: Quote,
+        /** Prices over the range, oldest first: epoch milliseconds and price. */
+        val points: List<Pair<Long, Double>>,
+        val dayLow: Double?,
+        val dayHigh: Double?,
+        val yearLow: Double?,
+        val yearHigh: Double?,
+        val volume: Long?,
+        val exchangeName: String,
+    ) {
+        /** The change over the range: from the day's previous close for one day, else from the first price. */
+        val rangeChange: Double get() = quote.price - (points.firstOrNull()?.second ?: quote.previousClose)
+    }
+
+    /** [symbol] over [range], or null if the feed did not answer. */
+    fun history(symbol: String, range: Range): History? {
+        val quote = fetch(symbol) ?: return null
+        val url = URL(
+            "https://query1.finance.yahoo.com/v8/finance/chart/" +
+                URLEncoder.encode(symbol, "UTF-8") + "?range=${range.range}&interval=${range.interval}"
+        )
+        val connection = (url.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 10_000
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16) AtAGlancePlus")
+        }
+        return try {
+            if (connection.responseCode != 200) return null
+            val result = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                .getJSONObject("chart").getJSONArray("result").getJSONObject(0)
+            val meta = result.getJSONObject("meta")
+            val times = result.optJSONArray("timestamp")
+            val closes = result.optJSONObject("indicators")?.optJSONArray("quote")?.optJSONObject(0)?.optJSONArray("close")
+            val points = (0 until minOf(times?.length() ?: 0, closes?.length() ?: 0)).mapNotNull { i ->
+                if (closes!!.isNull(i)) null else times!!.getLong(i) * 1000 to closes.getDouble(i)
+            }
+            fun number(key: String) = meta.optDouble(key).takeUnless { it.isNaN() }
+            History(
+                quote = quote,
+                // One day starts from the previous close, so the line and the change agree.
+                points = if (range == Range.DAY && points.isNotEmpty()) listOf(points.first().first to quote.previousClose) + points else points,
+                dayLow = number("regularMarketDayLow"),
+                dayHigh = number("regularMarketDayHigh"),
+                yearLow = number("fiftyTwoWeekLow"),
+                yearHigh = number("fiftyTwoWeekHigh"),
+                volume = meta.optLong("regularMarketVolume").takeIf { it > 0 },
+                exchangeName = meta.optString("fullExchangeName").ifEmpty { quote.exchange },
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "history failed for $symbol", e)
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     /** A match for what the user typed: enough to tell, say, VOD (NASDAQ) from VOD.L (London). */
     data class Match(val symbol: String, val name: String, val exchange: String, val type: String)
 
