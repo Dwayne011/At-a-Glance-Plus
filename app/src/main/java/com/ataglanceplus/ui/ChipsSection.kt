@@ -406,12 +406,13 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                         }
                         Text(
                             when (size) {
-                                ChipSize.NORMAL -> "One slot: ${bigExample(spec.kind).first}."
-                                ChipSize.WIDE -> "Two slots across: ${bigExample(spec.kind).second}. Where chips are stacked (the right of Columns, and of other cards) it shows normal size."
-                                ChipSize.TALL -> "Two stacked slots, with a second line: ${bigExample(spec.kind).third}. Where chips sit side by side (under the temperature, Split, Grid, the strip) it shows normal size."
+                                ChipSize.STANDARD -> "One slot: ${bigExample(spec.kind).first}."
+                                ChipSize.EXTENDED -> "Two slots when there is room, showing ${bigExample(spec.kind).second}. " +
+                                    "Under the temperature (and in Split, Grid and strips) it spreads across; in a stacked column it takes two rows, with ${bigExample(spec.kind).third}."
                             },
                             style = MaterialTheme.typography.bodySmall
                         )
+                        Text("On the extra chips card, chips are always extended.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 if (spec.kind == Complication.STEPS) {
@@ -425,7 +426,7 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                             },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            supportingText = { Text("Shown on a wide or tall steps chip.") }
+                            supportingText = { Text("Shown when the steps chip is extended.") }
                         )
                     }
                 }
@@ -449,7 +450,7 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                             },
                             singleLine = true,
                             label = { Text("What it's for (optional)") },
-                            supportingText = { Text("Shown on a wide or tall countdown chip, with the date.") }
+                            supportingText = { Text("Shown when the countdown chip is extended, with the date.") }
                         )
                     }
                 }
@@ -514,13 +515,13 @@ private fun chooseGoogleAccount(current: String?): Intent =
         "Count unread mail in this account", null, null, null
     )
 
-/** What a chip shows at each size, for the size setting: normal, wide, tall. */
+/** What a chip shows: standard, extended across, and the second line when extended in a column. */
 private fun bigExample(kind: Complication): Triple<String, String, String> = when (kind) {
-    Complication.COUNTDOWN -> Triple("\"4d\"", "\"4d · Holiday · Mon 2 Nov\"", "\"4d\" over \"Holiday · Mon 2 Nov\"")
-    Complication.SLEEP -> Triple("\"5h 13m\"", "\"5h 13m · 23:40–05:10\"", "\"5h 13m\" over \"23:40–05:10\"")
-    Complication.STEPS -> Triple("\"2,047\"", "\"2,047 of 8,000\"", "\"2,047\" over \"26% of 8,000\"")
-    Complication.SCREEN_TIME -> Triple("\"1h 20m\"", "\"1h 20m · YouTube 35m\"", "\"1h 20m\" over \"YouTube 35m\"")
-    Complication.SUNSET -> Triple("\"16:38\"", "\"Sunset 16:38 · Sunrise 07:05\"", "\"16:38\" over \"Sunrise 07:05\"")
-    Complication.BUDS -> Triple("each device in turn", "every device side by side", "the first device over the others")
+    Complication.COUNTDOWN -> Triple("\"4d\"", "\"4d · Holiday · Mon 2 Nov\"", "\"Holiday · Mon 2 Nov\" under \"4d\"")
+    Complication.SLEEP -> Triple("\"5h 13m\"", "\"5h 13m · 23:40–05:10\"", "\"23:40–05:10\" under \"5h 13m\"")
+    Complication.STEPS -> Triple("\"2,047\"", "\"2,047 of 8,000\"", "\"26% of 8,000\" under \"2,047\"")
+    Complication.SCREEN_TIME -> Triple("\"1h 20m\"", "\"1h 20m · YouTube 35m\"", "\"YouTube 35m\" under \"1h 20m\"")
+    Complication.SUNSET -> Triple("\"16:38\"", "\"Sunset 16:38 · Sunrise 07:05\"", "\"Sunrise 07:05\" under \"16:38\"")
+    Complication.BUDS -> Triple("each device in turn", "every device side by side", "the devices on two rows")
     else -> Triple("", "", "")
 }

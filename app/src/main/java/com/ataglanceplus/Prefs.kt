@@ -170,10 +170,12 @@ object Prefs {
         get(context).edit().putInt(KEY_STEP_GOAL, steps).apply()
     }
 
-    /** A chip's size: normal, wide (2 slots across) or tall (2 slots down). */
+    /** A chip's size: standard (1 slot) or extended (2). 0.9.3's wide and tall read as extended. */
     fun chipSize(context: Context, chipKey: String): com.ataglanceplus.cards.ChipSize =
-        runCatching { com.ataglanceplus.cards.ChipSize.valueOf(get(context).getString(KEY_CHIP_SIZE + chipKey, null)!!) }
-            .getOrDefault(com.ataglanceplus.cards.ChipSize.NORMAL)
+        when (get(context).getString(KEY_CHIP_SIZE + chipKey, null)) {
+            "EXTENDED", "WIDE", "TALL" -> com.ataglanceplus.cards.ChipSize.EXTENDED
+            else -> com.ataglanceplus.cards.ChipSize.STANDARD
+        }
 
     fun setChipSize(context: Context, chipKey: String, size: com.ataglanceplus.cards.ChipSize) {
         get(context).edit().putString(KEY_CHIP_SIZE + chipKey, size.name).apply()

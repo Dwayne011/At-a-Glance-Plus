@@ -50,8 +50,11 @@ enum class Complication(
     }
 }
 
-/** How much room a chip takes: one slot, two across, or two stacked. */
-enum class ChipSize(val label: String) { NORMAL("Normal"), WIDE("Wide"), TALL("Tall") }
+/**
+ * How much a chip shows: one slot, or extended over two, which is two across where chips sit
+ * side by side and two stacked where they are stacked.
+ */
+enum class ChipSize(val label: String) { STANDARD("Standard"), EXTENDED("Extended") }
 
 /**
  * One chip as the user added it: a kind plus, for Gmail, the account, or for app notifications,
@@ -239,33 +242,49 @@ object Chips {
     data class Placed(val spec: ChipSpec, val value: ChipValues.Value, val big: Boolean)
 
     /**
-     * Whether [spec] takes 2 slots in a spot of [style]: wide chips where chips sit side by side,
-     * tall chips where they are stacked. Elsewhere a big chip shows at normal size.
+     * Whether [spec] takes 2 slots: an extended chip (or any chip that can be, when [always], as on
+     * the extra chips card). It is wide where chips sit side by side and tall where they are
+     * stacked; [style] decides which when it is drawn.
      */
-    fun grows(context: Context, spec: ChipSpec, style: ChipStyle): Boolean {
-        if (!spec.kind.canGrow) return false
-        return when (Prefs.chipSize(context, spec.key)) {
-            ChipSize.WIDE -> !style.stack
-            ChipSize.TALL -> style.stack
-            ChipSize.NORMAL -> false
-        }
-    }
+    fun grows(context: Context, spec: ChipSpec, always: Boolean = false): Boolean =
+        spec.kind.canGrow && (always || Prefs.chipSize(context, spec.key) == ChipSize.EXTENDED)
 
     /**
      * The chips of [specs] with something to show that a spot of [slots] slots takes, in order.
-     * A 2-slot chip with only 1 slot left shows at normal size.
+     * An extended chip with only 1 slot left shows at standard size.
      */
-    fun plan(context: Context, specs: List<ChipSpec>, slots: Int, style: ChipStyle): List<Placed> {
+    fun plan(context: Context, specs: List<ChipSpec>, slots: Int, style: ChipStyle, always: Boolean = false): List<Placed> {
         val placed = mutableListOf<Placed>()
         var left = slots
         for ((spec, value) in withValues(specs)) {
             if (left <= 0) break
-            val big = left >= 2 && grows(context, spec, style)
+            val big = left >= 2 && grows(context, spec, always)
             left -= if (big) 2 else 1
             placed += Placed(spec, value, big)
         }
         return placed
     }
+
+    /**
+     * The extra chips card's two rows from [specs] (all of which it takes): every chip that can be
+     * is extended, and the chips are shared between both rows rather than filling the first.
+     */
+    fun overflowRows(context: Context, specs: List<ChipSpec>): Pair<List<Placed>, List<Placed>> {
+        val all = plan(context, specs, 2 * MAX_BOTTOM, DEFAULT_STRIP, always = true)
+        fun cost(row: List<Placed>) = row.sumOf { if (it.big) 2 else 1 }
+        // The most even split whose rows both fit; failing that, fill the first row.
+        for (split in (all.size + 1) / 2 until all.size) {
+            val first = all.take(split)
+            val second = all.drop(split)
+            if (cost(first) <= MAX_BOTTOM && cost(second) <= MAX_BOTTOM) return first to second
+        }
+        val first = plan(context, specs, MAX_BOTTOM, DEFAULT_STRIP, always = true)
+        return first to all.drop(first.size)
+    }
+
+    /** How many of [specs] one extra chips card takes. */
+    fun overflowTaken(context: Context, specs: List<ChipSpec>): Int =
+        plan(context, specs, 2 * MAX_BOTTOM, DEFAULT_STRIP, always = true).size
 
     /**
      * Adds the chips that have something to show, up to the layout's maximum. A chip with no

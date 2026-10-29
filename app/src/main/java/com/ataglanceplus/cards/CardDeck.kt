@@ -78,17 +78,16 @@ object CardDeck {
         // A chip taking 2 slots counts once, so each card takes as many as it really shows.
         fun takeFor(chipLayout: ComplicationLayout): List<ChipSpec>? = take(Chips.taken(context, pool.orEmpty(), chipLayout))
         val bottom = layout == ComplicationLayout.BOTTOM
-        val weatherChips = take(WeatherCard.room(context, Prefs.weatherLayout(context), pool.orEmpty()))
+        // The weather card fits what it can, not only the first in line, so it picks its own.
+        val weatherChips = pool?.let { p -> WeatherCard.chipsTaken(context, Prefs.weatherLayout(context), p).also { p.removeAll(it) } }
         val navChips = if (nav != null) takeFor(ComplicationLayout.RIGHT) else null
         val timerChips = if ((timer != null || alarm != null) && layout == ComplicationLayout.RIGHT) takeFor(ComplicationLayout.RIGHT) else null
         val calendarChips = if (calendar != null) takeFor(if (bottom) ComplicationLayout.BOTTOM else ComplicationLayout.RIGHT) else null
         // The rest on extra chips cards, two rows each.
         val extraChips = buildList {
             while (!pool.isNullOrEmpty()) {
-                val first = Chips.taken(context, pool, ComplicationLayout.BOTTOM)
-                val second = Chips.taken(context, pool.drop(first), ComplicationLayout.BOTTOM)
                 // At least one, so a chip whose value just went away cannot stall the loop.
-                add(take((first + second).coerceAtLeast(1)).orEmpty())
+                add(take(Chips.overflowTaken(context, pool).coerceAtLeast(1)).orEmpty())
             }
         }
 

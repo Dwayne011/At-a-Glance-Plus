@@ -543,13 +543,16 @@ object LiveCards {
 
     // --- Extra chips ---
 
-    /** A card of chips that did not fit on the other cards: up to 4 per row, two rows. */
+    /**
+     * A card of chips that did not fit on the other cards: two rows of up to 4 slots, shared
+     * between the rows, every chip that can be extended shown extended.
+     */
     fun chips(context: Context, aod: Boolean, specs: List<ChipSpec>, index: Int): SmartspaceTarget {
         val views = RemoteViews(context.packageName, R.layout.card_chips)
         if (aod) Style.aodBody(views)
-        val first = Chips.taken(context, specs, ComplicationLayout.BOTTOM)
-        Chips.add(context, views, specs.take(first), ComplicationLayout.BOTTOM, aod)
-        Chips.add(context, views, specs.drop(first), ComplicationLayout.BOTTOM, aod, R.id.complications_2)
+        val (first, second) = Chips.overflowRows(context, specs)
+        Chips.addPlaced(context, views, first, Chips.DEFAULT_STRIP, aod, R.id.complications)
+        Chips.addPlaced(context, views, second, Chips.DEFAULT_STRIP, aod, R.id.complications_2)
         val summary = Chips.withValues(specs).joinToString(" · ") { (spec, value) -> "${spec.kind.label} ${value.text}" }
         val tap = Style.gated(context, Intent(context, com.ataglanceplus.ui.MainActivity::class.java), REQUEST_BASE + 0xFF00 + index)
         return Style.target(context, "aagp_chips:$index", views, "More", summary, R.drawable.ic_card, tap, 0.5f)
