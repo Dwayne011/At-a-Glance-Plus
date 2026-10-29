@@ -563,8 +563,16 @@ object LiveCards {
         val (first, second) = Chips.overflowRows(context, specs)
         // The card's inside width: its own width less the body's padding (16 + 18dp).
         val row = WeatherCard.cardWidthDp(context) - 34f
-        Chips.addOverflowRow(context, views, first, row, aod, R.id.complications)
-        Chips.addOverflowRow(context, views, second, row, aod, R.id.complications_2)
+        val only = (first + second).singleOrNull()
+        if (only != null) {
+            // One chip: the first row grows to both rows' height and the chip fills it.
+            views.setViewLayoutHeight(R.id.complications, 2 * 34f, android.util.TypedValue.COMPLEX_UNIT_DIP)
+            views.setViewVisibility(R.id.complications_2, View.GONE)
+            Chips.addOverflowSingle(context, views, only, row, 2 * 34f, aod, R.id.complications)
+        } else {
+            Chips.addOverflowRow(context, views, first, row, aod, R.id.complications)
+            Chips.addOverflowRow(context, views, second, row, aod, R.id.complications_2)
+        }
         val summary = Chips.withValues(specs).joinToString(" · ") { (spec, value) -> "${spec.kind.label} ${value.text}" }
         val tap = Style.gated(context, Intent(context, com.ataglanceplus.ui.MainActivity::class.java), REQUEST_BASE + 0xFF00 + index)
         return Style.target(context, "aagp_chips:$index", views, "More", summary, R.drawable.ic_card, tap, 0.5f)
