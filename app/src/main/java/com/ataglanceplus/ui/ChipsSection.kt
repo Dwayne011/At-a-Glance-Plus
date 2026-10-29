@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -29,6 +30,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,11 +47,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ataglanceplus.Commands
 import com.ataglanceplus.Prefs
+import com.ataglanceplus.cards.ChipSize
 import com.ataglanceplus.cards.ChipSpec
 import com.ataglanceplus.cards.Chips
 import com.ataglanceplus.cards.Complication
@@ -60,10 +70,10 @@ import com.ataglanceplus.complications.SimpleSources
 import com.ataglanceplus.wadb.Activator
 import com.ataglanceplus.wadb.Wadb
 import com.ataglanceplus.weather.WeatherRepository
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
 
 /** Something a chip needs before it can show a value. */
 private enum class Need(val text: String) {
@@ -212,7 +222,15 @@ internal fun ChipsSection() {
                     ?: values[spec.key]?.text?.let { "Now: $it" }
                     ?: missing.firstOrNull()?.text
                     ?: "Nothing to report right now"
-                Text("$status · Opens $opens", style = MaterialTheme.typography.bodySmall)
+                // The app in the accent colour, so it stands out from the status.
+                val accent = MaterialTheme.colorScheme.primary
+                Text(
+                    buildAnnotatedString {
+                        append("$status · Opens ")
+                        withStyle(SpanStyle(color = accent, fontWeight = FontWeight.Medium)) { append(opens) }
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
                 if (spec.kind == Complication.BUDS) {
                     Text("Experimental: shows each connected Bluetooth device that reports its battery (earbuds, headphones, watch), taking turns.", style = MaterialTheme.typography.bodySmall)
                 }
@@ -330,6 +348,9 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
     var labels by remember { mutableStateOf<List<GmailSource.Label>?>(null) }
     var chosenLabels by remember { mutableStateOf(spec.arg?.let { Prefs.gmailLabels(context, it) } ?: emptySet()) }
     var countdown by remember { mutableStateOf(Prefs.countdownDay(context)) }
+    var countdownName by remember { mutableStateOf(Prefs.countdownName(context)) }
+    var size by remember { mutableStateOf(Prefs.chipSize(context, spec.key)) }
+    var goal by remember { mutableStateOf(Prefs.stepGoal(context).toString()) }
     if (spec.kind == Complication.GMAIL && spec.arg != null) {
         LaunchedEffect(spec.key) { labels = withContext(Dispatchers.IO) { GmailSource.labels(context, spec.arg) } }
     }
@@ -349,7 +370,10 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                 }
                 item {
                     Text("When tapped, opens", style = MaterialTheme.typography.labelLarge)
-                    Text(appLabel(context, opens) ?: spec.defaultAppName(context)?.let { "$it (default)" } ?: "Its usual app or screen")
+                    Text(
+                        appLabel(context, opens) ?: spec.defaultAppName(context)?.let { "$it (default)" } ?: "Its usual app or screen",
+                        color = MaterialTheme.colorScheme.primary
+                    )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         OutlinedButton(onClick = {
                             onPickApp { pkg ->
@@ -365,6 +389,46 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                         }
                     }
                 }
+                if (spec.kind.canGrow) {
+                    item {
+                        Text("Size", style = MaterialTheme.typography.labelLarge)
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            ChipSize.entries.forEachIndexed { index, option ->
+                                SegmentedButton(
+                                    selected = size == option,
+                                    onClick = {
+                                        Prefs.setChipSize(context, spec.key, option)
+                                        size = option
+                                    },
+                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = ChipSize.entries.size)
+                                ) { Text(option.label) }
+                            }
+                        }
+                        Text(
+                            when (size) {
+                                ChipSize.NORMAL -> "One slot: ${bigExample(spec.kind).first}."
+                                ChipSize.WIDE -> "Two slots across: ${bigExample(spec.kind).second}. Where chips are stacked (the right of Columns, and of other cards) it shows normal size."
+                                ChipSize.TALL -> "Two stacked slots, with a second line: ${bigExample(spec.kind).third}. Where chips sit side by side (under the temperature, Split, Grid, the strip) it shows normal size."
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+                if (spec.kind == Complication.STEPS) {
+                    item {
+                        Text("Daily goal", style = MaterialTheme.typography.labelLarge)
+                        OutlinedTextField(
+                            value = goal,
+                            onValueChange = { typed ->
+                                goal = typed.filter { it.isDigit() }.take(6)
+                                goal.toIntOrNull()?.takeIf { it > 0 }?.let { Prefs.setStepGoal(context, it) }
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            supportingText = { Text("Shown on a wide or tall steps chip.") }
+                        )
+                    }
+                }
                 if (spec.kind == Complication.COUNTDOWN) {
                     item {
                         Text("Count down to", style = MaterialTheme.typography.labelLarge)
@@ -377,6 +441,16 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                                 countdown = day
                             }, start.year, start.monthValue - 1, start.dayOfMonth).show()
                         }) { Text("Choose date") }
+                        OutlinedTextField(
+                            value = countdownName,
+                            onValueChange = {
+                                countdownName = it.take(30)
+                                Prefs.setCountdownName(context, countdownName)
+                            },
+                            singleLine = true,
+                            label = { Text("What it's for (optional)") },
+                            supportingText = { Text("Shown on a wide or tall countdown chip, with the date.") }
+                        )
                     }
                 }
                 if (spec.kind == Complication.GMAIL && spec.arg != null) {
@@ -439,3 +513,14 @@ private fun chooseGoogleAccount(current: String?): Intent =
         current?.let { android.accounts.Account(it, "com.google") }, null, arrayOf("com.google"),
         "Count unread mail in this account", null, null, null
     )
+
+/** What a chip shows at each size, for the size setting: normal, wide, tall. */
+private fun bigExample(kind: Complication): Triple<String, String, String> = when (kind) {
+    Complication.COUNTDOWN -> Triple("\"4d\"", "\"4d · Holiday · Mon 2 Nov\"", "\"4d\" over \"Holiday · Mon 2 Nov\"")
+    Complication.SLEEP -> Triple("\"5h 13m\"", "\"5h 13m · 23:40–05:10\"", "\"5h 13m\" over \"23:40–05:10\"")
+    Complication.STEPS -> Triple("\"2,047\"", "\"2,047 of 8,000\"", "\"2,047\" over \"26% of 8,000\"")
+    Complication.SCREEN_TIME -> Triple("\"1h 20m\"", "\"1h 20m · YouTube 35m\"", "\"1h 20m\" over \"YouTube 35m\"")
+    Complication.SUNSET -> Triple("\"16:38\"", "\"Sunset 16:38 · Sunrise 07:05\"", "\"16:38\" over \"Sunrise 07:05\"")
+    Complication.BUDS -> Triple("each device in turn", "every device side by side", "the first device over the others")
+    else -> Triple("", "", "")
+}

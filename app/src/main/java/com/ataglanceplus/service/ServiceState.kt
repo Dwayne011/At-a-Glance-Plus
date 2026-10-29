@@ -11,7 +11,9 @@ data class SessionInfo(
     val surface: String,
     val clientPackage: String,
     val targetCount: Int,
-    val lastPushAt: Long
+    val lastPushAt: Long,
+    /** The cards last sent, in order ("timer", "weather", "extra chips"…), for the Cards tab. */
+    val showing: List<String> = emptyList(),
 )
 
 /**
@@ -28,8 +30,8 @@ object ServiceState {
 
     fun sessionCreated(info: SessionInfo) = _sessions.update { it + (info.id to info) }
 
-    fun sessionPushed(id: String, at: Long) = _sessions.update { map ->
-        map[id]?.let { map + (id to it.copy(lastPushAt = at)) } ?: map
+    fun sessionPushed(id: String, at: Long, showing: List<String>) = _sessions.update { map ->
+        map[id]?.let { map + (id to it.copy(lastPushAt = at, showing = showing)) } ?: map
     }
 
     fun sessionDestroyed(id: String) = _sessions.update { it - id }

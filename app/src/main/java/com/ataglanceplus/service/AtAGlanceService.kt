@@ -290,7 +290,7 @@ class AtAGlanceService : SmartspaceService() {
             CrashLog.record(this, "Sending cards to ${config.uiSurface}", e)
             return
         }
-        ServiceState.sessionPushed(sessionId.id, System.currentTimeMillis())
+        ServiceState.sessionPushed(sessionId.id, System.currentTimeMillis(), targets.map { CardDeck.label(it.smartspaceTargetId) })
         Log.d(TAG, "pushed ${targets.size} target(s) to ${config.uiSurface}")
     }
 

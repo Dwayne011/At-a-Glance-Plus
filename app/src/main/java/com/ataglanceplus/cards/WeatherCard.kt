@@ -89,15 +89,16 @@ object WeatherCard {
         // side in the variant's arrangement.
         val shown = if (layout == WeatherLayout.NONE) emptyList()
         else Chips.withValues(chips ?: Prefs.chips(context) ?: DEFAULTS.getValue(layout)).map { it.first }
-        val anchors = anchorCount(context, layout, shown)
-        Chips.addStyled(context, views, shown.take(anchors), anchors, Chips.ANCHOR, aod, R.id.complications_anchor)
-        val rest = shown.drop(anchors)
+        val anchors = anchorPlan(context, layout, shown)
+        Chips.addPlaced(context, views, anchors, Chips.ANCHOR, aod, R.id.complications_anchor)
+        val rest = shown.drop(anchors.size)
         when (layout) {
             WeatherLayout.COLUMNS -> Chips.addStyled(context, views, rest, 2, Chips.COLUMN, aod, R.id.complications)
             WeatherLayout.SPLIT -> Chips.addStyled(context, views, rest, 2, Chips.WIDE, aod, R.id.complications)
             WeatherLayout.GRID -> {
-                Chips.addStyled(context, views, rest.take(2), 2, Chips.GRID, aod, R.id.complications)
-                Chips.addStyled(context, views, rest.drop(2), 2, Chips.GRID, aod, R.id.complications_2)
+                // Two rows of 2; a wide chip fills a row.
+                val first = Chips.addStyled(context, views, rest, 2, Chips.GRID, aod, R.id.complications)
+                Chips.addStyled(context, views, rest.drop(first), 2, Chips.GRID, aod, R.id.complications_2)
             }
             WeatherLayout.NONE -> views.setViewVisibility(R.id.complications, View.GONE)
         }
@@ -111,10 +112,14 @@ object WeatherCard {
     /** Most chips under the temperature. */
     private const val MAX_ANCHORS = 3
 
-    /** Chips on the right side of each variant. */
-    private fun rightRoom(layout: WeatherLayout): Int = when (layout) {
-        WeatherLayout.COLUMNS, WeatherLayout.SPLIT -> 2
-        WeatherLayout.GRID -> 4
+    /** How many of [specs] the right side of each variant takes (2 slots, or 2 rows of 2 in the grid). */
+    private fun rightTaken(context: Context, layout: WeatherLayout, specs: List<ChipSpec>): Int = when (layout) {
+        WeatherLayout.COLUMNS -> Chips.plan(context, specs, 2, Chips.COLUMN).size
+        WeatherLayout.SPLIT -> Chips.plan(context, specs, 2, Chips.WIDE).size
+        WeatherLayout.GRID -> {
+            val first = Chips.plan(context, specs, 2, Chips.GRID).size
+            first + Chips.plan(context, specs.drop(first), 2, Chips.GRID).size
+        }
         WeatherLayout.NONE -> 0
     }
 
@@ -158,33 +163,43 @@ object WeatherCard {
         }
         return "Fitting: screen ${screenDp(context).toInt()}dp, card ${cardWidthDp(context).toInt()}dp before the launcher shrinks it, " +
             "room under the temperature ${anchorRowDp(context, layout).toInt()}dp " +
-            "(${layout.label}), fits ${anchorCount(context, layout, Prefs.chips(context).orEmpty())}. Pill widths: ${pills.ifEmpty { "none" }}."
+            "(${layout.label}), fits ${anchorPlan(context, layout, Prefs.chips(context).orEmpty()).size}. Pill widths: ${pills.ifEmpty { "none" }}."
     }
 
     /**
-     * How many of [specs] (those with something to show, in order) fit under the temperature,
-     * measured at the phone's text size: at least 1 when there is any, at most 3.
+     * Which of [specs] (those with something to show, in order) fit under the temperature,
+     * measured at the phone's text size: at least 1 when there is any, at most 3 slots. A wide
+     * chip takes 2 slots when its whole line fits, else it shows at normal size.
      */
-    fun anchorCount(context: Context, layout: WeatherLayout, specs: List<ChipSpec>): Int {
-        if (layout == WeatherLayout.NONE) return 0
+    fun anchorPlan(context: Context, layout: WeatherLayout, specs: List<ChipSpec>): List<Chips.Placed> {
+        if (layout == WeatherLayout.NONE) return emptyList()
         val room = anchorRowDp(context, layout)
+        val placed = mutableListOf<Chips.Placed>()
         var used = 0f
-        var count = 0
-        for ((_, value) in Chips.withValues(specs)) {
-            if (count == MAX_ANCHORS) break
-            val text = value.parts.maxByOrNull { it.text.length }?.text ?: value.text
+        var slots = 0
+        for ((spec, value) in Chips.withValues(specs)) {
+            if (slots >= MAX_ANCHORS) break
             // The gap only sits between pills, not after the last.
-            val width = Chips.ANCHOR.widthDp(context, text) + if (count > 0) Chips.ANCHOR.gapDp else 0
-            if (count > 0 && used + width > room) break
+            val gap = if (placed.isEmpty()) 0 else Chips.ANCHOR.gapDp
+            val text = value.parts.maxByOrNull { it.text.length }?.text ?: value.text
+            val normal = Chips.ANCHOR.widthDp(context, text) + gap
+            val wide = Chips.ANCHOR.bigWidthDp(context, value) + gap
+            val big = Chips.grows(context, spec, Chips.ANCHOR) && slots + 2 <= MAX_ANCHORS && used + wide <= room
+            val width = if (big) wide else normal
+            if (placed.isNotEmpty() && used + width > room) break
             used += width
-            count++
+            slots += if (big) 2 else 1
+            placed += Chips.Placed(spec, value, big)
         }
-        return count
+        return placed
     }
 
-    /** Chips the weather card has room for from [specs]: those that fit under the temperature plus the right side. */
-    fun room(context: Context, layout: WeatherLayout, specs: List<ChipSpec>): Int =
-        if (layout == WeatherLayout.NONE) 0 else anchorCount(context, layout, specs) + rightRoom(layout)
+    /** Chips the weather card takes from [specs]: those that fit under the temperature plus the right side. */
+    fun room(context: Context, layout: WeatherLayout, specs: List<ChipSpec>): Int {
+        if (layout == WeatherLayout.NONE) return 0
+        val anchors = anchorPlan(context, layout, specs).size
+        return anchors + rightTaken(context, layout, Chips.withValues(specs).map { it.first }.drop(anchors))
+    }
 
     /** The next hours (3, or 2 in the grid variant); hidden until a reading with hourly data arrives. */
     private fun forecast(context: Context, views: RemoteViews, weather: Weather, count: Int, aod: Boolean, layout: WeatherLayout) {

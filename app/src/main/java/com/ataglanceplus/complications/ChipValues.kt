@@ -13,7 +13,8 @@ object ChipValues {
 
     /**
      * A chip's value. [parts], when there is more than one, are shown in turn (one per connected
-     * Bluetooth device); a single part's icon replaces the chip's usual icon.
+     * Bluetooth device), or side by side on a big chip; a single part's icon replaces the chip's
+     * usual icon.
      */
     data class Value(
         val text: String,
@@ -21,6 +22,10 @@ object ChipValues {
         val parts: List<Part> = emptyList(),
         /** The app's own status-bar icon, used in place of the chip's icon (app-notification chips). */
         val appIcon: android.graphics.drawable.Icon? = null,
+        /** The whole story on one line, for a wide chip: "4d · Mon 2 Nov". Defaults to [text]. */
+        val wide: String? = null,
+        /** A second line under [text], for a tall chip: "Mon 2 Nov". */
+        val detail: String? = null,
     )
 
     data class Part(val icon: Int, val aodIcon: Int, val text: String)

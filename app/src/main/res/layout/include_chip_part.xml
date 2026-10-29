@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One value inside a flipping chip: icon and text, as in a single chip. -->
+<!-- One Bluetooth device inside a chip (taking turns, or side by side on a 2-slot chip): icon and text. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chip_part"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:gravity="center"

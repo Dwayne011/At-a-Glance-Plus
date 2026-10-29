@@ -28,18 +28,20 @@ enum class Complication(
     val pickable: Boolean = true,
     /** Needs an account or an app chosen when it is added (Gmail, app notifications). */
     val needsArg: Boolean = false,
+    /** Has more to say than fits one slot, so can be made wide or tall. */
+    val canGrow: Boolean = false,
 ) {
     GMAIL("gmail", "Gmail unread", "4", R.drawable.ic_comp_mail, R.drawable.ic_comp_mail_aod, needsArg = true),
     MISSED_CALLS("calls", "Missed calls", "2", R.drawable.ic_comp_phone, R.drawable.ic_comp_phone_aod),
     TEXTS("texts", "Unread texts", "3", R.drawable.ic_comp_chat, R.drawable.ic_comp_chat_aod),
     ALARM("alarm", "Next alarm", "07:30", R.drawable.ic_comp_alarm, R.drawable.ic_comp_alarm_aod),
-    SCREEN_TIME("screen", "Screen time", "3h 12m", R.drawable.ic_comp_screen, R.drawable.ic_comp_screen_aod),
-    STEPS("steps", "Steps today", "6,214", R.drawable.ic_comp_steps, R.drawable.ic_comp_steps_aod),
-    SLEEP("sleep", "Sleep last night", "7h 40m", R.drawable.ic_comp_sleep, R.drawable.ic_comp_sleep_aod),
-    SUNSET("sunset", "Next sunrise or sunset", "16:42", R.drawable.ic_comp_sunset, R.drawable.ic_comp_sunset_aod),
+    SCREEN_TIME("screen", "Screen time", "3h 12m", R.drawable.ic_comp_screen, R.drawable.ic_comp_screen_aod, canGrow = true),
+    STEPS("steps", "Steps today", "6,214", R.drawable.ic_comp_steps, R.drawable.ic_comp_steps_aod, canGrow = true),
+    SLEEP("sleep", "Sleep last night", "7h 40m", R.drawable.ic_comp_sleep, R.drawable.ic_comp_sleep_aod, canGrow = true),
+    SUNSET("sunset", "Next sunrise or sunset", "16:42", R.drawable.ic_comp_sunset, R.drawable.ic_comp_sunset_aod, canGrow = true),
     BATTERY("battery", "Phone battery", "67%", R.drawable.ic_comp_battery, R.drawable.ic_comp_battery_aod),
-    BUDS("buds", "Bluetooth battery", "100%", R.drawable.ic_comp_bluetooth, R.drawable.ic_comp_bluetooth_aod),
-    COUNTDOWN("count", "Date countdown", "12d", R.drawable.ic_comp_countdown, R.drawable.ic_comp_countdown_aod),
+    BUDS("buds", "Bluetooth battery", "100%", R.drawable.ic_comp_bluetooth, R.drawable.ic_comp_bluetooth_aod, canGrow = true),
+    COUNTDOWN("count", "Date countdown", "12d", R.drawable.ic_comp_countdown, R.drawable.ic_comp_countdown_aod, canGrow = true),
     APP_NOTIFICATIONS("notif", "App notifications", "5", R.drawable.ic_comp_bell, R.drawable.ic_comp_bell_aod, needsArg = true),
     RAIL_TICKET("ticket", "Rail ticket", "Ticket", R.drawable.ic_comp_ticket, R.drawable.ic_comp_ticket_aod, pickable = false);
 
@@ -47,6 +49,9 @@ enum class Complication(
         fun fromId(id: String): Complication? = entries.firstOrNull { it.id == id }
     }
 }
+
+/** How much room a chip takes: one slot, two across, or two stacked. */
+enum class ChipSize(val label: String) { NORMAL("Normal"), WIDE("Wide"), TALL("Tall") }
 
 /**
  * One chip as the user added it: a kind plus, for Gmail, the account, or for app notifications,
@@ -158,7 +163,9 @@ object Chips {
     /**
      * A chip shape: its layout and the sizes inside the pill, used to check that a chip's text
      * fits. [maxPillDp] is the most room the pill has (null when the row decides); [maxTextDp]
-     * mirrors the text's maxWidth in the layout.
+     * mirrors the text's maxWidth in the layout. The rest describe the spot, for chips taking 2
+     * slots: whether chips are [stack]ed (else side by side), the tap zone ([zoneWDp], null when
+     * it fits the pill) and pill sizes, and the pill's [background].
      */
     data class ChipStyle(
         val layout: Int,
@@ -169,17 +176,54 @@ object Chips {
         val maxTextDp: Int,
         /** Space after the zone, for working out how many fit in a row. */
         val gapDp: Int = 6,
+        val stack: Boolean = false,
+        val zoneWDp: Int? = null,
+        val zoneHDp: Int = 24,
+        val pillHDp: Int = 24,
+        @DrawableRes val background: Int = R.drawable.chip_selector_hybrid,
+        /** Widest a wide pill may grow where the zone fits the pill. */
+        val wideCapDp: Int = 0,
     ) {
         /** The pill's natural width for [text] with its icon, in dp. */
         fun widthDp(context: Context, text: String): Float = 2 * padDp + iconDp + 4 + textWidthDp(context, text, textSp).coerceAtMost(maxTextDp.toFloat())
+
+        /** A 2-slot chip's zone: twice as wide across a row, twice as tall in a stack. */
+        val bigZoneWDp: Int? get() = if (stack) zoneWDp else zoneWDp?.let { 2 * it + gapDp }
+        val bigZoneHDp: Int get() = if (stack) 2 * zoneHDp else zoneHDp
+        val bigPillHDp: Int get() = if (stack) 2 * zoneHDp - (zoneHDp - pillHDp) else pillHDp
+
+        /** Room inside a 2-slot pill, in dp. */
+        val bigInnerDp: Int get() = (bigZoneWDp ?: wideCapDp) - 2 * padDp
+
+        /** A wide pill's natural width for [value], in dp (side-by-side devices for Bluetooth). */
+        fun bigWidthDp(context: Context, value: ChipValues.Value): Float {
+            val inner = if (value.parts.size > 1) {
+                value.parts.sumOf { (16 + 4 + textWidthDp(context, it.text, 12.5f)).toDouble() }.toFloat() + PART_GAP_DP * (value.parts.size - 1)
+            } else {
+                iconDp + 4 + textWidthDp(context, value.wide ?: value.text, textSp)
+            }
+            return (2 * padDp + inner).coerceAtMost((bigZoneWDp ?: wideCapDp).toFloat())
+        }
     }
 
-    val DEFAULT_RIGHT = ChipStyle(R.layout.include_complication_chip, 12.5f, 16, 8, 84, 44)
-    val DEFAULT_STRIP = ChipStyle(R.layout.include_complication_chip_strip, 12.5f, 16, 8, 80, 44)
-    val ANCHOR = ChipStyle(R.layout.include_chip_anchor, 11.5f, 13, 8, null, 56)
-    val COLUMN = ChipStyle(R.layout.include_chip_column, 12f, 14, 6, 72, 56)
-    val WIDE = ChipStyle(R.layout.include_chip_wide, 12f, 14, 6, 84, 56)
-    val GRID = ChipStyle(R.layout.include_chip_grid, 11f, 13, 5, 48, 56)
+    val DEFAULT_RIGHT = ChipStyle(
+        R.layout.include_complication_chip, 12.5f, 16, 8, 84, 44,
+        gapDp = 0, stack = true, zoneWDp = 84, zoneHDp = 38, background = R.drawable.chip_selector_normal,
+    )
+    val DEFAULT_STRIP = ChipStyle(
+        R.layout.include_complication_chip_strip, 12.5f, 16, 8, 80, 44,
+        zoneHDp = 34, background = R.drawable.chip_selector_normal, wideCapDp = 2 * 80 + 6,
+    )
+    val ANCHOR = ChipStyle(
+        R.layout.include_chip_anchor, 11.5f, 13, 8, null, 56,
+        zoneHDp = 22, pillHDp = 22, background = R.drawable.chip_selector_anchor, wideCapDp = 200,
+    )
+    val COLUMN = ChipStyle(R.layout.include_chip_column, 12f, 14, 6, 72, 56, gapDp = 0, stack = true, zoneWDp = 72, zoneHDp = 30)
+    val WIDE = ChipStyle(R.layout.include_chip_wide, 12f, 14, 6, 84, 56, zoneWDp = 84)
+    val GRID = ChipStyle(R.layout.include_chip_grid, 11f, 13, 5, 48, 56, gapDp = 0, zoneWDp = 48, zoneHDp = 27)
+
+    /** Space between devices on a 2-slot Bluetooth chip. */
+    private const val PART_GAP_DP = 8
 
     /** The width of [text] in dp at [sp], in the chip font, at the phone's current text size. */
     fun textWidthDp(context: Context, text: String, sp: Float): Float {
@@ -189,6 +233,38 @@ object Chips {
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         }
         return paint.measureText(text) / metrics.density
+    }
+
+    /** A chip placed in a spot, and whether it takes 2 slots there. */
+    data class Placed(val spec: ChipSpec, val value: ChipValues.Value, val big: Boolean)
+
+    /**
+     * Whether [spec] takes 2 slots in a spot of [style]: wide chips where chips sit side by side,
+     * tall chips where they are stacked. Elsewhere a big chip shows at normal size.
+     */
+    fun grows(context: Context, spec: ChipSpec, style: ChipStyle): Boolean {
+        if (!spec.kind.canGrow) return false
+        return when (Prefs.chipSize(context, spec.key)) {
+            ChipSize.WIDE -> !style.stack
+            ChipSize.TALL -> style.stack
+            ChipSize.NORMAL -> false
+        }
+    }
+
+    /**
+     * The chips of [specs] with something to show that a spot of [slots] slots takes, in order.
+     * A 2-slot chip with only 1 slot left shows at normal size.
+     */
+    fun plan(context: Context, specs: List<ChipSpec>, slots: Int, style: ChipStyle): List<Placed> {
+        val placed = mutableListOf<Placed>()
+        var left = slots
+        for ((spec, value) in withValues(specs)) {
+            if (left <= 0) break
+            val big = left >= 2 && grows(context, spec, style)
+            left -= if (big) 2 else 1
+            placed += Placed(spec, value, big)
+        }
+        return placed
     }
 
     /**
@@ -213,77 +289,187 @@ object Chips {
         addStyled(context, views, specs, if (bottom) MAX_BOTTOM else MAX_RIGHT, if (bottom) DEFAULT_STRIP else DEFAULT_RIGHT, aod, container)
     }
 
+    /** How many of [specs] a card's chip spot takes (see [add]); 2-slot chips count once. */
+    fun taken(context: Context, specs: List<ChipSpec>, layout: ComplicationLayout): Int = when (layout) {
+        ComplicationLayout.NONE -> 0
+        ComplicationLayout.BOTTOM -> plan(context, specs, MAX_BOTTOM, DEFAULT_STRIP).size
+        ComplicationLayout.RIGHT -> plan(context, specs, MAX_RIGHT, DEFAULT_RIGHT).size
+    }
+
     /**
-     * Adds up to [max] chips with something to show into [container], in [style]. Each chip's
-     * text is measured at the phone's text size; when it does not fit the pill, the text shrinks
-     * a little, then the icon is dropped, then the text shrinks the rest of the way (to 8sp at
-     * least). Returns how many were added; with none, the container is hidden.
+     * Adds chips with something to show into [container], in [style], filling [slots] slots
+     * (see [plan]). Returns how many were added; with none, the container is hidden.
      */
     fun addStyled(
         context: Context,
         views: RemoteViews,
         specs: List<ChipSpec>,
-        max: Int,
+        slots: Int,
         style: ChipStyle,
         aod: Boolean,
         container: Int,
-    ): Int {
-        val shown = withValues(specs).take(max)
-        views.setViewVisibility(container, if (shown.isEmpty()) View.GONE else View.VISIBLE)
-        val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
-        shown.forEach { (spec, value) ->
-            val child = RemoteViews(context.packageName, style.layout)
-            if (value.parts.size > 1) {
-                // Several values (Bluetooth devices): take turns inside the pill.
-                child.setViewVisibility(R.id.chip_icon, View.GONE)
-                child.setViewVisibility(R.id.chip_text, View.GONE)
-                val flipper = RemoteViews(context.packageName, R.layout.include_chip_flipper_inner)
-                value.parts.forEach { part ->
-                    val row = RemoteViews(context.packageName, R.layout.include_chip_part)
-                    row.setImageViewResource(R.id.chip_icon, if (aod) part.aodIcon else part.icon)
-                    row.setTextViewText(R.id.chip_text, part.text)
-                    if (aod) row.setTextColor(R.id.chip_text, Style.AOD_TEXT)
-                    flipper.addView(R.id.chip_flipper_inner, row)
-                }
-                child.addView(R.id.chip_pill, flipper)
-                child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + value.parts.joinToString(", ") { it.text })
-                if (aod) child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
-            } else {
-                val icon = value.parts.singleOrNull()?.let { if (aod) it.aodIcon else it.icon }
-                child.setTextViewText(R.id.chip_text, value.text)
-                child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: ${value.text}")
-                when {
-                    aod -> {
-                        child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
-                        child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.aodIcon)
-                        child.setTextColor(R.id.chip_text, Style.AOD_TEXT)
-                    }
-                    value.attention -> {
-                        child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_selector_attention)
-                        child.setImageViewResource(R.id.chip_icon, spec.kind.icon)
-                        child.setInt(R.id.chip_icon, "setColorFilter", ATTENTION_ICON)
-                        child.setTextColor(R.id.chip_text, ATTENTION_TEXT)
-                    }
-                    else -> child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.icon)
-                }
-                // The app's own status-bar icon, tinted like the chip's text.
-                if (value.appIcon != null && !value.attention) {
-                    child.setImageViewIcon(R.id.chip_icon, value.appIcon)
-                    child.setInt(R.id.chip_icon, "setColorFilter", textColour)
-                }
-                fit(context, child, style, value.text)
-            }
+    ): Int = plan(context, specs, slots, style).also { addPlaced(context, views, it, style, aod, container) }.size
+
+    /**
+     * Adds already placed chips. Each normal chip's text is measured at the phone's text size;
+     * when it does not fit the pill, the text shrinks a little (after losing any spaces), then the
+     * icon is dropped, then the text shrinks the rest of the way (to 8sp at least).
+     */
+    fun addPlaced(context: Context, views: RemoteViews, placed: List<Placed>, style: ChipStyle, aod: Boolean, container: Int) {
+        views.setViewVisibility(container, if (placed.isEmpty()) View.GONE else View.VISIBLE)
+        placed.forEach { (spec, value, big) ->
+            val child = if (big) bigChip(context, style, spec, value, aod) else normalChip(context, style, spec, value, aod)
             child.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
             views.addView(container, child)
         }
-        return shown.size
     }
 
-    /** Makes [text] fit the pill (see [addStyled]). */
-    private fun fit(context: Context, chip: RemoteViews, style: ChipStyle, text: String) {
-        val width = textWidthDp(context, text, style.textSp)
+    private fun normalChip(context: Context, style: ChipStyle, spec: ChipSpec, value: ChipValues.Value, aod: Boolean): RemoteViews {
+        val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
+        val child = RemoteViews(context.packageName, style.layout)
+        if (value.parts.size > 1) {
+            // Several values (Bluetooth devices): take turns inside the pill.
+            child.setViewVisibility(R.id.chip_icon, View.GONE)
+            child.setViewVisibility(R.id.chip_text, View.GONE)
+            val flipper = RemoteViews(context.packageName, R.layout.include_chip_flipper_inner)
+            value.parts.forEach { part -> flipper.addView(R.id.chip_flipper_inner, partView(context, part, aod)) }
+            child.addView(R.id.chip_pill, flipper)
+            child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + value.parts.joinToString(", ") { it.text })
+            if (aod) child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
+        } else {
+            child.setTextViewText(R.id.chip_text, value.text)
+            child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: ${value.text}")
+            look(child, spec, value, aod, textColour)
+            fit(context, child, style, value.text)
+        }
+        return child
+    }
+
+    /**
+     * A chip taking 2 slots: wide shows the whole story on one line ("4d · Mon 2 Nov"), or every
+     * Bluetooth device side by side; tall shows the value with a second line under it, or the
+     * devices on two rows.
+     */
+    private fun bigChip(context: Context, style: ChipStyle, spec: ChipSpec, value: ChipValues.Value, aod: Boolean): RemoteViews {
+        val dip = android.util.TypedValue.COMPLEX_UNIT_DIP
+        val px = android.util.TypedValue.COMPLEX_UNIT_PX
+        val wrap = android.view.ViewGroup.LayoutParams.WRAP_CONTENT.toFloat()
+        val match = android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat()
+        val tall = style.stack
+        val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
+        val child = RemoteViews(context.packageName, R.layout.include_chip_big)
+
+        val zoneW = style.bigZoneWDp
+        if (zoneW != null) child.setViewLayoutWidth(R.id.chip_zone, zoneW.toFloat(), dip) else child.setViewLayoutWidth(R.id.chip_zone, wrap, px)
+        child.setViewLayoutHeight(R.id.chip_zone, style.bigZoneHDp.toFloat(), dip)
+        if (!tall && style.gapDp > 0) child.setViewLayoutMargin(R.id.chip_zone, RemoteViews.MARGIN_END, style.gapDp.toFloat(), dip)
+        if (zoneW != null) child.setViewLayoutWidth(R.id.chip_pill, match, px)
+        child.setViewLayoutHeight(R.id.chip_pill, style.bigPillHDp.toFloat(), dip)
+        child.setViewPadding(R.id.chip_pill, dp(context, style.padDp), 0, dp(context, style.padDp), 0)
+        child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else if (value.attention) R.drawable.chip_selector_attention else style.background)
+        child.setViewLayoutWidth(R.id.chip_icon, style.iconDp.toFloat(), dip)
+        child.setViewLayoutHeight(R.id.chip_icon, style.iconDp.toFloat(), dip)
+        child.setTextViewTextSize(R.id.chip_text, android.util.TypedValue.COMPLEX_UNIT_SP, style.textSp)
+
+        if (value.parts.size > 1) {
+            child.setViewVisibility(R.id.chip_icon, View.GONE)
+            child.setViewVisibility(R.id.chip_text, View.GONE)
+            // Devices fill one row (wide) or two (tall) while they fit; any more are left off.
+            val rows = List(if (tall) 2 else 1) { mutableListOf<ChipValues.Part>() }
+            val inner = style.bigInnerDp.toFloat()
+            var row = 0
+            var used = 0f
+            for (part in value.parts) {
+                val width = 16 + 4 + textWidthDp(context, part.text, 12.5f) + if (rows[row].isEmpty()) 0 else PART_GAP_DP
+                if (rows[row].isNotEmpty() && used + width > inner) {
+                    if (row + 1 >= rows.size) break
+                    row++
+                    used = 0f
+                }
+                rows[row] += part
+                used += if (rows[row].size == 1) 16 + 4 + textWidthDp(context, part.text, 12.5f) else width
+            }
+            rows[0].forEachIndexed { i, part -> child.addView(R.id.chip_row, partView(context, part, aod, gap = i > 0)) }
+            if (rows.size > 1 && rows[1].isNotEmpty()) {
+                child.setViewVisibility(R.id.chip_row2, View.VISIBLE)
+                rows[1].forEachIndexed { i, part -> child.addView(R.id.chip_row2, partView(context, part, aod, gap = i > 0)) }
+            }
+            child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + value.parts.joinToString(", ") { it.text })
+            return child
+        }
+
+        val text = if (tall) value.text else value.wide ?: value.text
+        child.setTextViewText(R.id.chip_text, text)
+        look(child, spec, value, aod, textColour)
+        // Shrink to fit the 2-slot pill (to 9sp at least); anything longer ends in "…".
+        val inner = style.bigInnerDp.toFloat()
+        shrink(context, child, R.id.chip_text, text, style.textSp, inner - style.iconDp - 4, 9f)
+        val detail = value.detail?.takeIf { tall }
+        if (detail != null) {
+            child.setViewVisibility(R.id.chip_detail, View.VISIBLE)
+            child.setTextViewText(R.id.chip_detail, detail)
+            if (aod) child.setTextColor(R.id.chip_detail, Style.AOD_TEXT)
+            shrink(context, child, R.id.chip_detail, detail, 10.5f, inner, 8f)
+        }
+        child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + listOfNotNull(text, detail).joinToString(", "))
+        return child
+    }
+
+    /** The chip's icon and colours: always-on, needing attention, the app's own icon, or plain. */
+    private fun look(child: RemoteViews, spec: ChipSpec, value: ChipValues.Value, aod: Boolean, textColour: Int) {
+        val icon = value.parts.singleOrNull()?.let { if (aod) it.aodIcon else it.icon }
+        when {
+            aod -> {
+                child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
+                child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.aodIcon)
+                child.setTextColor(R.id.chip_text, Style.AOD_TEXT)
+            }
+            value.attention -> {
+                child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_selector_attention)
+                child.setImageViewResource(R.id.chip_icon, spec.kind.icon)
+                child.setInt(R.id.chip_icon, "setColorFilter", ATTENTION_ICON)
+                child.setTextColor(R.id.chip_text, ATTENTION_TEXT)
+            }
+            else -> child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.icon)
+        }
+        // The app's own status-bar icon, tinted like the chip's text.
+        if (value.appIcon != null && !value.attention) {
+            child.setImageViewIcon(R.id.chip_icon, value.appIcon)
+            child.setInt(R.id.chip_icon, "setColorFilter", textColour)
+        }
+    }
+
+    /** One Bluetooth device: its icon and level. */
+    private fun partView(context: Context, part: ChipValues.Part, aod: Boolean, gap: Boolean = false): RemoteViews {
+        val row = RemoteViews(context.packageName, R.layout.include_chip_part)
+        row.setImageViewResource(R.id.chip_icon, if (aod) part.aodIcon else part.icon)
+        row.setTextViewText(R.id.chip_text, part.text)
+        if (aod) row.setTextColor(R.id.chip_text, Style.AOD_TEXT)
+        if (gap) row.setViewLayoutMargin(R.id.chip_part, RemoteViews.MARGIN_START, PART_GAP_DP.toFloat(), android.util.TypedValue.COMPLEX_UNIT_DIP)
+        return row
+    }
+
+    /** Shrinks [text] in [id] from [sp] until it fits [roomDp] (not below [minSp]). */
+    private fun shrink(context: Context, chip: RemoteViews, id: Int, text: String, sp: Float, roomDp: Float, minSp: Float) {
+        val width = textWidthDp(context, text, sp)
+        if (width > roomDp && roomDp > 0) {
+            chip.setTextViewTextSize(id, android.util.TypedValue.COMPLEX_UNIT_SP, maxOf(minSp, sp * roomDp / width))
+        }
+    }
+
+    private fun dp(context: Context, value: Int): Int = (value * context.resources.displayMetrics.density).toInt()
+
+    /** Makes [given] fit the pill (see [addPlaced]). */
+    private fun fit(context: Context, chip: RemoteViews, style: ChipStyle, given: String) {
         val room = (style.maxPillDp?.let { it - 2 * style.padDp } ?: Int.MAX_VALUE).toFloat()
         val withIcon = minOf(room - style.iconDp - 4, style.maxTextDp.toFloat())
+        // "5h 13m" first loses its spaces ("5h13m"), so the icon can stay.
+        var text = given
+        if (textWidthDp(context, text, style.textSp) > withIcon && ' ' in text) {
+            text = text.replace(" ", "")
+            chip.setTextViewText(R.id.chip_text, text)
+        }
+        val width = textWidthDp(context, text, style.textSp)
         if (width <= withIcon) return
         val scale = withIcon / width
         if (scale >= 0.85f) {

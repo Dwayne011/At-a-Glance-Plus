@@ -205,7 +205,7 @@ CHIP = {
     "screen": [rect_path(5, 2, 14, 20, 2), "M12,18h.01"],
     "steps": ["M4,16v-2.38C4,11.5 2.97,10.5 3,8c.03,-2.72 1.49,-6 4.5,-6C9.37,2 10,3.8 10,5.5c0,3.11 -2,5.66 -2,8.68V16a2,2 0 1 1-4,0Z",
               "M20,20v-2.38c0,-2.12 1.03,-3.12 1,-5.62 -.03,-2.72 -1.49,-6 -4.5,-6C14.63,6 14,7.8 14,9.5c0,3.11 2,5.66 2,8.68V20a2,2 0 1 0 4,0Z"],
-    "sleep": ["M12,3a6,6 0 0 0 9,9 9,9 0 1 1-9,-9Z"],
+    "sleep": ["M3,11h8l-8,10h8", "M14,3h7l-7,8h7"],  # two Zs, like 💤
     "sunset": ["M12,10V2", "M22,22H2", "M16,18a4,4 0 0 0-8,0"],
     "battery": [rect_path(2, 7, 16, 10, 2), line_path(22, 11, 22, 13)],
     "buds": ["M3,14h3a2,2 0 0 1 2,2v3a2,2 0 0 1-2,2H5a2,2 0 0 1-2,-2v-7a9,9 0 0 1 18,0v7a2,2 0 0 1-2,2h-1a2,2 0 0 1-2,-2v-3a2,2 0 0 1 2,-2h3"],
@@ -306,6 +306,5 @@ def equaliser(name, count, bar_w, gap, colour, height=20, max_h=18, min_h=3, com
 
 
 equaliser("media_equalizer", 14, 3, 2.5, "#FFFDA4AF", comment="8.3 14-bar audio wave.")
-equaliser("art_equalizer", 4, 3, 2, "#FFFFFFFF", comment="8.3 4-bar overlay on the album art.")
 equaliser("island_equalizer", 5, 2.5, 2, "#FFFFFFFF", height=14, max_h=12, min_h=3, comment="6.1 5-bar mini equaliser (tinted per app).")
 print("ok", len(os.listdir(OUT)), "files in", OUT)

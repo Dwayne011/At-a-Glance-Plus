@@ -60,7 +60,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun CardPreviewSection(maxCards: Int) {
+internal fun CardPreviewSection(maxCards: Int, sessions: Collection<com.ataglanceplus.service.SessionInfo>) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val busy by Wadb.busy.collectAsStateWithLifecycle()
@@ -89,6 +89,19 @@ internal fun CardPreviewSection(maxCards: Int) {
         )
         if (maxCards > 0) {
             Text("At a Glance shows up to $maxCards cards at once.", style = MaterialTheme.typography.bodySmall)
+        }
+        // What each surface was last sent, so a card that should be there but is not can be told
+        // apart from one the launcher did not draw.
+        sessions.filter { it.lastPushAt > 0 }.sortedBy { it.surface }.forEach { session ->
+            val where = when (session.surface) {
+                com.ataglanceplus.service.AtAGlanceService.SURFACE_HOME -> "Home screen"
+                com.ataglanceplus.service.AtAGlanceService.SURFACE_LOCKSCREEN -> "Lock screen"
+                else -> session.surface
+            }
+            Text(
+                "$where now (asks for ${session.targetCount}): ${session.showing.joinToString(" · ").ifEmpty { "nothing" }}",
+                style = MaterialTheme.typography.bodySmall
+            )
         }
 
         if (!notificationAccess) {

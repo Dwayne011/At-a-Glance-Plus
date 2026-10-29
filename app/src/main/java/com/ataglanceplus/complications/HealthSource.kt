@@ -2,6 +2,7 @@ package com.ataglanceplus.complications
 
 import android.content.Context
 import android.util.Log
+import com.ataglanceplus.Prefs
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.SleepSessionRecord
@@ -44,7 +45,16 @@ object HealthSource {
                 )
             )
             val steps = result[StepsRecord.COUNT_TOTAL] ?: return null
-            if (steps > 0) ChipValues.Value(stepsText(steps)) else null
+            if (steps <= 0) return null
+            // For a big chip: against the daily goal.
+            val goal = Prefs.stepGoal(context)
+            val format = NumberFormat.getIntegerInstance()
+            val percent = (100 * steps / goal.coerceAtLeast(1)).toInt()
+            ChipValues.Value(
+                stepsText(steps),
+                wide = "${format.format(steps)} of ${format.format(goal)}",
+                detail = "$percent% of ${format.format(goal)}",
+            )
         } catch (e: Exception) {
             Log.w(TAG, "steps read failed", e)
             null
@@ -73,7 +83,13 @@ object HealthSource {
                     .fold(Duration.ZERO) { sum, stage -> sum + Duration.between(stage.startTime, stage.endTime) }
                 (total - awakeTime).toMinutes()
             }
-            if (minutes > 0) ChipValues.Value("${minutes / 60}h ${minutes % 60}m") else null
+            if (minutes <= 0) return null
+            // For a big chip: from going to sleep to waking.
+            val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
+            fun clock(at: Instant) = android.text.format.DateFormat.format(pattern, java.util.Date(at.toEpochMilli())).toString()
+            val span = "${clock(sessions.minOf { it.startTime })}–${clock(sessions.maxOf { it.endTime })}"
+            val text = "${minutes / 60}h ${minutes % 60}m"
+            ChipValues.Value(text, wide = "$text · $span", detail = span)
         } catch (e: Exception) {
             Log.w(TAG, "sleep read failed", e)
             null

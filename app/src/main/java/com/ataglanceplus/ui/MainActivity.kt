@@ -144,7 +144,7 @@ private fun StatusScreen() {
             }
 
             when (tab) {
-                1 -> CardPreviewSection(maxCards = sessions.values.maxOfOrNull { it.targetCount } ?: 0)
+                1 -> CardPreviewSection(maxCards = sessions.values.maxOfOrNull { it.targetCount } ?: 0, sessions = sessions.values)
                 2 -> ChipsSection()
                 else -> {
                     ProblemsSection()

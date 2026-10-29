@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    8.3 Media player: 48dp album art with a 4-bar equaliser overlay, title, artist and time,
-    a 14-bar equaliser (or a 3dp track bar), and three 48dp transport buttons.
-    The equalisers are indeterminate ProgressBars: they start their animated drawable by
-    themselves, which an animated vector in a plain ImageView never does inside RemoteViews.
+    8.3 Media player: 48dp album art, title, artist and time, a 14-bar equaliser (or a 3dp track
+    bar), and three 48dp transport buttons. The art has no equaliser overlay, by choice: one is
+    enough. The equaliser is an indeterminate ProgressBar: it starts its animated drawable by
+    itself, which an animated vector in a plain ImageView never does inside RemoteViews.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/card_root"
@@ -36,24 +36,6 @@
                 android:layout_gravity="center"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_music_note"
-                android:visibility="gone" />
-
-            <ProgressBar
-                android:id="@+id/media_art_eq"
-                android:layout_width="19dp"
-                android:layout_height="20dp"
-                android:layout_gravity="center"
-                android:indeterminate="true"
-                android:indeterminateDrawable="@drawable/avd_art_equalizer"
-                android:indeterminateOnly="true" />
-
-            <ImageView
-                android:id="@+id/media_art_eq_paused"
-                android:layout_width="19dp"
-                android:layout_height="20dp"
-                android:layout_gravity="center"
-                android:contentDescription="@null"
-                android:src="@drawable/ic_art_equalizer_paused"
                 android:visibility="gone" />
 
             <ImageView

@@ -78,6 +78,13 @@ object SimpleSources {
         val events = context.getSystemService(UsageStatsManager::class.java).queryEvents(start, now) ?: return null
         val open = HashMap<String, Long>()
         var total = 0L
+        // Per app too, for the busiest app on a big chip.
+        val byApp = HashMap<String, Long>()
+        fun count(key: String, ms: Long) {
+            total += ms
+            val pkg = key.substringBefore('/')
+            byApp[pkg] = (byApp[pkg] ?: 0L) + ms
+        }
         val event = UsageEvents.Event()
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
@@ -86,35 +93,58 @@ object SimpleSources {
             when (event.eventType) {
                 UsageEvents.Event.ACTIVITY_RESUMED -> open[key] = event.timeStamp
                 UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.ACTIVITY_STOPPED ->
-                    open.remove(key)?.let { total += event.timeStamp - it }
+                    open.remove(key)?.let { count(key, event.timeStamp - it) }
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
-                    open.values.forEach { total += event.timeStamp - it }
+                    open.forEach { (key, from) -> count(key, event.timeStamp - from) }
                     open.clear()
                 }
             }
         }
-        open.values.forEach { total += now - it }
+        open.forEach { (key, from) -> count(key, now - from) }
         val minutes = total / 60_000
         if (minutes <= 0) return null
-        return ChipValues.Value(if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m" else "${minutes}m")
+        val text = duration(minutes)
+        val top = byApp.maxByOrNull { it.value }?.takeIf { it.value >= 60_000 }?.let { (pkg, ms) ->
+            val name = runCatching { context.packageManager.getApplicationInfo(pkg, 0).loadLabel(context.packageManager).toString() }.getOrDefault(pkg)
+            "$name ${duration(ms / 60_000)}"
+        }
+        return ChipValues.Value(text, wide = top?.let { "$text · $it" }, detail = top)
     }
+
+    /** "1h 20m", or "35m" under an hour. */
+    fun duration(minutes: Long): String = if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m" else "${minutes}m"
 
     /** The next sunrise or sunset at the weather location. */
     fun sunEvent(context: Context): ChipValues.Value? {
-        val (time, _) = WeatherRepository.weather.value?.nextSunEvent() ?: return null
+        val weather = WeatherRepository.weather.value ?: return null
+        val (time, sunrise) = weather.nextSunEvent() ?: return null
         val pattern = if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
-        return ChipValues.Value(DateFormat.format(pattern, Date(time)).toString())
+        fun clock(at: Long) = DateFormat.format(pattern, Date(at)).toString()
+        fun name(rise: Boolean) = if (rise) "Sunrise" else "Sunset"
+        // The one after, for a big chip: sunset, then tomorrow's sunrise.
+        val after = weather.nextSunEvent(time)?.let { (at, rise) -> "${name(rise)} ${clock(at)}" }
+        return ChipValues.Value(
+            clock(time),
+            wide = listOfNotNull("${name(sunrise)} ${clock(time)}", after).joinToString(" · "),
+            detail = after,
+        )
     }
 
     /** Days to the chosen date: "12d", "Today" on the day, nothing once it has passed. */
     fun countdown(context: Context): ChipValues.Value? {
         val target = Prefs.countdownDay(context) ?: return null
         val days = target - LocalDate.now().toEpochDay()
-        return when {
-            days > 0 -> ChipValues.Value("${days}d")
-            days == 0L -> ChipValues.Value("Today")
-            else -> null
+        val text = when {
+            days > 0 -> "${days}d"
+            days == 0L -> "Today"
+            else -> return null
         }
+        // For a big chip: what it is to, and the date ("Holiday · Mon 2 Nov").
+        val date = LocalDate.ofEpochDay(target).format(
+            java.time.format.DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(java.util.Locale.getDefault(), "EEEdMMM"))
+        )
+        val detail = listOf(Prefs.countdownName(context), date).filter { it.isNotEmpty() }.joinToString(" · ")
+        return ChipValues.Value(text, wide = "$text · $detail", detail = detail)
     }
 
     /** Counts above 99 show as "99+" (spec 7.3, large number state). */

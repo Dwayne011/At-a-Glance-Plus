@@ -24,6 +24,9 @@ object Prefs {
     private const val KEY_CHIP_APP = "chip_app_"
     private const val KEY_GMAIL_LABELS = "gmail_labels_"
     private const val KEY_COUNTDOWN = "countdown_day"
+    private const val KEY_COUNTDOWN_NAME = "countdown_name"
+    private const val KEY_STEP_GOAL = "step_goal"
+    private const val KEY_CHIP_SIZE = "chip_size_"
     private const val KEY_CHIP_REFRESH = "chip_refresh"
     private const val KEY_AOD_PREVIEW = "aod_preview"
     private const val KEY_MEDIA_WAVE = "media_wave"
@@ -47,7 +50,8 @@ object Prefs {
 
     /** Settings that change what the complication engine has to watch. */
     fun isChipSettingKey(key: String?): Boolean =
-        key != null && (key == KEY_CHIPS || key.startsWith(KEY_GMAIL_LABELS) || key == KEY_COUNTDOWN || key == KEY_CHIP_REFRESH)
+        key != null && (key == KEY_CHIPS || key.startsWith(KEY_GMAIL_LABELS) || key == KEY_COUNTDOWN || key == KEY_CHIP_REFRESH ||
+            key == KEY_COUNTDOWN_NAME || key == KEY_STEP_GOAL)
 
     /** Tells the service a chip permission was granted, so it starts watching that source. */
     fun chipPermissionsChanged(context: Context) {
@@ -150,6 +154,29 @@ object Prefs {
 
     fun setCountdownDay(context: Context, epochDay: Long) {
         get(context).edit().putLong(KEY_COUNTDOWN, epochDay).apply()
+    }
+
+    /** What the countdown is to ("Holiday"), shown on a big countdown chip; blank for none. */
+    fun countdownName(context: Context): String = get(context).getString(KEY_COUNTDOWN_NAME, "").orEmpty()
+
+    fun setCountdownName(context: Context, name: String) {
+        get(context).edit().putString(KEY_COUNTDOWN_NAME, name.trim()).apply()
+    }
+
+    /** Daily step goal, shown on a big steps chip. */
+    fun stepGoal(context: Context): Int = get(context).getInt(KEY_STEP_GOAL, 8_000)
+
+    fun setStepGoal(context: Context, steps: Int) {
+        get(context).edit().putInt(KEY_STEP_GOAL, steps).apply()
+    }
+
+    /** A chip's size: normal, wide (2 slots across) or tall (2 slots down). */
+    fun chipSize(context: Context, chipKey: String): com.ataglanceplus.cards.ChipSize =
+        runCatching { com.ataglanceplus.cards.ChipSize.valueOf(get(context).getString(KEY_CHIP_SIZE + chipKey, null)!!) }
+            .getOrDefault(com.ataglanceplus.cards.ChipSize.NORMAL)
+
+    fun setChipSize(context: Context, chipKey: String, size: com.ataglanceplus.cards.ChipSize) {
+        get(context).edit().putString(KEY_CHIP_SIZE + chipKey, size.name).apply()
     }
 
     const val GMAIL_INBOX = "^i"

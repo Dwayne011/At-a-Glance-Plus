@@ -147,9 +147,7 @@ object LiveCards {
             views.setTextViewText(R.id.media_time, DateUtils.formatElapsedTime(position / 1000) + duration)
         }
 
-        // Equalisers: animated while playing, flat bars when paused or on the always-on display.
-        views.setViewVisibility(R.id.media_art_eq, if (playing) View.VISIBLE else View.GONE)
-        views.setViewVisibility(R.id.media_art_eq_paused, if (playing) View.GONE else View.VISIBLE)
+        // Equaliser: animated while playing, flat bars when paused or on the always-on display.
         if (wave) {
             views.setViewVisibility(R.id.media_eq, if (playing) View.VISIBLE else View.GONE)
             views.setViewVisibility(R.id.media_eq_paused, if (playing) View.GONE else View.VISIBLE)
@@ -172,7 +170,6 @@ object LiveCards {
             Style.aodBody(views, R.id.media_title, R.id.media_detail, R.id.media_time, R.id.media_eq_label)
             views.setInt(R.id.media_art, "setBackgroundResource", R.drawable.aod_outline_r12)
             if (media.art != null) views.setImageViewResource(R.id.media_art, android.R.color.transparent)
-            views.setInt(R.id.media_art_eq_paused, "setColorFilter", Style.AOD_TEXT)
             views.setInt(R.id.media_eq_paused, "setColorFilter", Style.AOD_TEXT)
             views.setColorStateList(R.id.media_track, "setProgressTintList", ColorStateList.valueOf(Style.AOD_TEXT))
             views.setInt(R.id.media_play, "setBackgroundResource", R.drawable.aod_outline_oval)
@@ -550,8 +547,9 @@ object LiveCards {
     fun chips(context: Context, aod: Boolean, specs: List<ChipSpec>, index: Int): SmartspaceTarget {
         val views = RemoteViews(context.packageName, R.layout.card_chips)
         if (aod) Style.aodBody(views)
-        Chips.add(context, views, specs.take(Chips.MAX_BOTTOM), ComplicationLayout.BOTTOM, aod)
-        Chips.add(context, views, specs.drop(Chips.MAX_BOTTOM), ComplicationLayout.BOTTOM, aod, R.id.complications_2)
+        val first = Chips.taken(context, specs, ComplicationLayout.BOTTOM)
+        Chips.add(context, views, specs.take(first), ComplicationLayout.BOTTOM, aod)
+        Chips.add(context, views, specs.drop(first), ComplicationLayout.BOTTOM, aod, R.id.complications_2)
         val summary = Chips.withValues(specs).joinToString(" · ") { (spec, value) -> "${spec.kind.label} ${value.text}" }
         val tap = Style.gated(context, Intent(context, com.ataglanceplus.ui.MainActivity::class.java), REQUEST_BASE + 0xFF00 + index)
         return Style.target(context, "aagp_chips:$index", views, "More", summary, R.drawable.ic_card, tap, 0.5f)
