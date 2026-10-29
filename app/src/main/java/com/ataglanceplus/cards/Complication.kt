@@ -42,6 +42,7 @@ enum class Complication(
     BATTERY("battery", "Phone battery", "67%", R.drawable.ic_comp_battery, R.drawable.ic_comp_battery_aod),
     BUDS("buds", "Bluetooth battery", "100%", R.drawable.ic_comp_bluetooth, R.drawable.ic_comp_bluetooth_aod, canGrow = true),
     COUNTDOWN("count", "Date countdown", "12d", R.drawable.ic_comp_countdown, R.drawable.ic_comp_countdown_aod, canGrow = true),
+    HEALTH("health", "Health metric", "72", R.drawable.ic_comp_heart, R.drawable.ic_comp_heart_aod, needsArg = true, canGrow = true),
     APP_NOTIFICATIONS("notif", "App notifications", "5", R.drawable.ic_comp_bell, R.drawable.ic_comp_bell_aod, needsArg = true),
     RAIL_TICKET("ticket", "Rail ticket", "Ticket", R.drawable.ic_comp_ticket, R.drawable.ic_comp_ticket_aod, pickable = false);
 
@@ -94,6 +95,8 @@ data class ChipSpec(val kind: Complication, val arg: String? = null) {
         Complication.STEPS -> com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_STEPS)
         Complication.SLEEP -> com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_SLEEP)
         Complication.SCREEN_TIME -> com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_SCREEN)
+        Complication.GMAIL -> arg?.let { gmailAccount(context, it) } ?: defaultPackage()?.let { context.packageManager.getLaunchIntentForPackage(it) }
+        Complication.HEALTH -> arg?.let { com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_HEALTH_PREFIX + it) }
         Complication.SUNSET -> weatherSunScreen(context) ?: defaultPackage()?.let { context.packageManager.getLaunchIntentForPackage(it) }
         Complication.BATTERY -> Intent(Intent.ACTION_POWER_USAGE_SUMMARY)
         Complication.BUDS -> Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
@@ -156,7 +159,19 @@ private fun openableScreen(context: Context, pkg: String, word: String): Intent?
         context.packageManager.getPackageInfo(pkg, android.content.pm.PackageManager.PackageInfoFlags.of(android.content.pm.PackageManager.GET_ACTIVITIES.toLong())).activities
     }.getOrNull() ?: return null
     val screen = activities.firstOrNull { it.exported && it.enabled && word in it.name.substringAfterLast('.').lowercase() } ?: return null
-    return Intent().setClassName(pkg, screen.name)
+    // A fresh task, so back leaves the app rather than going through its earlier pages.
+    return Intent().setClassName(pkg, screen.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+}
+
+/**
+ * The Gmail app at [account]'s inbox, through the account's Gmail web link, which the app may
+ * take; null when Gmail does not handle it (it then opens as usual). Gmail has no documented way
+ * in to one account, so this is a best try.
+ */
+fun gmailAccount(context: Context, account: String): Intent? {
+    val link = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://mail.google.com/mail/u/?authuser=" + android.net.Uri.encode(account)))
+        .setPackage(ChipSpec.GMAIL_PKG)
+    return link.takeIf { it.resolveActivity(context.packageManager) != null }
 }
 
 /** Where a card's complications sit (spec 7.1). */
@@ -277,14 +292,15 @@ object Chips {
 
     /**
      * The chips of [specs] with something to show that a spot of [slots] slots takes, in order.
-     * An extended chip with only 1 slot left shows at standard size.
+     * An extended chip is never shrunk: with only 1 slot left it waits for the next spot.
      */
     fun plan(context: Context, specs: List<ChipSpec>, slots: Int, style: ChipStyle, always: Boolean = false): List<Placed> {
         val placed = mutableListOf<Placed>()
         var left = slots
         for ((spec, value) in withValues(specs)) {
             if (left <= 0) break
-            val big = left >= 2 && grows(context, spec, always)
+            val big = grows(context, spec, always)
+            if (big && left < 2) break
             left -= if (big) 2 else 1
             placed += Placed(spec, value, big)
         }

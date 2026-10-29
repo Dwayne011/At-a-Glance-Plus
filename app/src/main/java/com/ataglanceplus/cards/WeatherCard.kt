@@ -158,9 +158,10 @@ object WeatherCard {
     /**
      * Which of [specs] (those with something to show, in order) go under the temperature,
      * measured at the phone's text size: up to 3 slots, at least 1 chip when there is any. An
-     * extended chip is wide (2 slots) when its whole line fits, else standard. A chip that does
-     * not fit the space left is passed over for a later, smaller one, so no room is wasted; the
-     * ones passed over go to the right side.
+     * extended chip is wide (2 slots), and only goes here when its whole line fits; otherwise it
+     * waits for a spot where it can be extended (the right side, another card, or the extra chips
+     * card) rather than being shrunk. A chip that does not fit the space left is passed over for
+     * a later, smaller one, so no room is wasted; the ones passed over go to the right side.
      */
     fun anchorPlan(context: Context, layout: WeatherLayout, specs: List<ChipSpec>): List<Chips.Placed> {
         if (layout == WeatherLayout.NONE) return emptyList()
@@ -175,7 +176,10 @@ object WeatherCard {
             val text = value.parts.maxByOrNull { it.text.length }?.text ?: value.text
             val standard = Chips.ANCHOR.widthDp(context, text) + gap
             val wide = Chips.ANCHOR.bigWidthDp(context, value) + gap
-            val big = Chips.grows(context, spec) && slots + 2 <= MAX_ANCHORS && used + wide <= room
+            val extended = Chips.grows(context, spec)
+            val big = extended && slots + 2 <= MAX_ANCHORS && used + wide <= room
+            // Never shrunk, except as the first chip, so the row is not left empty.
+            if (extended && !big && placed.isNotEmpty()) continue
             val width = if (big) wide else standard
             if (placed.isNotEmpty() && used + width > room) continue
             used += width

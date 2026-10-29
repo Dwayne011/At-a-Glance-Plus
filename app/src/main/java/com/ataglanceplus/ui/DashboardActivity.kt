@@ -57,7 +57,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.ataglanceplus.Prefs
+import com.ataglanceplus.complications.HealthMetric
+import com.ataglanceplus.complications.HealthMetrics
 import com.ataglanceplus.complications.HealthSource
+import com.ataglanceplus.complications.MetricShape
+import com.ataglanceplus.complications.Reading
 import com.ataglanceplus.complications.SimpleSources
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -96,7 +100,7 @@ class DashboardActivity : ComponentActivity() {
                             KIND_STEPS -> StepsDashboard()
                             KIND_SLEEP -> SleepDashboard()
                             KIND_SCREEN -> ScreenDashboard()
-                            else -> Text("Nothing to show.")
+                            else -> HealthMetric.fromId(kind?.removePrefix(KIND_HEALTH_PREFIX))?.let { MetricDashboard(it) } ?: Text("Nothing to show.")
                         }
                     }
                 }
@@ -109,6 +113,8 @@ class DashboardActivity : ComponentActivity() {
         const val KIND_STEPS = "steps"
         const val KIND_SLEEP = "sleep"
         const val KIND_SCREEN = "screen"
+        /** Followed by a [com.ataglanceplus.complications.HealthMetric] id: "health:hr". */
+        const val KIND_HEALTH_PREFIX = "health:"
 
         fun intent(context: Context, kind: String): Intent =
             Intent(context, DashboardActivity::class.java).putExtra(EXTRA_KIND, kind).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -349,6 +355,248 @@ private fun AppRow(pkg: String, ms: Long, share: Float) {
     }
 }
 
+// --- Health metrics ---
+
+/** What a metric's dashboard shows, by its shape. */
+private sealed interface MetricData {
+    data class Totals(val today: Double, val hours: List<Double>, val days: List<Pair<LocalDate, Double>>) : MetricData
+    data class Readings(val readings: List<Reading>) : MetricData
+}
+
+/**
+ * A health metric: a daily total (today by hour and the last 7 days, like steps); readings
+ * (the latest, today's line and each day's range over the last week, or each reading's range
+ * for blood pressure); or occasional measurements (the latest and the last 30 days).
+ */
+@Composable
+private fun MetricDashboard(metric: HealthMetric) {
+    val context = LocalContext.current
+    val load by produceState<Load<MetricData>>(Load.Loading, metric) {
+        value = withContext(Dispatchers.IO) {
+            if (metric.permission !in HealthSource.granted(context)) {
+                Load.Missing("Allow Health Connect access for ${metric.label.lowercase()} in the app's Chips tab.")
+            } else runCatching {
+                Load.Ready(
+                    when (metric.shape) {
+                        MetricShape.TOTAL -> MetricData.Totals(
+                            HealthMetrics.totalToday(context, metric),
+                            HealthMetrics.totalsByHour(context, metric),
+                            HealthMetrics.totalsByDay(context, metric),
+                        )
+                        MetricShape.READINGS -> MetricData.Readings(HealthMetrics.readings(context, metric, Instant.now().minus(java.time.Duration.ofDays(7))))
+                        MetricShape.OCCASIONAL -> MetricData.Readings(HealthMetrics.readings(context, metric, Instant.now().minus(java.time.Duration.ofDays(30))))
+                    }
+                )
+            }.getOrElse { Load.Missing("Health Connect did not answer: ${it.message}") }
+        }
+    }
+    Title(metric.label)
+    when (val state = load) {
+        Load.Loading -> Text("Loading…")
+        is Load.Missing -> Text(state.why)
+        is Load.Ready -> when (val data = state.data) {
+            is MetricData.Totals -> {
+                Hero(HealthMetrics.full(metric, data.today), "today")
+                ChartCard("Today by hour") {
+                    BarChart(
+                        values = data.hours.map { (it * 100).toLong() },
+                        describe = { i, _ -> "%02d:00–%02d:00 · %s".format(i, (i + 1) % 24, HealthMetrics.full(metric, data.hours[i])) },
+                        axis = listOf(0 to "00:00", 6 to "06:00", 12 to "12:00", 18 to "18:00"),
+                        initial = java.time.LocalTime.now().hour,
+                    )
+                }
+                ChartCard("Last 7 days") {
+                    BarChart(
+                        values = data.days.map { (it.second * 100).toLong() },
+                        describe = { i, _ -> "${dayAndDate(data.days[i].first)} · ${HealthMetrics.full(metric, data.days[i].second)}" },
+                        axis = data.days.mapIndexed { i, (date, _) -> i to day(date) },
+                        initial = data.days.lastIndex,
+                    )
+                }
+            }
+            is MetricData.Readings -> ReadingsDashboard(metric, data.readings)
+        }
+    }
+    OpenButton("Open Health Connect", Intent("android.health.connect.action.MANAGE_HEALTH_DATA"))
+}
+
+@Composable
+private fun ReadingsDashboard(metric: HealthMetric, readings: List<Reading>) {
+    val context = LocalContext.current
+    val latest = readings.lastOrNull()
+    if (latest == null) {
+        Text("No ${metric.label.lowercase()} recorded in the last ${if (metric.shape == MetricShape.OCCASIONAL) "30" else "7"} days.")
+        return
+    }
+    Hero(HealthMetrics.full(metric, latest.value, latest.second), HealthMetrics.ago(context, latest.time))
+    fun at(time: Instant) = "${dayAndDate(time.atZone(ZoneId.systemDefault()).toLocalDate())} ${clock(context, time)}"
+    when {
+        metric == HealthMetric.BLOOD_PRESSURE -> {
+            val recent = readings.takeLast(14)
+            ChartCard("Recent readings") {
+                Text("Each bar runs from diastolic (bottom) to systolic (top).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                RangeChart(
+                    ranges = recent.map { (it.second ?: it.value) to it.value },
+                    describe = { i -> "${at(recent[i].time)} · ${HealthMetrics.full(metric, recent[i].value, recent[i].second)}" },
+                    axis = emptyList(),
+                    format = { HealthMetrics.short(metric, it) },
+                )
+            }
+        }
+        metric.shape == MetricShape.READINGS -> {
+            val today = LocalDate.now()
+            val todays = readings.filter { it.time.atZone(ZoneId.systemDefault()).toLocalDate() == today }
+            if (todays.size >= 2) {
+                ChartCard("Today") {
+                    LineChart(
+                        points = todays,
+                        describe = { r -> "${clock(context, r.time)} · ${HealthMetrics.full(metric, r.value)}" },
+                        format = { HealthMetrics.short(metric, it) },
+                        markers = todays.size <= 48,
+                    )
+                }
+            }
+            // Each day's lowest to highest, with the average when tapped.
+            val week = (6 downTo 0).map { back -> today.minusDays(back.toLong()) }
+            val byDay = week.map { day -> readings.filter { it.time.atZone(ZoneId.systemDefault()).toLocalDate() == day } }
+            ChartCard("Last 7 days") {
+                RangeChart(
+                    ranges = byDay.map { r -> if (r.isEmpty()) null else r.minOf { it.value } to r.maxOf { it.value } },
+                    describe = { i ->
+                        val r = byDay[i]
+                        if (r.isEmpty()) "${dayAndDate(week[i])} · no readings"
+                        else "${dayAndDate(week[i])} · ${HealthMetrics.short(metric, r.minOf { it.value })}–${HealthMetrics.full(metric, r.maxOf { it.value })}, average ${HealthMetrics.short(metric, r.map { it.value }.average())}"
+                    },
+                    axis = week.mapIndexed { i, d -> i to day(d) },
+                    format = { HealthMetrics.short(metric, it) },
+                )
+            }
+        }
+        else -> {
+            ChartCard("Last 30 days") {
+                LineChart(
+                    points = readings,
+                    describe = { r -> "${at(r.time)} · ${HealthMetrics.full(metric, r.value)}" },
+                    format = { HealthMetrics.short(metric, it) },
+                    markers = readings.size <= 60,
+                )
+                if (readings.size >= 2) {
+                    val change = latest.value - readings.first().value
+                    Text(
+                        "Since ${dayAndDate(readings.first().time.atZone(ZoneId.systemDefault()).toLocalDate())}: " +
+                            (if (change >= 0) "+" else "−") + HealthMetrics.full(metric, kotlin.math.abs(change)),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Readings over time as one 2dp line, scaled to their own low and high (marked at the left), with
+ * markers when there are few. A tap picks the nearest reading and describes it above the chart.
+ */
+@Composable
+private fun LineChart(points: List<Reading>, describe: (Reading) -> String, format: (Double) -> String, markers: Boolean) {
+    if (points.isEmpty()) return
+    var selected by remember(points) { mutableIntStateOf(points.lastIndex) }
+    val line = MaterialTheme.colorScheme.primary
+    val surface = MaterialTheme.colorScheme.surfaceContainerHighest
+    val grid = MaterialTheme.colorScheme.outlineVariant
+    val low = points.minOf { it.value }
+    val high = points.maxOf { it.value }.let { if (it == low) low + 1 else it }
+    val t0 = points.first().time.toEpochMilli()
+    val span = (points.last().time.toEpochMilli() - t0).coerceAtLeast(1).toFloat()
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(describe(points[selected]), style = MaterialTheme.typography.bodyMedium)
+        Row {
+            Column(modifier = Modifier.height(120.dp).width(44.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Text(format(high), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(format(low), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Canvas(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(120.dp)
+                    .pointerInput(points) {
+                        detectTapGestures { at ->
+                            val time = t0 + at.x / size.width * span
+                            selected = points.indices.minByOrNull { kotlin.math.abs(points[it].time.toEpochMilli() - time) } ?: selected
+                        }
+                    }
+            ) {
+                val pad = 6.dp.toPx()
+                fun x(r: Reading) = if (points.size == 1) size.width / 2 else (r.time.toEpochMilli() - t0) / span * size.width
+                fun y(r: Reading) = pad + (1 - ((r.value - low) / (high - low)).toFloat()) * (size.height - 2 * pad)
+                drawLine(grid, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
+                val path = Path()
+                points.forEachIndexed { i, r -> if (i == 0) path.moveTo(x(r), y(r)) else path.lineTo(x(r), y(r)) }
+                drawPath(path, line, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                if (markers) points.forEach { r -> drawCircle(line, 4.dp.toPx(), Offset(x(r), y(r))) }
+                // The chosen reading: a ringed marker and a faint guide.
+                val chosen = points[selected]
+                drawLine(grid, Offset(x(chosen), 0f), Offset(x(chosen), size.height), strokeWidth = 1.dp.toPx())
+                drawCircle(surface, 7.dp.toPx(), Offset(x(chosen), y(chosen)))
+                drawCircle(line, 5.dp.toPx(), Offset(x(chosen), y(chosen)))
+            }
+        }
+    }
+}
+
+/**
+ * Floating bars from a low to a high value (null for none), scaled to all of them together,
+ * with the overall low and high marked at the left. A tap describes that bar above the chart.
+ */
+@Composable
+private fun RangeChart(ranges: List<Pair<Double, Double>?>, describe: (Int) -> String, axis: List<Pair<Int, String>>, format: (Double) -> String) {
+    if (ranges.isEmpty()) return
+    var selected by remember(ranges) { mutableIntStateOf(ranges.indexOfLast { it != null }.coerceAtLeast(0)) }
+    val bar = MaterialTheme.colorScheme.primary
+    val dimmed = bar.copy(alpha = 0.45f)
+    val grid = MaterialTheme.colorScheme.outlineVariant
+    val present = ranges.filterNotNull()
+    val low = present.minOfOrNull { it.first } ?: 0.0
+    val high = (present.maxOfOrNull { it.second } ?: 1.0).let { if (it == low) low + 1 else it }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(describe(selected), style = MaterialTheme.typography.bodyMedium)
+        Row {
+            Column(modifier = Modifier.height(120.dp).width(44.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Text(format(high), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(format(low), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .pointerInput(ranges) {
+                            detectTapGestures { at -> selected = (at.x / size.width * ranges.size).toInt().coerceIn(0, ranges.lastIndex) }
+                        }
+                ) {
+                    val slot = size.width / ranges.size
+                    val gap = if (ranges.size > 12) 2.dp.toPx() else 8.dp.toPx()
+                    val pad = 4.dp.toPx()
+                    fun y(v: Double) = pad + (1 - ((v - low) / (high - low)).toFloat()) * (size.height - 2 * pad)
+                    drawLine(grid, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
+                    ranges.forEachIndexed { i, range ->
+                        range ?: return@forEachIndexed
+                        val top = y(range.second)
+                        val height = (y(range.first) - top).coerceAtLeast(6.dp.toPx())
+                        drawRoundRect(
+                            if (i == selected) bar else dimmed,
+                            topLeft = Offset(i * slot + gap / 2, top),
+                            size = Size(slot - gap, height),
+                            cornerRadius = CornerRadius(4.dp.toPx()),
+                        )
+                    }
+                }
+                if (axis.isNotEmpty()) AxisLabels(axis, ranges.size)
+            }
+        }
+    }
+}
+
 // --- Shared pieces ---
 
 @Composable
@@ -420,23 +668,28 @@ private fun BarChart(values: List<Long>, describe: (Int, Long) -> String, axis: 
             }
             drawLine(baseline, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
         }
-        // Axis labels centred under their bars (kept inside the chart at the ends).
-        Layout(
-            content = {
-                axis.forEach { (_, label) ->
-                    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { measurables, constraints ->
-            val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0)) }
-            val width = constraints.maxWidth
-            val slot = width.toFloat() / values.size
-            layout(width, placeables.maxOfOrNull { it.height } ?: 0) {
-                placeables.forEachIndexed { k, placeable ->
-                    val centre = (axis[k].first + 0.5f) * slot
-                    placeable.place((centre - placeable.width / 2f).toInt().coerceIn(0, (width - placeable.width).coerceAtLeast(0)), 0)
-                }
+        AxisLabels(axis, values.size)
+    }
+}
+
+/** Axis labels centred under their bars (kept inside the chart at the ends). */
+@Composable
+private fun AxisLabels(axis: List<Pair<Int, String>>, count: Int) {
+    Layout(
+        content = {
+            axis.forEach { (_, label) ->
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) { measurables, constraints ->
+        val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0)) }
+        val width = constraints.maxWidth
+        val slot = width.toFloat() / count
+        layout(width, placeables.maxOfOrNull { it.height } ?: 0) {
+            placeables.forEachIndexed { k, placeable ->
+                val centre = (axis[k].first + 0.5f) * slot
+                placeable.place((centre - placeable.width / 2f).toInt().coerceIn(0, (width - placeable.width).coerceAtLeast(0)), 0)
             }
         }
     }

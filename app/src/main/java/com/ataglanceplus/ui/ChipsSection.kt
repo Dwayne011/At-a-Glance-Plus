@@ -9,8 +9,11 @@ import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -18,15 +21,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -39,6 +44,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,7 +53,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +66,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ataglanceplus.Commands
@@ -65,7 +78,9 @@ import com.ataglanceplus.cards.Complication
 import com.ataglanceplus.cards.WeatherLayout
 import com.ataglanceplus.complications.ChipValues
 import com.ataglanceplus.complications.GmailSource
+import com.ataglanceplus.complications.HealthMetric
 import com.ataglanceplus.complications.HealthSource
+import com.ataglanceplus.complications.MetricGroup
 import com.ataglanceplus.complications.NotificationCounter
 import com.ataglanceplus.complications.SimpleSources
 import com.ataglanceplus.live.CalendarSource
@@ -98,6 +113,7 @@ private fun needs(context: Context, spec: ChipSpec, healthGranted: Set<String>):
         Complication.SCREEN_TIME -> if (!SimpleSources.hasUsageAccess(context)) add(Need.USAGE)
         Complication.STEPS -> if (HealthSource.STEPS !in healthGranted || HealthSource.BACKGROUND !in healthGranted) add(Need.HEALTH)
         Complication.SLEEP -> if (HealthSource.SLEEP !in healthGranted || HealthSource.BACKGROUND !in healthGranted) add(Need.HEALTH)
+        Complication.HEALTH -> if (!healthGranted.containsAll(healthPermissions(spec))) add(Need.HEALTH)
         Complication.BUDS -> if (!has(Manifest.permission.BLUETOOTH_CONNECT)) add(Need.BLUETOOTH)
         Complication.SUNSET -> if (!WeatherRepository.hasLocationPermission(context)) add(Need.LOCATION)
         Complication.COUNTDOWN -> if (Prefs.countdownDay(context) == null) add(Need.DATE)
@@ -123,8 +139,32 @@ private fun appLabel(context: Context, pkg: String?): String? = pkg?.let {
 private fun chipTitle(context: Context, spec: ChipSpec): String = when (spec.kind) {
     Complication.GMAIL -> "Gmail · ${spec.arg ?: "choose an account"}"
     Complication.APP_NOTIFICATIONS -> "Notifications · ${appLabel(context, spec.arg) ?: spec.arg ?: "choose an app"}"
+    Complication.HEALTH -> HealthMetric.fromId(spec.arg)?.label ?: "Health metric"
     else -> spec.kind.label
 }
+
+/** The permissions a Health Connect chip asks for: its own, and reading while the app is in the background. */
+private fun healthPermissions(spec: ChipSpec): Set<String> = setOfNotNull(
+    when (spec.kind) {
+        Complication.STEPS -> HealthSource.STEPS
+        Complication.SLEEP -> HealthSource.SLEEP
+        Complication.HEALTH -> HealthMetric.fromId(spec.arg)?.permission
+        else -> null
+    },
+    HealthSource.BACKGROUND,
+)
+
+/** The chip's icon: a health metric's own, else its kind's. */
+private fun chipIcon(spec: ChipSpec): Int =
+    if (spec.kind == Complication.HEALTH) HealthMetric.fromId(spec.arg)?.icon ?: spec.kind.icon else spec.kind.icon
+
+/** The kinds offered under "Add a chip", by group. */
+private val ADD_GROUPS = listOf(
+    "Messages" to listOf(Complication.GMAIL, Complication.MISSED_CALLS, Complication.TEXTS, Complication.APP_NOTIFICATIONS),
+    "Health" to listOf(Complication.STEPS, Complication.SLEEP, Complication.HEALTH),
+    "Phone" to listOf(Complication.BATTERY, Complication.BUDS, Complication.SCREEN_TIME),
+    "Time" to listOf(Complication.ALARM, Complication.COUNTDOWN, Complication.SUNSET),
+)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -153,6 +193,9 @@ internal fun ChipsSection() {
     val health = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { changed() }
     var picking by remember { mutableStateOf<((String) -> Unit)?>(null) }
     var settingsFor by remember { mutableStateOf<ChipSpec?>(null) }
+    var adding by remember { mutableStateOf(false) }
+    var pickingMetric by remember { mutableStateOf(false) }
+    var showFitting by remember { mutableStateOf(false) }
     var grantMessage by remember { mutableStateOf("") }
 
     suspend fun grantOverAdb(notifications: Boolean, usage: Boolean, callLog: Boolean) {
@@ -170,6 +213,9 @@ internal fun ChipsSection() {
 
     fun add(spec: ChipSpec) {
         if (chips.none { it.key == spec.key } && chips.size < Chips.MAX_CHOSEN) Prefs.setChips(context, chips + spec)
+        if (spec.kind == Complication.HEALTH || spec.kind == Complication.STEPS || spec.kind == Complication.SLEEP) {
+            if (!healthGranted.containsAll(healthPermissions(spec))) health.launch(healthPermissions(spec))
+        }
     }
 
     // The Gmail chip whose account is being changed; null when adding a new Gmail chip.
@@ -188,12 +234,21 @@ internal fun ChipsSection() {
         }
     }
 
-    Section("Complication chips") {
-        Text(
-            "Pick as many chips as you like, in order of importance. Chips with something to report right now fill the weather card first, then other cards on show, then an extra chips card. When one has nothing to report (no unread mail, say), the next one takes its place.",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Text("Weather card layout", style = MaterialTheme.typography.labelLarge)
+    fun grant(spec: ChipSpec, need: Need) {
+        when (need) {
+            Need.CALL_LOG -> permissions.launch(arrayOf(Manifest.permission.READ_CALL_LOG))
+            Need.GMAIL -> permissions.launch(arrayOf(GmailSource.PERMISSION))
+            Need.BLUETOOTH -> permissions.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
+            Need.HEALTH -> health.launch(healthPermissions(spec))
+            Need.NOTIFICATIONS, Need.USAGE -> scope.launch {
+                grantOverAdb(notifications = need == Need.NOTIFICATIONS, usage = need == Need.USAGE, callLog = false)
+            }
+            Need.LOCATION -> Unit
+            Need.DATE -> settingsFor = spec
+        }
+    }
+
+    Section("Weather card") {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WeatherLayout.entries.forEach { option ->
                 FilterChip(selected = layout == option, onClick = { Prefs.setWeatherLayout(context, option) }, label = { Text(option.label) })
@@ -201,11 +256,18 @@ internal fun ChipsSection() {
         }
         Text(
             when (layout) {
-                WeatherLayout.COLUMNS -> "Next 3 hours as columns; 2 chips under the temperature and 2 stacked on the right."
-                WeatherLayout.SPLIT -> "Next 3 hours in a row; 2 chips under the temperature and 2 wide chips under the forecast."
-                WeatherLayout.GRID -> "Next 2 hours in a box; 2 chips under the temperature and a 2 x 2 grid of chips."
+                WeatherLayout.COLUMNS -> "Next 3 hours as columns; chips under the temperature and 2 stacked on the right."
+                WeatherLayout.SPLIT -> "Next 3 hours in a row; chips under the temperature and 2 wide chips under the forecast."
+                WeatherLayout.GRID -> "Next 2 hours in a box; chips under the temperature and a 2 x 2 grid of chips."
                 WeatherLayout.NONE -> "Next 3 hours, and no chips anywhere."
             },
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+
+    Section("Your chips") {
+        Text(
+            "Most important first: drag ≡ to reorder. Chips with something to report fill the weather card, then other cards, then an extra chips card. Tap a chip for its settings.",
             style = MaterialTheme.typography.bodySmall
         )
         if (grantMessage.isNotEmpty()) {
@@ -214,119 +276,69 @@ internal fun ChipsSection() {
         if (chips.isEmpty()) {
             Text("No chips chosen; the weather card uses the design's examples (Steps, Battery, Alarm and so on).", style = MaterialTheme.typography.bodySmall)
         }
-        chips.forEach { spec ->
-            HorizontalDivider()
-            val missing = needs(context, spec, healthGranted)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(chipTitle(context, spec), style = MaterialTheme.typography.labelLarge)
-                val opens = appLabel(context, Prefs.chipApp(context, spec.key)) ?: spec.defaultAppName(context) ?: "its usual app"
-                val status = (if (!spec.configured) "Choose the Gmail account to count" else null)
-                    ?: values[spec.key]?.text?.let { "Now: $it" }
-                    ?: missing.firstOrNull()?.text
-                    ?: "Nothing to report right now"
-                // The app in the accent colour, so it stands out from the status.
-                val accent = MaterialTheme.colorScheme.primary
-                Text(
-                    buildAnnotatedString {
-                        append("$status · Opens ")
-                        withStyle(SpanStyle(color = accent, fontWeight = FontWeight.Medium)) { append(opens) }
-                    },
-                    style = MaterialTheme.typography.bodySmall
-                )
-                if (spec.kind == Complication.BUDS) {
-                    Text("Experimental: shows each connected Bluetooth device that reports its battery (earbuds, headphones, watch), taking turns.", style = MaterialTheme.typography.bodySmall)
-                }
-                if (spec.kind == Complication.STEPS || spec.kind == Complication.SLEEP) {
-                    Text("Reads Health Connect. Turn on Health Connect sync in Google Health or Fitbit.", style = MaterialTheme.typography.bodySmall)
-                }
-                // Wraps onto a second line rather than squeezing buttons when space runs out.
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    missing.firstOrNull()?.let { need ->
-                        Button(enabled = !busy || need !in setOf(Need.NOTIFICATIONS, Need.USAGE, Need.CALL_LOG), onClick = {
-                            when (need) {
-                                Need.CALL_LOG -> permissions.launch(arrayOf(Manifest.permission.READ_CALL_LOG))
-                                Need.GMAIL -> permissions.launch(arrayOf(GmailSource.PERMISSION))
-                                Need.BLUETOOTH -> permissions.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
-                                Need.HEALTH -> health.launch(HealthSource.ALL)
-                                Need.NOTIFICATIONS, Need.USAGE -> scope.launch {
-                                    grantOverAdb(notifications = need == Need.NOTIFICATIONS, usage = need == Need.USAGE, callLog = false)
-                                }
-                                Need.LOCATION -> Unit
-                                Need.DATE -> settingsFor = spec
-                            }
-                        }) { Text(if (need == Need.DATE) "Choose date" else "Grant") }
-                    }
-                    if (spec.kind == Complication.GMAIL && !spec.configured) {
-                        Button(onClick = {
-                            replacing = spec
-                            accountChooser.launch(chooseGoogleAccount(spec.arg))
-                        }) { Text("Choose account") }
-                    }
-                    OutlinedButton(onClick = { settingsFor = spec }) { Text("Settings") }
-                    val index = chips.indexOfFirst { it.key == spec.key }
-                    if (index > 0) {
-                        TextButton(onClick = {
-                            Prefs.setChips(context, chips.toMutableList().apply { add(index - 1, removeAt(index)) })
-                        }) { Text("Move up") }
-                    }
-                    TextButton(onClick = { Prefs.setChips(context, chips.filter { it.key != spec.key }) }) { Text("Remove") }
-                }
-                // Android blocks notification and usage access for apps installed outside the Play
-                // Store until "Allow restricted settings"; wireless debugging grants them directly.
-                if (missing.firstOrNull() == Need.NOTIFICATIONS || missing.firstOrNull() == Need.USAGE) {
-                    TextButton(onClick = {
-                        val intent = if (missing.first() == Need.NOTIFICATIONS) {
-                            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
-                                .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, NotificationCounter.component(context).flattenToString())
-                        } else {
-                            Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                        }
-                        runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    }) { Text("Or open the setting") }
-                    Text("Grant uses wireless debugging (Wi-Fi needed).", style = MaterialTheme.typography.bodySmall)
-                }
-                if (missing.firstOrNull() == Need.CALL_LOG) {
-                    TextButton(enabled = !busy, onClick = {
-                        scope.launch { grantOverAdb(notifications = false, usage = false, callLog = true) }
-                    }) { Text("If the prompt does not appear: grant with wireless debugging") }
-                }
+        ReorderableChips(
+            chips = chips,
+            onReorder = { Prefs.setChips(context, it) },
+        ) { spec ->
+            val missing = needs(context, spec, healthGranted).firstOrNull()
+            val status = when {
+                !spec.configured -> "Choose the account to count"
+                missing != null -> missing.text
+                else -> null
             }
+            ChipRow(
+                icon = chipIcon(spec),
+                title = chipTitle(context, spec),
+                value = values[spec.key]?.text,
+                status = status,
+                onClick = { settingsFor = spec },
+            )
         }
-
-        HorizontalDivider()
-        Text(
-            if (chips.size < Chips.MAX_CHOSEN) "Add a chip" else "Remove a chip to add another (${Chips.MAX_CHOSEN} at most)",
-            style = MaterialTheme.typography.labelLarge
-        )
         if (chips.size < Chips.MAX_CHOSEN) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Complication.entries.filter { it.pickable }.forEach { kind ->
-                    val already = !kind.needsArg && chips.any { it.kind == kind }
-                    if (!already) {
-                        AssistChip(onClick = {
-                            when (kind) {
-                                Complication.GMAIL -> {
-                                    replacing = null
-                                    accountChooser.launch(chooseGoogleAccount(null))
-                                }
-                                Complication.APP_NOTIFICATIONS -> picking = { pkg -> add(ChipSpec(Complication.APP_NOTIFICATIONS, pkg)) }
-                                else -> add(ChipSpec(kind))
-                            }
-                        }, label = { Text(kind.label) })
-                    }
-                }
-            }
+            Button(onClick = { adding = true }) { Text("+ Add a chip") }
+        } else {
+            Text("Remove a chip to add another (${Chips.MAX_CHOSEN} at most).", style = MaterialTheme.typography.bodySmall)
+        }
+        TextButton(onClick = { showFitting = !showFitting }) { Text(if (showFitting) "Hide fitting details" else "Fitting details") }
+        if (showFitting) {
+            Text(
+                com.ataglanceplus.cards.WeatherCard.fitReport(context),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 
-    Text(
-        com.ataglanceplus.cards.WeatherCard.fitReport(context),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 4.dp)
-    )
-
+    if (adding) {
+        AddChipDialog(
+            chosen = chips,
+            onPick = { kind ->
+                adding = false
+                when (kind) {
+                    Complication.GMAIL -> {
+                        replacing = null
+                        accountChooser.launch(chooseGoogleAccount(null))
+                    }
+                    Complication.APP_NOTIFICATIONS -> picking = { pkg -> add(ChipSpec(Complication.APP_NOTIFICATIONS, pkg)) }
+                    Complication.HEALTH -> pickingMetric = true
+                    else -> add(ChipSpec(kind))
+                }
+            },
+            onDismiss = { adding = false }
+        )
+    }
+    if (pickingMetric) {
+        MetricPickerDialog(
+            chosen = chips,
+            onPick = { metric ->
+                pickingMetric = false
+                add(ChipSpec(Complication.HEALTH, metric.id))
+            },
+            onDismiss = { pickingMetric = false }
+        )
+    }
     settingsFor?.let { spec ->
+        val missing = needs(context, spec, healthGranted).firstOrNull()
         ChipSettingsDialog(
             spec,
             onPickApp = { onPicked -> picking = onPicked },
@@ -335,7 +347,62 @@ internal fun ChipsSection() {
                 replacing = spec
                 accountChooser.launch(chooseGoogleAccount(spec.arg))
             },
-            onDismiss = { settingsFor = null }
+            onDismiss = { settingsFor = null },
+            access = {
+                val now = values[spec.key]?.text
+                Text(
+                    when {
+                        !spec.configured -> "Choose the Gmail account to count."
+                        missing != null -> missing.text + "."
+                        now != null -> "Now: $now"
+                        else -> "Nothing to report right now."
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (spec.kind == Complication.BUDS) {
+                    Text("Experimental: shows each connected Bluetooth device that reports its battery (earbuds, headphones, watch).", style = MaterialTheme.typography.bodySmall)
+                }
+                if (spec.kind == Complication.STEPS || spec.kind == Complication.SLEEP || spec.kind == Complication.HEALTH) {
+                    Text("Reads Health Connect. Turn on Health Connect sync in Google Health or Fitbit.", style = MaterialTheme.typography.bodySmall)
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (missing != null && missing != Need.LOCATION && missing != Need.DATE) {
+                        Button(enabled = !busy || missing !in setOf(Need.NOTIFICATIONS, Need.USAGE, Need.CALL_LOG), onClick = { grant(spec, missing) }) { Text("Grant") }
+                    }
+                    if (spec.kind == Complication.GMAIL && !spec.configured) {
+                        Button(onClick = {
+                            settingsFor = null
+                            replacing = spec
+                            accountChooser.launch(chooseGoogleAccount(spec.arg))
+                        }) { Text("Choose account") }
+                    }
+                    // Android blocks notification and usage access for apps installed outside the Play
+                    // Store until "Allow restricted settings"; wireless debugging grants them directly.
+                    if (missing == Need.NOTIFICATIONS || missing == Need.USAGE) {
+                        TextButton(onClick = {
+                            val intent = if (missing == Need.NOTIFICATIONS) {
+                                Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                                    .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, NotificationCounter.component(context).flattenToString())
+                            } else {
+                                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                            }
+                            runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        }) { Text("Or open the setting") }
+                    }
+                    if (missing == Need.CALL_LOG) {
+                        TextButton(enabled = !busy, onClick = {
+                            scope.launch { grantOverAdb(notifications = false, usage = false, callLog = true) }
+                        }) { Text("Grant with wireless debugging") }
+                    }
+                }
+                if (missing == Need.NOTIFICATIONS || missing == Need.USAGE) {
+                    Text("Grant uses wireless debugging (Wi-Fi needed).", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            onRemove = {
+                settingsFor = null
+                Prefs.setChips(context, chips.filter { it.key != spec.key })
+            },
         )
     }
     picking?.let { onPicked ->
@@ -343,8 +410,152 @@ internal fun ChipsSection() {
     }
 }
 
+/** One chip in the list: icon, name, its value now (or what it needs), and a way into its settings. */
 @Composable
-private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -> Unit, onChooseAccount: () -> Unit, onDismiss: () -> Unit) {
+private fun ChipRow(icon: Int, title: String, value: String?, status: String?, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+            Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (status != null) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (value != null) {
+            Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
+        }
+        Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+    }
+}
+
+/**
+ * The chips in order, each with a ≡ handle: drag it up or down to move the chip. Rows swap as the
+ * dragged one passes the middle of its neighbour, and the order is saved when it is let go.
+ */
+@Composable
+private fun ReorderableChips(chips: List<ChipSpec>, onReorder: (List<ChipSpec>) -> Unit, row: @Composable (ChipSpec) -> Unit) {
+    var order by remember(chips) { mutableStateOf(chips) }
+    var dragging by remember { mutableStateOf<String?>(null) }
+    var offset by remember { mutableFloatStateOf(0f) }
+    val heights = remember { mutableMapOf<String, Int>() }
+    Column {
+        order.forEach { spec ->
+            key(spec.key) {
+                val lifted = dragging == spec.key
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { heights[spec.key] = it.height }
+                        .zIndex(if (lifted) 1f else 0f)
+                        .graphicsLayer { translationY = if (lifted) offset else 0f }
+                        .background(if (lifted) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent, RoundedCornerShape(12.dp))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .pointerInput(spec.key) {
+                                detectDragGestures(
+                                    onDragStart = { dragging = spec.key; offset = 0f },
+                                    onDragEnd = { dragging = null; offset = 0f; onReorder(order) },
+                                    onDragCancel = { dragging = null; offset = 0f; order = chips },
+                                ) { change, amount ->
+                                    change.consume()
+                                    offset += amount.y
+                                    val index = order.indexOfFirst { it.key == spec.key }
+                                    val next = order.getOrNull(index + 1)
+                                    val previous = order.getOrNull(index - 1)
+                                    if (next != null && offset > (heights[next.key] ?: 0) / 2f) {
+                                        offset -= heights[next.key] ?: 0
+                                        order = order.toMutableList().apply { add(index + 1, removeAt(index)) }
+                                    } else if (previous != null && offset < -(heights[previous.key] ?: 0) / 2f) {
+                                        offset += heights[previous.key] ?: 0
+                                        order = order.toMutableList().apply { add(index - 1, removeAt(index)) }
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("≡", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Box(modifier = Modifier.weight(1f)) { row(spec) }
+                }
+            }
+        }
+    }
+}
+
+/** Every kind of chip, by group; those that can be added once and already are, are left out. */
+@Composable
+private fun AddChipDialog(chosen: List<ChipSpec>, onPick: (Complication) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Add a chip") },
+        text = {
+            LazyColumn(modifier = Modifier.heightIn(max = 480.dp)) {
+                ADD_GROUPS.forEach { (group, kinds) ->
+                    val offered = kinds.filter { kind -> kind.needsArg || chosen.none { it.kind == kind } }
+                    if (offered.isNotEmpty()) {
+                        item { Text(group, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) }
+                        items(offered) { kind ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { onPick(kind) }.padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(painterResource(kind.icon), contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(if (kind == Complication.HEALTH) "Health metric…" else kind.label, modifier = Modifier.padding(start = 12.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+}
+
+/** The health metrics by group, those already added left out. */
+@Composable
+private fun MetricPickerDialog(chosen: List<ChipSpec>, onPick: (HealthMetric) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Health metric") },
+        text = {
+            LazyColumn(modifier = Modifier.heightIn(max = 480.dp)) {
+                item {
+                    Text("Only metrics your watch or apps record in Health Connect will show anything.", style = MaterialTheme.typography.bodySmall)
+                }
+                MetricGroup.entries.forEach { group ->
+                    val offered = HealthMetric.entries.filter { m -> m.group == group && chosen.none { it.kind == Complication.HEALTH && it.arg == m.id } }
+                    if (offered.isNotEmpty()) {
+                        item { Text(group.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) }
+                        items(offered) { metric ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { onPick(metric) }.padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(painterResource(metric.icon), contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(metric.label, modifier = Modifier.padding(start = 12.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun ChipSettingsDialog(
+    spec: ChipSpec,
+    onPickApp: (((String) -> Unit)) -> Unit,
+    onChooseAccount: () -> Unit,
+    onDismiss: () -> Unit,
+    access: @Composable () -> Unit,
+    onRemove: () -> Unit,
+) {
     val context = LocalContext.current
     var opens by remember { mutableStateOf(Prefs.chipApp(context, spec.key)) }
     var labels by remember { mutableStateOf<List<GmailSource.Label>?>(null) }
@@ -368,6 +579,7 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
         title = { Text(chipTitle(context, spec)) },
         text = {
             LazyColumn(modifier = Modifier.heightIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { access() } }
                 if (spec.kind == Complication.GMAIL) {
                     item {
                         Text("Gmail account", style = MaterialTheme.typography.labelLarge)
@@ -504,6 +716,9 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                             Text("${GmailSource.displayName(label)} (${label.unread} unread)", modifier = Modifier.padding(start = 8.dp))
                         }
                     }
+                }
+                item {
+                    TextButton(onClick = onRemove) { Text("Remove this chip", color = MaterialTheme.colorScheme.error) }
                 }
             }
         }

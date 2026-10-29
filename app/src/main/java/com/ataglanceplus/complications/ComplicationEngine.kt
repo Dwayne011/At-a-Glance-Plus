@@ -125,6 +125,9 @@ class ComplicationEngine(private val context: Context) {
         val granted = HealthSource.granted(context)
         set(Complication.STEPS, HealthSource.steps(context, granted))
         set(Complication.SLEEP, HealthSource.sleep(context, granted))
+        selected().filter { it.kind == Complication.HEALTH }.forEach { spec ->
+            HealthMetric.fromId(spec.arg)?.let { metric -> ChipValues.set(spec.key, HealthMetrics.value(context, metric, granted)) }
+        }
     }
 
     private fun updateNotificationChips(counts: Map<String, Int>) {
