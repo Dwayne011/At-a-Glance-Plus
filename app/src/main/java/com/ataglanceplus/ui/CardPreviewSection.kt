@@ -196,7 +196,9 @@ private fun SwitchRow(title: String, detail: String, checked: Boolean, onChange:
 /** Tickers, how often prices refresh, and when the finance card shows. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FinanceSettings(@Suppress("UNUSED_PARAMETER") settingsVersion: Int) {
+private fun FinanceSettings(settingsVersion: Int) {
+    // Read so this redraws when a setting changes: Compose ignores an unused parameter when deciding to skip.
+    if (settingsVersion < 0) return
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val status by FinanceSource.status.collectAsStateWithLifecycle()
@@ -330,7 +332,9 @@ private fun FinanceSettings(@Suppress("UNUSED_PARAMETER") settingsVersion: Int) 
 /** Teams and series to follow, and when their cards show. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SportsSettings(@Suppress("UNUSED_PARAMETER") settingsVersion: Int) {
+private fun SportsSettings(settingsVersion: Int) {
+    // Read so this redraws when a setting changes: Compose ignores an unused parameter when deciding to skip.
+    if (settingsVersion < 0) return
     val context = LocalContext.current
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<com.ataglanceplus.live.Followed>>(emptyList()) }
@@ -406,6 +410,9 @@ private fun SportsSettings(@Suppress("UNUSED_PARAMETER") settingsVersion: Int) {
     }
     SwitchRow("Next game when nothing's on", "Otherwise each team's card only shows around its games.", Prefs.sportsNextAlways(context)) {
         Prefs.setSportsNextAlways(context, it)
+    }
+    SwitchRow("Open games in Google", "Tapping a card shows Google's page for the game. Off: ESPN's.", Prefs.sportsOpenGoogle(context)) {
+        Prefs.setSportsOpenGoogle(context, it)
     }
     Text("Scores refresh every 30 seconds during a game. From ESPN's free public feed, which is unofficial and could change.", style = MaterialTheme.typography.bodySmall)
 }

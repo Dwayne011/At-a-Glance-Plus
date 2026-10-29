@@ -207,7 +207,7 @@ internal fun ChipsSection() {
             val missing = needs(context, spec, healthGranted)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(chipTitle(context, spec), style = MaterialTheme.typography.labelLarge)
-                val opens = appLabel(context, Prefs.chipApp(context, spec.key)) ?: "its usual app"
+                val opens = appLabel(context, Prefs.chipApp(context, spec.key)) ?: spec.defaultAppName(context) ?: "its usual app"
                 val status = (if (!spec.configured) "Choose the Gmail account to count" else null)
                     ?: values[spec.key]?.text?.let { "Now: $it" }
                     ?: missing.firstOrNull()?.text
@@ -349,7 +349,7 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                 }
                 item {
                     Text("When tapped, opens", style = MaterialTheme.typography.labelLarge)
-                    Text(appLabel(context, opens) ?: "Its usual app or screen")
+                    Text(appLabel(context, opens) ?: spec.defaultAppName(context)?.let { "$it (default)" } ?: "Its usual app or screen")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = {
                             onPickApp { pkg ->

@@ -48,12 +48,25 @@
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.whatsapp" />
         <package android:name="com.google.android.apps.healthdata" />
+        <package android:name="com.google.android.googlequicksearchbox" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="content" android:host="com.android.calendar" />
         </intent>
         <intent>
             <action android:name="android.service.smartspace.SmartspaceService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SHOW_ALARMS" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.POWER_USAGE_SUMMARY" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.BLUETOOTH_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.health.connect.action.HEALTH_HOME_SETTINGS" />
         </intent>
     </queries>
 

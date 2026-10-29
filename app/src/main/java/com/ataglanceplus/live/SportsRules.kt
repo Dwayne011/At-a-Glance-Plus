@@ -14,8 +14,21 @@ sealed class SportsShowing(val phase: SportsPhase) {
         override val instanceKey get() = "sports:${game.eventId}:$phase"
     }
 
-    class Race(val session: RaceSession, phase: SportsPhase) : SportsShowing(phase) {
-        override val instanceKey get() = "sports:${session.eventId}:${session.session}:$phase"
+    /**
+     * [session] is the one on the card: the one the rules chose, or another of the weekend's
+     * [sessions] the user stepped to with Next. The key stays the chosen one's, so a dismissal
+     * holds while stepping.
+     */
+    class Race(
+        val session: RaceSession,
+        phase: SportsPhase,
+        val sessions: List<RaceSession>,
+        /** Whether the next Next goes back to the session the rules chose. */
+        val lastStep: Boolean,
+        private val chosen: RaceSession,
+        private val chosenPhase: SportsPhase,
+    ) : SportsShowing(phase) {
+        override val instanceKey get() = "sports:${chosen.eventId}:${chosen.session}:$chosenPhase"
     }
 }
 
@@ -27,6 +40,7 @@ sealed class SportsShowing(val phase: SportsPhase) {
 object SportsRules {
 
     private const val HOUR = 3_600_000L
+    const val STEP_LASTS = 60_000L
 
     fun showing(context: Context, games: Map<String, List<Game>>, races: Map<String, List<RaceSession>>): List<SportsShowing> {
         val now = System.currentTimeMillis()
@@ -38,7 +52,7 @@ object SportsRules {
             if (f.isRacing) {
                 val sessions = races[f.key].orEmpty()
                 pick(sessions, now, before, after, next, { it.state }, { it.start }, { endOf(it) })
-                    ?.let { (s, phase) -> result += SportsShowing.Race(s, phase) }
+                    ?.let { (s, phase) -> result += stepped(context, sessions, s, phase, now, before) }
             } else {
                 val list = games[f.key].orEmpty()
                 pick(list, now, before, after, next, { it.state }, { it.start }, { endOf(it) })
@@ -62,6 +76,27 @@ object SportsRules {
             nextAlways -> upcoming to SportsPhase.NEXT
             else -> null
         }
+    }
+
+    /**
+     * The session the user stepped to with Next, counted from the chosen one and wrapping back to
+     * it. A step lasts a minute, so the card returns to what is on now by itself.
+     */
+    private fun stepped(
+        context: Context, sessions: List<RaceSession>, chosen: RaceSession, phase: SportsPhase, now: Long, before: Long,
+    ): SportsShowing.Race {
+        val base = sessions.indexOf(chosen)
+        val (eventId, steps, at) = Prefs.sportsRaceStep(context)
+        val step = if (eventId == chosen.eventId && now - at < STEP_LASTS) steps % sessions.size else 0
+        val session = sessions[(base + step) % sessions.size]
+        val shownPhase = when {
+            step == 0 -> phase
+            session.state == "in" -> SportsPhase.LIVE
+            session.state == "post" -> SportsPhase.AFTER
+            session.start - now in 0..before -> SportsPhase.BEFORE
+            else -> SportsPhase.NEXT
+        }
+        return SportsShowing.Race(session, shownPhase, sessions, step == sessions.size - 1, chosen, phase)
     }
 
     /** When a game ended: when it was first seen finished, else its start plus a typical length. */

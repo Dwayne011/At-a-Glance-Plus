@@ -31,6 +31,8 @@ object Prefs {
     private const val KEY_SPORTS_BEFORE = "sports_before_hours"
     private const val KEY_SPORTS_AFTER = "sports_after_hours"
     private const val KEY_SPORTS_NEXT = "sports_next_always"
+    private const val KEY_SPORTS_STEP = "sports_race_step"
+    private const val KEY_SPORTS_OPEN_GOOGLE = "sports_open_google"
     private const val KEY_FIN_TICKERS = "finance_tickers"
     private const val KEY_FIN_REFRESH = "finance_refresh_minutes"
     private const val KEY_FIN_MOVES = "finance_show_moves"
@@ -283,6 +285,27 @@ object Prefs {
 
     fun setSportsNextAlways(context: Context, on: Boolean) {
         get(context).edit().putBoolean(KEY_SPORTS_NEXT, on).apply()
+    }
+
+    /** Which race weekend the F1 card's Next was tapped on, how many times, and when last. */
+    fun sportsRaceStep(context: Context): Triple<String, Int, Long> {
+        val parts = get(context).getString(KEY_SPORTS_STEP, "").orEmpty().split('|')
+        return Triple(parts.getOrElse(0) { "" }, parts.getOrNull(1)?.toIntOrNull() ?: 0, parts.getOrNull(2)?.toLongOrNull() ?: 0L)
+    }
+
+    /** One more Next on [eventId]'s card; a new weekend, or a step that has run out, starts again. */
+    fun stepSportsRace(context: Context, eventId: String, lasts: Long) {
+        val now = System.currentTimeMillis()
+        val (id, steps, at) = sportsRaceStep(context)
+        val next = if (id == eventId && now - at < lasts) steps + 1 else 1
+        get(context).edit().putString(KEY_SPORTS_STEP, "$eventId|$next|$now").apply()
+    }
+
+    /** Tapping a sports card opens Google's page for the game (else ESPN's). */
+    fun sportsOpenGoogle(context: Context): Boolean = get(context).getBoolean(KEY_SPORTS_OPEN_GOOGLE, true)
+
+    fun setSportsOpenGoogle(context: Context, on: Boolean) {
+        get(context).edit().putBoolean(KEY_SPORTS_OPEN_GOOGLE, on).apply()
     }
 
     fun isSportsFollowKey(key: String?): Boolean = key == KEY_SPORTS_FOLLOWED

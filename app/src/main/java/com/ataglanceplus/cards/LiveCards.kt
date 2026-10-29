@@ -402,7 +402,7 @@ object LiveCards {
                 R.id.sports_league, R.id.sports_status, R.id.sports_note
             )
         }
-        val tap = gameTap(context, game.link, key)
+        val tap = gameTap(context, "${game.home.name} vs ${game.away.name}", game.link, key)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         val title = "${game.home.abbr} ${game.home.score ?: ""} ${game.away.abbr} ${game.away.score ?: ""}".trim()
@@ -416,34 +416,51 @@ object LiveCards {
         val views = RemoteViews(context.packageName, R.layout.card_race)
         val title = "${session.eventName} · ${session.session}"
         val podium = session.top.mapIndexed { i, name -> "${i + 1} ${name.substringAfter(". ")}" }.joinToString(" · ")
-        val (detail, badge) = when (showing.phase) {
-            SportsPhase.LIVE -> podium.ifEmpty { session.status } to "LIVE"
-            SportsPhase.AFTER -> podium.ifEmpty { session.status } to "Result"
-            SportsPhase.BEFORE -> "Starts ${clock(context, session.start)}" to countdown(session.start).removePrefix("in ")
-            SportsPhase.NEXT -> day(context, session.start) to "Next"
+        // The pill is the Next button, so what the session is doing leads the detail line.
+        val detail: CharSequence = when (showing.phase) {
+            SportsPhase.LIVE -> android.text.SpannableString("LIVE · " + podium.ifEmpty { session.status }).apply {
+                if (!aod) setSpan(android.text.style.ForegroundColorSpan(LIVE_RED), 0, 4, 0)
+            }
+            SportsPhase.AFTER -> "Result · " + podium.ifEmpty { session.status }
+            SportsPhase.BEFORE -> "${clock(context, session.start)} · ${countdown(session.start)}"
+            SportsPhase.NEXT -> day(context, session.start)
         }
         views.setTextViewText(R.id.race_title, title)
         views.setTextViewText(R.id.race_detail, detail)
-        views.setTextViewText(R.id.race_badge_text, badge)
-        if (showing.phase == SportsPhase.LIVE && !aod) views.setTextColor(R.id.race_badge_text, LIVE_RED)
+        if (showing.sessions.size > 1) {
+            views.setTextViewText(R.id.race_badge_text, if (showing.lastStep) "Back ›" else "Next ›")
+            views.setOnClickPendingIntent(R.id.race_next, CardActionReceiver.sportsStep(context, session.eventId))
+        } else {
+            views.setViewVisibility(R.id.race_next, View.GONE)
+        }
         if (aod) {
             Style.aodBody(views, R.id.race_title, R.id.race_detail, R.id.race_badge_text)
             views.setInt(R.id.race_badge, "setBackgroundResource", R.drawable.aod_outline_r12)
             views.setInt(R.id.race_badge_text, "setBackgroundResource", R.drawable.aod_outline_r14)
             views.setImageViewResource(R.id.race_icon, R.drawable.ic_nav_flag_aod)
         }
-        val tap = gameTap(context, session.link, key)
+        val tap = gameTap(context, "F1 ${session.eventName} ${session.session}", session.link, key)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
-        return Style.target(context, targetId(key), views, title, detail, R.drawable.ic_nav_flag, tap, if (showing.phase == SportsPhase.LIVE) 1.65f else 1.2f)
+        return Style.target(context, targetId(key), views, title, detail.toString(), R.drawable.ic_nav_flag, tap, if (showing.phase == SportsPhase.LIVE) 1.65f else 1.2f)
     }
 
-    /** The game's page (the ESPN app opens it when installed), after unlocking. */
-    private fun gameTap(context: Context, link: String?, key: String): PendingIntent {
+    /**
+     * After unlocking: Google's results for the game (scores, stats and highlights, in the Google
+     * app when installed), or ESPN's page if the user prefers it.
+     */
+    private fun gameTap(context: Context, search: String, link: String?, key: String): PendingIntent {
         val code = REQUEST_BASE + (key.hashCode() and 0xFFFF)
-        return if (link != null) Style.gated(context, Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)), code)
-        else Style.gatedApp(context, "com.espn.score_center", code)
+        if (Prefs.sportsOpenGoogle(context) || link == null) {
+            val app = Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, search).setPackage(GOOGLE_APP)
+            val intent = if (app.resolveActivity(context.packageManager) != null) app
+            else Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/search?q=" + android.net.Uri.encode(search)))
+            return Style.gated(context, intent, code)
+        }
+        return Style.gated(context, Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)), code)
     }
+
+    private const val GOOGLE_APP = "com.google.android.googlequicksearchbox"
 
     private fun clock(context: Context, time: Long): String =
         DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm a", Date(time)).toString()

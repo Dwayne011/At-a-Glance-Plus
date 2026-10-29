@@ -75,14 +75,33 @@ data class ChipSpec(val kind: Complication, val arg: String? = null) {
     private fun targetIntent(context: Context): Intent {
         val pm = context.packageManager
         val chosen = Prefs.chipApp(context, key)?.let { pm.getLaunchIntentForPackage(it) }
-        val intent = chosen ?: when (kind) {
-            Complication.ALARM -> Intent(AlarmClock.ACTION_SHOW_ALARMS)
-            Complication.STEPS, Complication.SLEEP -> Intent("android.health.connect.action.HEALTH_HOME_SETTINGS")
-            Complication.BATTERY -> Intent(Intent.ACTION_POWER_USAGE_SUMMARY)
-            Complication.BUDS -> Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
-            else -> defaultPackage()?.let { pm.getLaunchIntentForPackage(it) }
-        } ?: Intent(context, MainActivity::class.java)
+        val intent = chosen ?: defaultIntent(context) ?: Intent(context, MainActivity::class.java)
         return intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    /** This chip's usual screen, when the user has not chosen an app. */
+    private fun defaultIntent(context: Context): Intent? = when (kind) {
+        Complication.ALARM -> Intent(AlarmClock.ACTION_SHOW_ALARMS)
+        Complication.STEPS, Complication.SLEEP -> Intent("android.health.connect.action.HEALTH_HOME_SETTINGS")
+        Complication.BATTERY -> Intent(Intent.ACTION_POWER_USAGE_SUMMARY)
+        Complication.BUDS -> Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+        else -> defaultPackage()?.let { context.packageManager.getLaunchIntentForPackage(it) }
+    }
+
+    /**
+     * The name of the app a tap opens when none is chosen, for settings: "Clock", "Health
+     * Connect". Null when Android would ask which app to use, or nothing handles it.
+     */
+    fun defaultAppName(context: Context): String? {
+        val pm = context.packageManager
+        val intent = defaultIntent(context) ?: return null
+        val info = pm.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo ?: return null
+        // The "open with" chooser belongs to Android itself.
+        if (info.packageName == "android") return null
+        val activity = info.loadLabel(pm).toString()
+        val app = info.applicationInfo.loadLabel(pm).toString()
+        // Settings screens name the screen ("Bluetooth"); apps are better named by the app.
+        return if (info.packageName == "com.android.settings" && activity.isNotBlank()) "Settings › $activity" else app
     }
 
     fun tapIntent(context: Context): PendingIntent {
