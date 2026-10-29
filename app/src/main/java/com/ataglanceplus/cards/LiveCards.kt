@@ -679,12 +679,23 @@ object LiveCards {
 
     // --- 6.1 Incoming message toast ---
 
-    /** The toast shown in place of the first card, until it is swiped past, tapped or replaced. */
-    fun island(context: Context, aod: Boolean, message: IncomingMessage, hideText: Boolean): SmartspaceTarget {
+    /**
+     * The toast shown in place of the first card, until it is swiped past, tapped or replaced. The
+     * avatar pops in with a ring bursting out while [entering] (not yet seen on this surface), and
+     * pulses a halo in the app's colour throughout.
+     */
+    fun island(context: Context, aod: Boolean, message: IncomingMessage, hideText: Boolean, entering: Boolean): SmartspaceTarget {
         val views = RemoteViews(context.packageName, R.layout.include_island_message_toast)
         views.setTextViewText(R.id.island_app, message.app)
         views.setTextColor(R.id.island_app, message.colour)
         views.setInt(R.id.island_avatar, "setColorFilter", message.colour)
+        // The animated avatar draws the disc itself, so the plain one is only for the always-on display.
+        val tint = android.content.res.ColorStateList.valueOf(message.colour)
+        views.setColorStateList(R.id.island_fx_enter, "setIndeterminateTintList", tint)
+        views.setColorStateList(R.id.island_fx_pulse, "setIndeterminateTintList", tint)
+        views.setViewVisibility(R.id.island_fx_enter, if (!aod && entering) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.island_fx_pulse, if (!aod && !entering) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.island_avatar, if (aod) View.VISIBLE else View.INVISIBLE)
         views.setTextViewText(R.id.island_sender, message.sender)
         views.setTextViewText(R.id.island_initial, message.sender.trimStart('#', '+').take(1).uppercase())
         // On the lock screen, follow Android's "sensitive content" setting: sender only.

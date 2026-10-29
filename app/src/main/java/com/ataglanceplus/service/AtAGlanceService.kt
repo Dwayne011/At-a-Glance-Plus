@@ -301,7 +301,7 @@ class AtAGlanceService : SmartspaceService() {
         val aod = config.uiSurface == SURFACE_LOCKSCREEN && (screenOff || Prefs.aodPreview(this))
         // A card that fails to build must not take the whole app down: log it and show weather alone.
         val targets = try {
-            val data = cardData()
+            val data = cardData(sessionId)
             CardDeck.build(this, config.uiSurface, config.smartspaceTargetCount, aod, data).also {
                 Prefs.pruneDismissed(this, CardDeck.activeInstances(this, data))
             }
@@ -319,7 +319,7 @@ class AtAGlanceService : SmartspaceService() {
         Log.d(TAG, "pushed ${targets.size} target(s) to ${config.uiSurface}")
     }
 
-    private fun cardData() = CardData(
+    private fun cardData(sessionId: SmartspaceSessionId) = CardData(
         weather = WeatherRepository.weather.value,
         weatherStatus = WeatherRepository.status.value,
         nav = NotificationHub.nav.value,
@@ -332,6 +332,7 @@ class AtAGlanceService : SmartspaceService() {
         sports = runCatching { SportsRules.showing(this, SportsSource.games.value, SportsSource.races.value) }.getOrDefault(emptyList()),
         message = message,
         messageRemainingMs = (messageUntil - System.currentTimeMillis()).coerceAtLeast(0L),
+        messageEntering = sessionId !in islandSeen,
     )
 
     /** Fetches prices now and then at the user's interval, while the finance card is on and has tickers. */

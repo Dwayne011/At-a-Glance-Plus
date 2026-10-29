@@ -29,6 +29,8 @@ data class CardData(
     val torch: com.ataglanceplus.live.TorchNow?,
     val message: IncomingMessage?,
     val messageRemainingMs: Long,
+    /** True until the message card has been shown on this surface: it plays its entrance. */
+    val messageEntering: Boolean,
 )
 
 /** Everything shown on a surface, in order. */
@@ -103,7 +105,7 @@ object CardDeck {
         val contextual = buildList {
             if (data.message != null && data.messageRemainingMs > 0 && on(CardType.MESSAGES)) {
                 val hideText = surface == AtAGlanceService.SURFACE_LOCKSCREEN && !LiveCards.lockScreenShowsPrivate(context)
-                card("message") { LiveCards.island(context, aod, data.message, hideText) }
+                card("message") { LiveCards.island(context, aod, data.message, hideText, data.messageEntering) }
             }
             // The torch first: it is on now, and the card is how to turn it off.
             torch?.let { card("torch") { LiveCards.torch(context, aod, it) } }

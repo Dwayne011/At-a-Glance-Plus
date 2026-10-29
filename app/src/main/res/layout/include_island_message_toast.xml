@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    6.1 Incoming message, shown in place of the first card for 4.5 seconds.
-    It is pushed as its own card and swapped back afterwards; the launcher draws the swap, so the
-    spec's slide/scale entry curve cannot be controlled. The 3dp countdown bar steps every 0.5s.
+    6.1 Incoming message, shown in place of the first card until it is swiped past, tapped or
+    replaced. The launcher draws the swap, so the spec's slide/scale curve cannot be controlled;
+    instead the avatar animates: island_fx_enter (pop, ring burst, then pulse) until the card has
+    been seen, island_fx_pulse (pulse only) afterwards. Neither is shown on the always-on display,
+    which uses the plain island_avatar.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/card_root"
@@ -15,6 +17,37 @@
         android:layout_gravity="center_vertical"
         android:background="@drawable/card_bg_island"
         android:clipToOutline="true">
+
+        <!-- Behind the avatar, centred on it (16dp padding + 21dp radius - 36dp). -->
+        <ProgressBar
+            android:id="@+id/island_fx_enter"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="start|top"
+            android:layout_marginStart="1dp"
+            android:layout_marginTop="1dp"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_island_enter"
+            android:indeterminateOnly="true"
+            android:maxHeight="72dp"
+            android:maxWidth="72dp"
+            android:minHeight="72dp"
+            android:minWidth="72dp" />
+
+        <ProgressBar
+            android:id="@+id/island_fx_pulse"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="start|top"
+            android:layout_marginStart="1dp"
+            android:layout_marginTop="1dp"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_island_pulse"
+            android:indeterminateOnly="true"
+            android:maxHeight="72dp"
+            android:maxWidth="72dp"
+            android:minHeight="72dp"
+            android:minWidth="72dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
