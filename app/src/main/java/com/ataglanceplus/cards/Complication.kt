@@ -242,7 +242,7 @@ object Chips {
         /** A wide pill's natural width for [value], in dp (side-by-side devices for Bluetooth). */
         fun bigWidthDp(context: Context, value: ChipValues.Value): Float {
             val inner = if (value.parts.size > 1) {
-                value.parts.sumOf { (16 + 4 + textWidthDp(context, it.text, 12.5f)).toDouble() }.toFloat() + PART_GAP_DP * (value.parts.size - 1)
+                value.parts.sumOf { (16 + 4 + textWidthDp(context, it.named, 12.5f)).toDouble() }.toFloat() + PART_GAP_DP * (value.parts.size - 1)
             } else {
                 iconDp + 4 + textWidthDp(context, value.wide ?: value.text, textSp)
             }
@@ -441,19 +441,19 @@ object Chips {
             var row = 0
             var used = 0f
             for (part in value.parts) {
-                val width = 16 + 4 + textWidthDp(context, part.text, 12.5f) + if (rows[row].isEmpty()) 0 else PART_GAP_DP
+                val width = 16 + 4 + textWidthDp(context, part.named, 12.5f) + if (rows[row].isEmpty()) 0 else PART_GAP_DP
                 if (rows[row].isNotEmpty() && used + width > inner) {
                     if (row + 1 >= rows.size) break
                     row++
                     used = 0f
                 }
                 rows[row] += part
-                used += if (rows[row].size == 1) 16 + 4 + textWidthDp(context, part.text, 12.5f) else width
+                used += if (rows[row].size == 1) 16 + 4 + textWidthDp(context, part.named, 12.5f) else width
             }
-            rows[0].forEachIndexed { i, part -> child.addView(R.id.chip_row, partView(context, part, aod, gap = i > 0)) }
+            rows[0].forEachIndexed { i, part -> child.addView(R.id.chip_row, partView(context, part, aod, gap = i > 0, named = true)) }
             if (rows.size > 1 && rows[1].isNotEmpty()) {
                 child.setViewVisibility(R.id.chip_row2, View.VISIBLE)
-                rows[1].forEachIndexed { i, part -> child.addView(R.id.chip_row2, partView(context, part, aod, gap = i > 0)) }
+                rows[1].forEachIndexed { i, part -> child.addView(R.id.chip_row2, partView(context, part, aod, gap = i > 0, named = true)) }
             }
             child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + value.parts.joinToString(", ") { it.text })
             return child
@@ -532,10 +532,10 @@ object Chips {
                 child.setViewVisibility(R.id.chip_text, View.GONE)
                 var used = 0f
                 value.parts.forEachIndexed { k, part ->
-                    val w = 16 + 4 + textWidthDp(context, part.text, 12.5f) + if (k > 0) PART_GAP_DP else 0
+                    val w = 16 + 4 + textWidthDp(context, part.named, 12.5f) + if (k > 0) PART_GAP_DP else 0
                     if (k > 0 && used + w > inner) return@forEachIndexed
                     used += w
-                    child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0))
+                    child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0, named = true))
                 }
             } else {
                 val name = label(context, spec)
@@ -583,19 +583,19 @@ object Chips {
             var row = 0
             var used = 0f
             for (part in value.parts) {
-                val w = 16 + 4 + textWidthDp(context, part.text, 12.5f) + if (rows[row].isEmpty()) 0 else PART_GAP_DP
+                val w = 16 + 4 + textWidthDp(context, part.named, 12.5f) + if (rows[row].isEmpty()) 0 else PART_GAP_DP
                 if (rows[row].isNotEmpty() && used + w > inner) {
                     if (row == 1) break
                     row = 1
                     used = 0f
                 }
-                used += if (rows[row].isEmpty()) 16 + 4 + textWidthDp(context, part.text, 12.5f) else w
+                used += if (rows[row].isEmpty()) 16 + 4 + textWidthDp(context, part.named, 12.5f) else w
                 rows[row] += part
             }
-            rows[0].forEachIndexed { k, part -> child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0)) }
+            rows[0].forEachIndexed { k, part -> child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0, named = true)) }
             if (rows[1].isNotEmpty()) {
                 child.setViewVisibility(R.id.chip_row2, View.VISIBLE)
-                rows[1].forEachIndexed { k, part -> child.addView(R.id.chip_row2, partView(context, part, aod, gap = k > 0)) }
+                rows[1].forEachIndexed { k, part -> child.addView(R.id.chip_row2, partView(context, part, aod, gap = k > 0, named = true)) }
             }
         } else {
             val name = label(context, spec)
@@ -629,11 +629,11 @@ object Chips {
         else -> spec.kind.label
     }
 
-    /** One Bluetooth device: its icon and level. */
-    private fun partView(context: Context, part: ChipValues.Part, aod: Boolean, gap: Boolean = false): RemoteViews {
-        val row = RemoteViews(context.packageName, R.layout.include_chip_part)
+    /** One Bluetooth device: its icon and level, and its name where there is room ([named]). */
+    private fun partView(context: Context, part: ChipValues.Part, aod: Boolean, gap: Boolean = false, named: Boolean = false): RemoteViews {
+        val row = RemoteViews(context.packageName, if (named) R.layout.include_chip_part_named else R.layout.include_chip_part)
         row.setImageViewResource(R.id.chip_icon, if (aod) part.aodIcon else part.icon)
-        row.setTextViewText(R.id.chip_text, part.text)
+        row.setTextViewText(R.id.chip_text, if (named) part.named else part.text)
         if (aod) row.setTextColor(R.id.chip_text, Style.AOD_TEXT)
         if (gap) row.setViewLayoutMargin(R.id.chip_part, RemoteViews.MARGIN_START, PART_GAP_DP.toFloat(), android.util.TypedValue.COMPLEX_UNIT_DIP)
         return row

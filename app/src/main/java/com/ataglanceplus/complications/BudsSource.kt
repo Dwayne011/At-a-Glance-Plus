@@ -61,7 +61,8 @@ class BudsSource(private val context: Context, private val onChange: () -> Unit)
     fun value(): ChipValues.Value? {
         val parts = levels.values.toList()
         if (parts.isEmpty()) return null
-        return ChipValues.Value(parts.first().text, parts = parts)
+        // Extended, a lone device shows its name too.
+        return ChipValues.Value(parts.first().text, parts = parts, wide = parts.joinToString(" · ") { it.named }, detail = parts.first().name)
     }
 
     /** Headphones, a watch, or anything else, from the device's Bluetooth class. */
@@ -73,7 +74,10 @@ class BudsSource(private val context: Context, private val onChange: () -> Unit)
             BluetoothClass.Device.Major.WEARABLE -> R.drawable.ic_comp_watch to R.drawable.ic_comp_watch_aod
             else -> R.drawable.ic_comp_bluetooth to R.drawable.ic_comp_bluetooth_aod
         }
-        return ChipValues.Part(icon, aod, "$level%")
+        // The name the user gave it, else its own; shortened so a chip can still hold it.
+        val name = runCatching { device.alias ?: device.name }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { if (it.length > 18) it.take(17).trimEnd() + "…" else it }
+        return ChipValues.Part(icon, aod, "$level%", name)
     }
 
     /** Levels for devices already connected when we start listening. */

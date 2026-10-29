@@ -28,7 +28,10 @@ object ChipValues {
         val detail: String? = null,
     )
 
-    data class Part(val icon: Int, val aodIcon: Int, val text: String)
+    data class Part(val icon: Int, val aodIcon: Int, val text: String, val name: String? = null) {
+        /** With its name, where there is room: "Pixel Buds Pro 100%". */
+        val named: String get() = name?.let { "$it $text" } ?: text
+    }
 
     private val _values = MutableStateFlow<Map<String, Value>>(emptyMap())
     val values: StateFlow<Map<String, Value>> = _values.asStateFlow()
