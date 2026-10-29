@@ -618,7 +618,7 @@ private val DOWN = Color(0xFFD03B3B)
 
 /**
  * A stock: the user's stocks to switch between, the price and its change over the chosen range,
- * the price over that range, and the day's figures. Links on to Google Finance.
+ * its candles and VWAP over that range, and the day's figures. Links on to Google Finance.
  */
 @Composable
 private fun StockDashboard(initial: String) {
@@ -670,17 +670,43 @@ private fun StockDashboard(initial: String) {
                         FilterChip(selected = r == range, onClick = { range = r }, label = { Text(r.label) })
                     }
                 }
-                val points = h.points.map { (t, v) -> Reading(Instant.ofEpochMilli(t), v) }
-                if (points.size >= 2) {
-                    LineChart(
-                        points = points,
-                        describe = { r ->
-                            val at = r.time.atZone(ZoneId.systemDefault())
-                            val whenText = if (range.ordinal <= com.ataglanceplus.live.FinanceSource.Range.WEEK.ordinal) "${dayAndDate(at.toLocalDate())} ${clock(context, r.time)}" else dayAndDate(at.toLocalDate())
-                            "$whenText · ${money(r.value)}"
+                if (h.candles.size >= 2) {
+                    val zone = ZoneId.systemDefault()
+                    val intraday = range.ordinal <= com.ataglanceplus.live.FinanceSource.Range.WEEK.ordinal
+                    fun whenText(c: com.ataglanceplus.live.FinanceSource.Candle): String {
+                        val at = Instant.ofEpochMilli(c.time)
+                        val date = dayAndDate(at.atZone(zone).toLocalDate())
+                        return if (intraday) "$date ${clock(context, at)}" else date
+                    }
+                    // Four labels along the bottom: times for one day, days for five, dates beyond.
+                    val labelPattern = when (range) {
+                        com.ataglanceplus.live.FinanceSource.Range.DAY -> null
+                        com.ataglanceplus.live.FinanceSource.Range.WEEK -> "EEE"
+                        com.ataglanceplus.live.FinanceSource.Range.YEAR -> "MMM"
+                        else -> "dMMM"
+                    }?.let { DateTimeFormatter.ofPattern(android.text.format.DateFormat.getBestDateTimePattern(locale, it), locale) }
+                    val last = h.candles.lastIndex
+                    val axis = listOf(0, last / 3, 2 * last / 3, last).distinct().map { i ->
+                        val at = Instant.ofEpochMilli(h.candles[i].time)
+                        i to (labelPattern?.format(at.atZone(zone)) ?: clock(context, at))
+                    }
+                    CandleChart(
+                        candles = h.candles,
+                        vwap = h.vwap,
+                        vwapStarts = h.vwapStarts,
+                        describe = { i ->
+                            val c = h.candles[i]
+                            "${whenText(c)}\nOpen ${money(c.open)} · High ${money(c.high)} · Low ${money(c.low)} · Close ${money(c.close)}" +
+                                (h.vwap.getOrNull(i)?.let { " · VWAP ${money(it)}" } ?: "")
                         },
                         format = { money(it) },
-                        markers = false,
+                        axis = axis,
+                    )
+                    Text(
+                        if (intraday) "VWAP, the volume-weighted average price, starts again each trading day."
+                        else "VWAP, the volume-weighted average price, is anchored to the start of the range.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
                     Text("No prices for this range yet.", style = MaterialTheme.typography.bodyMedium)
@@ -696,6 +722,97 @@ private fun StockDashboard(initial: String) {
         }
     }
     Text("Prices from Yahoo Finance's free feed; some exchanges are 15 minutes behind.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** VWAP's line: the first categorical blue, in its dark-theme and light-theme steps. */
+private val VWAP_DARK = Color(0xFF3987E5)
+private val VWAP_LIGHT = Color(0xFF2A78D6)
+
+/**
+ * Candles over time, filled green for a rise (close at or above open) and red for a fall, with
+ * wicks from low to high, and the VWAP as a 2dp blue line (broken where it starts again). Scaled
+ * to the range's own low and high (marked at the left). A legend names the three marks; a tap
+ * picks a candle and describes its open, high, low, close and VWAP above the chart.
+ */
+@Composable
+private fun CandleChart(
+    candles: List<com.ataglanceplus.live.FinanceSource.Candle>,
+    vwap: List<Double?>,
+    vwapStarts: Set<Int>,
+    describe: (Int) -> String,
+    format: (Double) -> String,
+    axis: List<Pair<Int, String>>,
+) {
+    if (candles.isEmpty()) return
+    var selected by remember(candles) { mutableIntStateOf(candles.lastIndex) }
+    val vwapColour = if (isSystemInDarkTheme()) VWAP_DARK else VWAP_LIGHT
+    val grid = MaterialTheme.colorScheme.outlineVariant
+    val averages = vwap.filterNotNull()
+    val low = minOf(candles.minOf { it.low }, averages.minOrNull() ?: Double.MAX_VALUE)
+    val high = maxOf(candles.maxOf { it.high }, averages.maxOrNull() ?: -Double.MAX_VALUE).let { if (it == low) low + 1 else it }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            LegendKey(UP, "Up", line = false)
+            LegendKey(DOWN, "Down", line = false)
+            LegendKey(vwapColour, "VWAP", line = true)
+        }
+        Text(describe(selected), style = MaterialTheme.typography.bodyMedium)
+        Row {
+            Column(modifier = Modifier.height(180.dp).width(52.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Text(format(high), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(format(low), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .pointerInput(candles) {
+                            detectTapGestures { at -> selected = (at.x / size.width * candles.size).toInt().coerceIn(0, candles.lastIndex) }
+                        }
+                ) {
+                    val pad = 4.dp.toPx()
+                    val slot = size.width / candles.size
+                    val body = (slot * 0.7f).coerceAtLeast(1f)
+                    val wick = 1.dp.toPx().coerceAtMost(body)
+                    fun x(i: Int) = (i + 0.5f) * slot
+                    fun y(v: Double) = pad + (1 - ((v - low) / (high - low)).toFloat()) * (size.height - 2 * pad)
+                    drawLine(grid, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
+                    // The chosen candle's faint guide, behind the marks.
+                    drawLine(grid, Offset(x(selected), 0f), Offset(x(selected), size.height), strokeWidth = 1.dp.toPx())
+                    candles.forEachIndexed { i, c ->
+                        val colour = if (c.close >= c.open) UP else DOWN
+                        drawLine(colour, Offset(x(i), y(c.high)), Offset(x(i), y(c.low)), strokeWidth = wick)
+                        val top = y(maxOf(c.open, c.close))
+                        val height = (y(minOf(c.open, c.close)) - top).coerceAtLeast(1.dp.toPx())
+                        drawRect(colour, topLeft = Offset(x(i) - body / 2, top), size = Size(body, height))
+                    }
+                    val path = Path()
+                    var drawing = false
+                    vwap.forEachIndexed { i, v ->
+                        if (v == null || i in vwapStarts) drawing = false
+                        if (v == null) return@forEachIndexed
+                        if (drawing) path.lineTo(x(i), y(v)) else path.moveTo(x(i), y(v))
+                        drawing = true
+                    }
+                    drawPath(path, vwapColour, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                }
+                AxisLabels(axis, candles.size)
+            }
+        }
+    }
+}
+
+/** One legend entry: a filled square for candles, a short line for the VWAP. */
+@Composable
+private fun LegendKey(colour: Color, label: String, line: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Canvas(modifier = Modifier.size(width = 14.dp, height = 10.dp)) {
+            if (line) drawLine(colour, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), strokeWidth = 2.dp.toPx())
+            else drawRect(colour, topLeft = Offset(2.dp.toPx(), 0f), size = Size(size.width - 4.dp.toPx(), size.height))
+        }
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 @Composable

@@ -83,6 +83,7 @@ class AtAGlanceService : SmartspaceService() {
             if (intent.action == Intent.ACTION_SCREEN_OFF || intent.action == Intent.ACTION_SCREEN_ON) {
                 screenOff = intent.action == Intent.ACTION_SCREEN_OFF
             }
+            if (intent.action == Intent.ACTION_SCREEN_ON) refreshIfStale()
             pushAll()
         }
     }
@@ -96,10 +97,23 @@ class AtAGlanceService : SmartspaceService() {
         override fun onChange(selfChange: Boolean) = refreshCalendar()
     }
 
-    /** The message toast on show, and when it ends. */
+    /**
+     * The message toast on show, and when it ends at the latest. [islandSeen] holds the sessions
+     * that have shown it, so a later page change there can dismiss it.
+     */
     private var message: IncomingMessage? = null
     private var messageUntil = 0L
     private var islandJob: Job? = null
+    private val islandSeen = mutableSetOf<SmartspaceSessionId>()
+
+    /**
+     * When prices and sports were last fetched, by the wall clock. The refresh loops' own delays
+     * stop while the phone is in deep sleep, so these say whether the cards are out of date when
+     * the screen comes back on.
+     */
+    private var financeFetchedAt = 0L
+    private var sportsScheduledAt = 0L
+    private var sportsCheckedAt = 0L
     private var financeJob: Job? = null
     private var sportsJob: Job? = null
     private var shownFinance: String? = null
@@ -245,10 +259,20 @@ class AtAGlanceService : SmartspaceService() {
             else -> "event ${event.eventType}"
         }
         val surface = sessions[sessionId]?.uiSurface ?: "?"
-        ServiceState.event("$name on $surface")
+        val targetId = event.smartspaceTarget?.smartspaceTargetId
+        ServiceState.event("$name on $surface" + (targetId?.let { " (${CardDeck.label(it)})" } ?: ""))
+        // The message stays until it is swiped past (another page shown after it was), tapped,
+        // or replaced. Events from before it was shown on this surface do not count.
+        if (message != null) {
+            val island = targetId == LiveCards.ISLAND_TARGET_ID
+            when (event.eventType) {
+                SmartspaceTargetEvent.EVENT_TARGET_SHOWN ->
+                    if (island) islandSeen += sessionId else if (targetId != null && sessionId in islandSeen) endMessage()
+                SmartspaceTargetEvent.EVENT_TARGET_INTERACTION -> if (island) endMessage()
+            }
+        }
         // Dismissed from the launcher's own menu: same as the card's ✕. The weather card stays.
         if (event.eventType == SmartspaceTargetEvent.EVENT_TARGET_DISMISS || event.eventType == SmartspaceTargetEvent.EVENT_TARGET_BLOCK) {
-            val targetId = event.smartspaceTarget?.smartspaceTargetId
             when {
                 targetId == LiveCards.ISLAND_TARGET_ID -> endMessage()
                 targetId != null -> LiveCards.instanceKey(targetId)?.let { Prefs.dismiss(this, it) } ?: pushAll()
@@ -260,6 +284,7 @@ class AtAGlanceService : SmartspaceService() {
     override fun onDestroySmartspaceSession(sessionId: SmartspaceSessionId) {
         Log.i(TAG, "session destroyed: ${sessionId.id}")
         sessions.remove(sessionId)
+        islandSeen.remove(sessionId)
         ServiceState.sessionDestroyed(sessionId.id)
     }
 
@@ -317,6 +342,7 @@ class AtAGlanceService : SmartspaceService() {
                 if (Prefs.cardEnabled(this@AtAGlanceService, CardType.FINANCE)) {
                     runCatching { FinanceSource.refresh(this@AtAGlanceService) }
                         .onFailure { CrashLog.record(this@AtAGlanceService, "Fetching prices", it) }
+                    financeFetchedAt = System.currentTimeMillis()
                 }
                 delay(Prefs.financeRefreshMinutes(this@AtAGlanceService) * 60_000L)
             }
@@ -331,14 +357,14 @@ class AtAGlanceService : SmartspaceService() {
         sportsJob?.cancel()
         if (Prefs.sportsFollowed(this).isEmpty()) return
         sportsJob = scope.launch {
-            var lastSchedule = 0L
             while (true) {
                 if (Prefs.cardEnabled(this@AtAGlanceService, CardType.SPORTS)) {
-                    if (System.currentTimeMillis() - lastSchedule > 30 * 60_000L) {
+                    if (System.currentTimeMillis() - sportsScheduledAt > SPORTS_SCHEDULE_MS) {
                         runCatching { SportsSource.refreshSchedules(this@AtAGlanceService) }
                             .onFailure { CrashLog.record(this@AtAGlanceService, "Fetching sports schedules", it) }
-                        lastSchedule = System.currentTimeMillis()
+                        sportsScheduledAt = System.currentTimeMillis()
                     }
+                    sportsCheckedAt = System.currentTimeMillis()
                     val live = runCatching { SportsSource.refreshLive(this@AtAGlanceService) }
                         .onFailure { CrashLog.record(this@AtAGlanceService, "Fetching live scores", it) }
                         .getOrDefault(false)
@@ -348,6 +374,17 @@ class AtAGlanceService : SmartspaceService() {
                 }
             }
         }
+    }
+
+    /**
+     * The screen came on: fetch prices and scores again if their timers fell behind while the
+     * phone slept, so the cards do not show yesterday's figures. Also ends a message past its time.
+     */
+    private fun refreshIfStale() {
+        val now = System.currentTimeMillis()
+        if (now - financeFetchedAt > Prefs.financeRefreshMinutes(this) * 60_000L) restartFinance()
+        if (now - sportsScheduledAt > SPORTS_SCHEDULE_MS || now - sportsCheckedAt > SPORTS_STALE_MS) restartSports()
+        if (message != null && now >= messageUntil) endMessage()
     }
 
     private fun refreshCalendar() {
@@ -361,27 +398,25 @@ class AtAGlanceService : SmartspaceService() {
     }
 
     /**
-     * A new message: show the toast in first place for 4.5 seconds, redrawing every half second to
-     * step its countdown bar. A newer message replaces it and restarts the countdown.
+     * A new message: show the toast in first place, drawn once, until it is swiped past, tapped,
+     * dismissed or replaced by a newer message, and at most [MESSAGE_MAX_MS].
      */
     private fun showMessage(incoming: IncomingMessage) {
         if (!Prefs.cardEnabled(this, CardType.MESSAGES) || screenOff) return
         message = incoming
-        messageUntil = System.currentTimeMillis() + LiveCards.ISLAND_MS
+        messageUntil = System.currentTimeMillis() + MESSAGE_MAX_MS
+        islandSeen.clear()
         islandJob?.cancel()
         islandJob = scope.launch {
-            while (true) {
-                pushAll()
-                val left = messageUntil - System.currentTimeMillis()
-                if (left <= 0) break
-                delay(minOf(ISLAND_STEP_MS, left))
-            }
+            delay(MESSAGE_MAX_MS)
             endMessage()
         }
+        pushAll()
     }
 
     private fun endMessage() {
         islandJob?.cancel()
+        islandSeen.clear()
         message = null
         messageUntil = 0L
         pushAll()
@@ -395,7 +430,9 @@ class AtAGlanceService : SmartspaceService() {
 
         private const val WEATHER_CHECK_MS = 5 * 60 * 1000L
         private const val DATE_CHECK_MS = 60 * 1000L
-        private const val ISLAND_STEP_MS = 500L
+        private const val MESSAGE_MAX_MS = 10 * 60_000L
+        private const val SPORTS_SCHEDULE_MS = 30 * 60_000L
+        private const val SPORTS_STALE_MS = 60_000L
         private const val TRACK_BAR_MS = 30_000L
     }
 }

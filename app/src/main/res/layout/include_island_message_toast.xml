@@ -145,15 +145,5 @@
                     android:textStyle="bold" />
             </FrameLayout>
         </LinearLayout>
-
-        <ProgressBar
-            android:id="@+id/island_countdown"
-            style="@android:style/Widget.Material.ProgressBar.Horizontal"
-            android:layout_width="match_parent"
-            android:layout_height="3dp"
-            android:layout_gravity="bottom"
-            android:max="1000"
-            android:progress="1000"
-            android:progressDrawable="@drawable/island_progress" />
     </FrameLayout>
 </FrameLayout>

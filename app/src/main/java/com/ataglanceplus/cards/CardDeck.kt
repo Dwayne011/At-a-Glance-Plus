@@ -103,7 +103,7 @@ object CardDeck {
         val contextual = buildList {
             if (data.message != null && data.messageRemainingMs > 0 && on(CardType.MESSAGES)) {
                 val hideText = surface == AtAGlanceService.SURFACE_LOCKSCREEN && !LiveCards.lockScreenShowsPrivate(context)
-                card("message") { LiveCards.island(context, aod, data.message, data.messageRemainingMs, hideText) }
+                card("message") { LiveCards.island(context, aod, data.message, hideText) }
             }
             // The torch first: it is on now, and the card is how to turn it off.
             torch?.let { card("torch") { LiveCards.torch(context, aod, it) } }

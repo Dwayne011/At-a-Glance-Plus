@@ -57,9 +57,6 @@ object LiveCards {
     const val ISLAND_TARGET_ID = "aagp_island"
     private const val TARGET_PREFIX = "aagp_card:"
 
-    /** Message toast duration (spec 6.1). */
-    const val ISLAND_MS = 4_500L
-
     fun targetId(instanceKey: String) = TARGET_PREFIX + instanceKey
 
     /** The instance key behind a target id, or null for the weather card and the toast. */
@@ -682,8 +679,8 @@ object LiveCards {
 
     // --- 6.1 Incoming message toast ---
 
-    /** The toast shown in place of the first card; [remainingMs] drives the 3dp countdown bar. */
-    fun island(context: Context, aod: Boolean, message: IncomingMessage, remainingMs: Long, hideText: Boolean): SmartspaceTarget {
+    /** The toast shown in place of the first card, until it is swiped past, tapped or replaced. */
+    fun island(context: Context, aod: Boolean, message: IncomingMessage, hideText: Boolean): SmartspaceTarget {
         val views = RemoteViews(context.packageName, R.layout.include_island_message_toast)
         views.setTextViewText(R.id.island_app, message.app)
         views.setTextColor(R.id.island_app, message.colour)
@@ -693,7 +690,6 @@ object LiveCards {
         // On the lock screen, follow Android's "sensitive content" setting: sender only.
         val text = if (hideText) "New message" else message.text
         views.setTextViewText(R.id.island_message, text)
-        views.setProgressBar(R.id.island_countdown, 1000, ((remainingMs * 1000) / ISLAND_MS).toInt().coerceIn(0, 1000), false)
         // Reply and the toast itself open the conversation, after unlocking.
         val open = gate(context, message.open, message.pkg, "message:${message.key}")
         if (aod) {
@@ -702,7 +698,6 @@ object LiveCards {
             views.setImageViewResource(R.id.island_badge_icon, R.drawable.ic_chat_badge_aod)
             views.setViewVisibility(R.id.island_eq, View.GONE)
             views.setViewVisibility(R.id.island_reply, View.GONE)
-            views.setViewVisibility(R.id.island_countdown, View.GONE)
         } else {
             views.setOnClickPendingIntent(R.id.island_reply, open)
         }

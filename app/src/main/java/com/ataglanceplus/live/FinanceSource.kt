@@ -106,11 +106,22 @@ object FinanceSource {
         DAY("1D", "1d", "5m"), WEEK("5D", "5d", "30m"), MONTH("1M", "1mo", "1d"), HALF_YEAR("6M", "6mo", "1d"), YEAR("1Y", "1y", "1wk"),
     }
 
+    /** One candle: its start (epoch ms), open, high, low, close and volume. */
+    data class Candle(val time: Long, val open: Double, val high: Double, val low: Double, val close: Double, val volume: Long)
+
     /** A stock over a [Range], with the day's figures, for the dashboard. */
     data class History(
         val quote: Quote,
         /** Prices over the range, oldest first: epoch milliseconds and price. */
         val points: List<Pair<Long, Double>>,
+        val candles: List<Candle>,
+        /**
+         * Volume-weighted average price at each candle (null before any volume): resetting each
+         * trading day for intraday ranges, else anchored to the start of the range.
+         */
+        val vwap: List<Double?>,
+        /** Indices of the candles where the VWAP starts again (each trading day, intraday). */
+        val vwapStarts: Set<Int>,
         val dayLow: Double?,
         val dayHigh: Double?,
         val yearLow: Double?,
@@ -140,15 +151,49 @@ object FinanceSource {
                 .getJSONObject("chart").getJSONArray("result").getJSONObject(0)
             val meta = result.getJSONObject("meta")
             val times = result.optJSONArray("timestamp")
-            val closes = result.optJSONObject("indicators")?.optJSONArray("quote")?.optJSONObject(0)?.optJSONArray("close")
+            val ohlc = result.optJSONObject("indicators")?.optJSONArray("quote")?.optJSONObject(0)
+            val closes = ohlc?.optJSONArray("close")
             val points = (0 until minOf(times?.length() ?: 0, closes?.length() ?: 0)).mapNotNull { i ->
                 if (closes!!.isNull(i)) null else times!!.getLong(i) * 1000 to closes.getDouble(i)
+            }
+            fun column(name: String) = ohlc?.optJSONArray(name)
+            val opens = column("open")
+            val highs = column("high")
+            val lows = column("low")
+            val volumes = column("volume")
+            val candles = (0 until minOf(times?.length() ?: 0, closes?.length() ?: 0)).mapNotNull { i ->
+                if (listOf(opens, highs, lows, closes).any { it == null || it.isNull(i) }) return@mapNotNull null
+                Candle(times!!.getLong(i) * 1000, opens!!.getDouble(i), highs!!.getDouble(i), lows!!.getDouble(i), closes!!.getDouble(i),
+                    volumes?.takeUnless { it.isNull(i) }?.getLong(i) ?: 0L)
+            }
+            // VWAP from the typical price ((high + low + close) / 3), resetting at each trading
+            // day in the exchange's own time for intraday candles.
+            val offset = meta.optLong("gmtoffset") * 1000
+            val intraday = range == Range.DAY || range == Range.WEEK
+            var day = Long.MIN_VALUE
+            var priceVolume = 0.0
+            var volume = 0L
+            val vwapStarts = mutableSetOf(0)
+            val vwap = candles.mapIndexed { i, c ->
+                val today = (c.time + offset) / 86_400_000L
+                if (intraday && today != day) {
+                    if (day != Long.MIN_VALUE) vwapStarts += i
+                    day = today
+                    priceVolume = 0.0
+                    volume = 0L
+                }
+                priceVolume += (c.high + c.low + c.close) / 3 * c.volume
+                volume += c.volume
+                if (volume > 0) priceVolume / volume else null
             }
             fun number(key: String) = meta.optDouble(key).takeUnless { it.isNaN() }
             History(
                 quote = quote,
                 // One day starts from the previous close, so the line and the change agree.
                 points = if (range == Range.DAY && points.isNotEmpty()) listOf(points.first().first to quote.previousClose) + points else points,
+                candles = candles,
+                vwap = vwap,
+                vwapStarts = vwapStarts,
                 dayLow = number("regularMarketDayLow"),
                 dayHigh = number("regularMarketDayHigh"),
                 yearLow = number("fiftyTwoWeekLow"),
