@@ -32,6 +32,8 @@ import com.ataglanceplus.live.FinanceSource
 import com.ataglanceplus.live.IncomingMessage
 import com.ataglanceplus.live.MediaSource
 import com.ataglanceplus.live.NotificationHub
+import com.ataglanceplus.live.SportsRules
+import com.ataglanceplus.live.SportsSource
 import com.ataglanceplus.weather.WeatherRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +65,7 @@ class AtAGlanceService : SmartspaceService() {
         if (key in Prefs.NON_CARD_KEYS) return@OnSharedPreferenceChangeListener
         if (Prefs.isChipSettingKey(key)) engine.settingsChanged()
         if (Prefs.isFinanceFetchKey(key)) restartFinance()
+        if (Prefs.isSportsFollowKey(key)) restartSports()
         // Calendar options or permission may have changed.
         refreshCalendar()
         pushAll()
@@ -97,6 +100,7 @@ class AtAGlanceService : SmartspaceService() {
     private var messageUntil = 0L
     private var islandJob: Job? = null
     private var financeJob: Job? = null
+    private var sportsJob: Job? = null
     private var shownFinance: String? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -129,6 +133,9 @@ class AtAGlanceService : SmartspaceService() {
         scope.launch { NotificationHub.messages.collect { showMessage(it) } }
         scope.launch { FinanceSource.quotes.drop(1).collect { pushAll() } }
         restartFinance()
+        scope.launch { SportsSource.games.drop(1).collect { pushAll() } }
+        scope.launch { SportsSource.races.drop(1).collect { pushAll() } }
+        restartSports()
         // The media track bar cannot move by itself; nudge it while playing.
         scope.launch {
             while (true) {
@@ -172,7 +179,9 @@ class AtAGlanceService : SmartspaceService() {
                 refreshCalendar()
                 // The finance card comes and goes with the time (periods and windows).
                 val finance = FinanceRules.showing(this@AtAGlanceService, FinanceSource.quotes.value)?.instanceKey
-                if (now != shownDate || day != shownDay || calendar != null || finance != shownFinance ||
+                // Sports cards count down to kick-off and come and go with the time.
+                val sportsOn = Prefs.sportsFollowed(this@AtAGlanceService).isNotEmpty()
+                if (now != shownDate || day != shownDay || calendar != null || finance != shownFinance || sportsOn ||
                     LiveCards.upcomingAlarm(this@AtAGlanceService) != null
                 ) {
                     shownFinance = finance
@@ -290,6 +299,7 @@ class AtAGlanceService : SmartspaceService() {
         media = MediaSource.now.value,
         calendar = calendar,
         quotes = FinanceSource.quotes.value,
+        sports = runCatching { SportsRules.showing(this, SportsSource.games.value, SportsSource.races.value) }.getOrDefault(emptyList()),
         message = message,
         messageRemainingMs = (messageUntil - System.currentTimeMillis()).coerceAtLeast(0L),
     )
@@ -304,6 +314,33 @@ class AtAGlanceService : SmartspaceService() {
                         .onFailure { CrashLog.record(this@AtAGlanceService, "Fetching prices", it) }
                 }
                 delay(Prefs.financeRefreshMinutes(this@AtAGlanceService) * 60_000L)
+            }
+        }
+    }
+
+    /**
+     * Sports: schedules now and every half hour; while a game or session is on (or about to
+     * start), live scores every 30 seconds, otherwise a check every 5 minutes.
+     */
+    private fun restartSports() {
+        sportsJob?.cancel()
+        if (Prefs.sportsFollowed(this).isEmpty()) return
+        sportsJob = scope.launch {
+            var lastSchedule = 0L
+            while (true) {
+                if (Prefs.cardEnabled(this@AtAGlanceService, CardType.SPORTS)) {
+                    if (System.currentTimeMillis() - lastSchedule > 30 * 60_000L) {
+                        runCatching { SportsSource.refreshSchedules(this@AtAGlanceService) }
+                            .onFailure { CrashLog.record(this@AtAGlanceService, "Fetching sports schedules", it) }
+                        lastSchedule = System.currentTimeMillis()
+                    }
+                    val live = runCatching { SportsSource.refreshLive(this@AtAGlanceService) }
+                        .onFailure { CrashLog.record(this@AtAGlanceService, "Fetching live scores", it) }
+                        .getOrDefault(false)
+                    delay(if (live) 30_000L else 5 * 60_000L)
+                } else {
+                    delay(5 * 60_000L)
+                }
             }
         }
     }

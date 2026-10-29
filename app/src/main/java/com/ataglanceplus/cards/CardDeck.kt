@@ -24,6 +24,7 @@ data class CardData(
     val media: MediaNow?,
     val calendar: CalendarNow?,
     val quotes: List<Quote>,
+    val sports: List<com.ataglanceplus.live.SportsShowing>,
     val message: IncomingMessage?,
     val messageRemainingMs: Long,
 )
@@ -38,7 +39,8 @@ object CardDeck {
 
     /**
      * Cards with something real to show, most time-sensitive first: a new message, navigation,
-     * live updates, a timer or alarm, media, the next calendar event, finance, then the weather
+     * live updates, live games, a timer or alarm, media, the next calendar event, other sports
+     * cards (before, after, next game), finance, then the weather
      * card, which is always there and cannot be dismissed. Switched-off types and dismissed
      * instances are left out.
      *
@@ -63,6 +65,8 @@ object CardDeck {
         } else null
         val media = data.media?.takeIf { on(CardType.MEDIA) && "media:${it.pkg}" !in dismissed }
         val calendar = data.calendar?.takeIf { on(CardType.CALENDAR) && it.instanceKey !in dismissed }
+        val sports = if (on(CardType.SPORTS)) data.sports.filter { it.instanceKey !in dismissed } else emptyList()
+        val (liveSports, otherSports) = sports.partition { it.phase == com.ataglanceplus.live.SportsPhase.LIVE }
         val finance = if (on(CardType.FINANCE)) FinanceRules.showing(context, data.quotes)?.takeIf { it.instanceKey !in dismissed } else null
 
         // Share out the user's chips. Before the user picks any, each card keeps the spec's own.
@@ -84,10 +88,12 @@ object CardDeck {
             }
             nav?.let { add(LiveCards.nav(context, aod, it, navChips)) }
             live.forEach { add(LiveCards.live(context, aod, it)) }
+            liveSports.forEach { add(sportsCard(context, aod, it)) }
             timer?.let { add(LiveCards.timer(context, aod, it, timerChips)) }
             alarm?.let { add(LiveCards.alarm(context, aod, it, timerChips)) }
             media?.let { add(LiveCards.media(context, aod, it)) }
             calendar?.let { add(LiveCards.calendar(context, aod, it, calendarChips)) }
+            otherSports.forEach { add(sportsCard(context, aod, it)) }
             finance?.let { add(LiveCards.finance(context, aod, data.quotes, it)) }
         }
         val weatherCard = WeatherCard.build(context, surface, aod, data.weather, data.weatherStatus, weatherChips)
@@ -95,6 +101,11 @@ object CardDeck {
         if (maxCards <= 0) return contextual + weatherCard + extras
         // Out of room: the weather card always stays; the least urgent cards go first.
         return (contextual.take(maxCards - 1) + weatherCard + extras).take(maxCards)
+    }
+
+    private fun sportsCard(context: Context, aod: Boolean, showing: com.ataglanceplus.live.SportsShowing): SmartspaceTarget = when (showing) {
+        is com.ataglanceplus.live.SportsShowing.Team -> LiveCards.sports(context, aod, showing)
+        is com.ataglanceplus.live.SportsShowing.Race -> LiveCards.race(context, aod, showing)
     }
 
     /** Instance keys of everything that exists now, dismissed or not, so stale dismissals can be forgotten. */
@@ -106,5 +117,6 @@ object CardDeck {
         data.media?.let { add("media:${it.pkg}") }
         data.calendar?.let { add(it.instanceKey) }
         FinanceRules.showing(context, data.quotes)?.let { add(it.instanceKey) }
+        data.sports.forEach { add(it.instanceKey) }
     }
 }

@@ -27,6 +27,10 @@ object Prefs {
     private const val KEY_CHIP_REFRESH = "chip_refresh"
     private const val KEY_AOD_PREVIEW = "aod_preview"
     private const val KEY_MEDIA_WAVE = "media_wave"
+    private const val KEY_SPORTS_FOLLOWED = "sports_followed"
+    private const val KEY_SPORTS_BEFORE = "sports_before_hours"
+    private const val KEY_SPORTS_AFTER = "sports_after_hours"
+    private const val KEY_SPORTS_NEXT = "sports_next_always"
     private const val KEY_FIN_TICKERS = "finance_tickers"
     private const val KEY_FIN_REFRESH = "finance_refresh_minutes"
     private const val KEY_FIN_MOVES = "finance_show_moves"
@@ -246,4 +250,40 @@ object Prefs {
 
     /** Settings that change which prices are fetched. */
     fun isFinanceFetchKey(key: String?): Boolean = key == KEY_FIN_TICKERS || key == KEY_FIN_REFRESH
+
+    // --- Sports cards ---
+
+    /** Teams and series followed, in the user's order. */
+    fun sportsFollowed(context: Context): List<com.ataglanceplus.live.Followed> = runCatching {
+        val array = org.json.JSONArray(get(context).getString(KEY_SPORTS_FOLLOWED, "[]"))
+        (0 until array.length()).map { com.ataglanceplus.live.Followed.fromJson(array.getJSONObject(it)) }
+    }.getOrDefault(emptyList())
+
+    fun setSportsFollowed(context: Context, followed: List<com.ataglanceplus.live.Followed>) {
+        val array = org.json.JSONArray().apply { followed.forEach { put(it.toJson()) } }
+        get(context).edit().putString(KEY_SPORTS_FOLLOWED, array.toString()).apply()
+    }
+
+    /** Hours before a game its card appears. */
+    fun sportsBeforeHours(context: Context): Int = get(context).getInt(KEY_SPORTS_BEFORE, 2)
+
+    fun setSportsBeforeHours(context: Context, hours: Int) {
+        get(context).edit().putInt(KEY_SPORTS_BEFORE, hours).apply()
+    }
+
+    /** Hours after a game its result stays. */
+    fun sportsAfterHours(context: Context): Int = get(context).getInt(KEY_SPORTS_AFTER, 2)
+
+    fun setSportsAfterHours(context: Context, hours: Int) {
+        get(context).edit().putInt(KEY_SPORTS_AFTER, hours).apply()
+    }
+
+    /** Show each team's next fixture when nothing else is on. On to start with. */
+    fun sportsNextAlways(context: Context): Boolean = get(context).getBoolean(KEY_SPORTS_NEXT, true)
+
+    fun setSportsNextAlways(context: Context, on: Boolean) {
+        get(context).edit().putBoolean(KEY_SPORTS_NEXT, on).apply()
+    }
+
+    fun isSportsFollowKey(key: String?): Boolean = key == KEY_SPORTS_FOLLOWED
 }

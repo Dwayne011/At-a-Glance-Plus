@@ -151,6 +151,9 @@ internal fun CardPreviewSection(maxCards: Int) {
                     Prefs.setCalendarAllDay(context, it)
                 }
             }
+            if (type == CardType.SPORTS && Prefs.cardEnabled(context, type)) {
+                SportsSettings(version)
+            }
             if (type == CardType.FINANCE && Prefs.cardEnabled(context, type)) {
                 // Passing the settings version makes it redraw when any option changes.
                 FinanceSettings(version)
@@ -322,4 +325,87 @@ private fun FinanceSettings(@Suppress("UNUSED_PARAMETER") settingsVersion: Int) 
     if (!Prefs.financeOnMoves(context) && !Prefs.financePeriodic(context) && !Prefs.financeInWindows(context)) {
         Text("Turn on at least one of these, or the card never shows.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
     }
+}
+
+/** Teams and series to follow, and when their cards show. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SportsSettings(@Suppress("UNUSED_PARAMETER") settingsVersion: Int) {
+    val context = LocalContext.current
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<com.ataglanceplus.live.Followed>>(emptyList()) }
+    var searching by remember { mutableStateOf(false) }
+    val followed = Prefs.sportsFollowed(context)
+
+    LaunchedEffect(query) {
+        if (query.isBlank()) {
+            results = emptyList()
+            return@LaunchedEffect
+        }
+        delay(350)
+        searching = true
+        results = withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsSource.searchTeams(query) }.map { it.followed }
+        searching = false
+    }
+
+    Text("Following", style = MaterialTheme.typography.bodySmall)
+    if (followed.isEmpty()) Text("Nobody yet: search for a team below.", style = MaterialTheme.typography.bodySmall)
+    followed.forEach { f ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(f.leagueName, style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onClick = { Prefs.setSportsFollowed(context, followed.filter { it.key != f.key }) }) { Text("Remove") }
+        }
+    }
+    val f1 = com.ataglanceplus.live.Followed("racing", "f1", null, "Formula 1", "Formula 1")
+    if (followed.none { it.key == f1.key }) {
+        OutlinedButton(onClick = { Prefs.setSportsFollowed(context, followed + f1) }) { Text("Follow Formula 1") }
+    }
+    OutlinedTextField(
+        value = query, onValueChange = { query = it }, singleLine = true,
+        label = { Text("Search for a team") }, modifier = Modifier.fillMaxWidth()
+    )
+    if (searching) Text("Searching…", style = MaterialTheme.typography.bodySmall)
+    if (query.isNotBlank() && !searching && results.isEmpty()) Text("No teams found.", style = MaterialTheme.typography.bodySmall)
+    results.forEach { team ->
+        val already = followed.any { it.key == team.key }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !already) {
+                    Prefs.setSportsFollowed(context, followed + team)
+                    query = ""
+                }
+                .padding(vertical = 6.dp)
+        ) {
+            Text(team.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                listOf(team.leagueName, team.sport.replaceFirstChar { it.uppercase() }).filter { it.isNotEmpty() }.joinToString(" · ") +
+                    if (already) " · following" else "",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+
+    Text("Show a game's card", style = MaterialTheme.typography.labelLarge)
+    Text("Before kick-off", style = MaterialTheme.typography.bodySmall)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val before = Prefs.sportsBeforeHours(context)
+        listOf(1, 2, 3, 6).forEach { h ->
+            FilterChip(selected = before == h, onClick = { Prefs.setSportsBeforeHours(context, h) }, label = { Text("$h h") })
+        }
+    }
+    Text("After full time", style = MaterialTheme.typography.bodySmall)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val after = Prefs.sportsAfterHours(context)
+        listOf(1, 2, 4).forEach { h ->
+            FilterChip(selected = after == h, onClick = { Prefs.setSportsAfterHours(context, h) }, label = { Text("$h h") })
+        }
+    }
+    SwitchRow("Next game when nothing's on", "Otherwise each team's card only shows around its games.", Prefs.sportsNextAlways(context)) {
+        Prefs.setSportsNextAlways(context, it)
+    }
+    Text("Scores refresh every 30 seconds during a game. From ESPN's free public feed, which is unofficial and could change.", style = MaterialTheme.typography.bodySmall)
 }

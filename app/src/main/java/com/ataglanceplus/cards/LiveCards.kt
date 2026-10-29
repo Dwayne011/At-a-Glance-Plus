@@ -26,6 +26,9 @@ import com.ataglanceplus.live.TravelMode
 import com.ataglanceplus.live.FinanceRules
 import com.ataglanceplus.live.FinanceSource
 import com.ataglanceplus.live.Quote
+import com.ataglanceplus.live.SportsPhase
+import com.ataglanceplus.live.SportsShowing
+import com.ataglanceplus.live.SportsSource
 import com.ataglanceplus.ui.UnlockGateActivity
 import java.util.Date
 import java.util.Locale
@@ -39,6 +42,7 @@ enum class CardType(val id: String, val label: String, val detail: String) {
     CALENDAR("calendar", "Calendar", "Your next event, shortly before it starts and while it is on"),
     MESSAGES("messages", "Message pop-up", "New messages show for 4.5 seconds in place of the first card"),
     FINANCE("finance", "Finance", "Your stocks, when the rules below say so; one page each, taking turns"),
+    SPORTS("sports", "Sports", "Your teams' games: live scores, results, kick-off times and the next fixture"),
 }
 
 /**
@@ -349,6 +353,122 @@ object LiveCards {
         TravelMode.WALK -> if (aod) R.drawable.ic_nav_walk_aod else R.drawable.ic_nav_walk
     }
 
+    // --- Sports ---
+
+    /**
+     * A followed team's game, scoreboard style: live score and clock, the result for a while
+     * after, the kick-off time (with a countdown) before, or the next fixture.
+     */
+    fun sports(context: Context, aod: Boolean, showing: SportsShowing.Team): SmartspaceTarget {
+        val game = showing.game
+        val key = showing.instanceKey
+        val views = RemoteViews(context.packageName, R.layout.card_sports)
+        listOf(
+            Triple(game.home, R.id.sports_home_logo, R.id.sports_home_abbr),
+            Triple(game.away, R.id.sports_away_logo, R.id.sports_away_abbr),
+        ).forEach { (side, logo, abbr) ->
+            val bitmap = SportsSource.logo(side.logoUrl)
+            if (bitmap != null) views.setImageViewBitmap(logo, bitmap) else views.setViewVisibility(logo, View.GONE)
+            views.setTextViewText(abbr, side.abbr)
+        }
+        val scored = showing.phase == SportsPhase.LIVE || showing.phase == SportsPhase.AFTER
+        listOf(game.home to R.id.sports_home_score, game.away to R.id.sports_away_score).forEach { (side, id) ->
+            if (scored) {
+                views.setTextViewText(id, side.score ?: "0")
+                // After the game the loser's score is dimmed.
+                if (showing.phase == SportsPhase.AFTER && !side.winner && (game.home.winner || game.away.winner)) {
+                    views.setTextColor(id, if (aod) Style.AOD_TEXT else DIMMED)
+                }
+            } else {
+                views.setViewVisibility(id, View.GONE)
+            }
+        }
+        views.setTextViewText(R.id.sports_league, game.leagueName)
+        val (status, note) = when (showing.phase) {
+            SportsPhase.LIVE -> game.status to "LIVE"
+            SportsPhase.AFTER -> game.status to null
+            SportsPhase.BEFORE -> clock(context, game.start) to countdown(game.start)
+            SportsPhase.NEXT -> day(context, game.start) to "Next game"
+        }
+        views.setTextViewText(R.id.sports_status, status)
+        if (note != null) {
+            views.setViewVisibility(R.id.sports_note, View.VISIBLE)
+            views.setTextViewText(R.id.sports_note, note)
+            if (showing.phase == SportsPhase.LIVE) views.setTextColor(R.id.sports_note, if (aod) Style.AOD_TEXT else LIVE_RED)
+        }
+        if (aod) {
+            Style.aodBody(
+                views, R.id.sports_home_abbr, R.id.sports_away_abbr, R.id.sports_home_score, R.id.sports_away_score,
+                R.id.sports_league, R.id.sports_status, R.id.sports_note
+            )
+        }
+        val tap = gameTap(context, game.link, key)
+        Style.holdBar(views, pinned = false, aod = aod)
+        views.setOnClickPendingIntent(R.id.card_root, tap)
+        val title = "${game.home.abbr} ${game.home.score ?: ""} ${game.away.abbr} ${game.away.score ?: ""}".trim()
+        return Style.target(context, targetId(key), views, title, "$status · ${game.leagueName}", R.drawable.ic_nav_flag, tap, if (showing.phase == SportsPhase.LIVE) 1.65f else 1.2f)
+    }
+
+    /** A followed series' session (Formula 1): live order, result, start time or the next session. */
+    fun race(context: Context, aod: Boolean, showing: SportsShowing.Race): SmartspaceTarget {
+        val session = showing.session
+        val key = showing.instanceKey
+        val views = RemoteViews(context.packageName, R.layout.card_race)
+        val title = "${session.eventName} · ${session.session}"
+        val podium = session.top.mapIndexed { i, name -> "${i + 1} ${name.substringAfter(". ")}" }.joinToString(" · ")
+        val (detail, badge) = when (showing.phase) {
+            SportsPhase.LIVE -> podium.ifEmpty { session.status } to "LIVE"
+            SportsPhase.AFTER -> podium.ifEmpty { session.status } to "Result"
+            SportsPhase.BEFORE -> "Starts ${clock(context, session.start)}" to countdown(session.start).removePrefix("in ")
+            SportsPhase.NEXT -> day(context, session.start) to "Next"
+        }
+        views.setTextViewText(R.id.race_title, title)
+        views.setTextViewText(R.id.race_detail, detail)
+        views.setTextViewText(R.id.race_badge_text, badge)
+        if (showing.phase == SportsPhase.LIVE && !aod) views.setTextColor(R.id.race_badge_text, LIVE_RED)
+        if (aod) {
+            Style.aodBody(views, R.id.race_title, R.id.race_detail, R.id.race_badge_text)
+            views.setInt(R.id.race_badge, "setBackgroundResource", R.drawable.aod_outline_r12)
+            views.setInt(R.id.race_badge_text, "setBackgroundResource", R.drawable.aod_outline_r14)
+            views.setImageViewResource(R.id.race_icon, R.drawable.ic_nav_flag_aod)
+        }
+        val tap = gameTap(context, session.link, key)
+        Style.holdBar(views, pinned = false, aod = aod)
+        views.setOnClickPendingIntent(R.id.card_root, tap)
+        return Style.target(context, targetId(key), views, title, detail, R.drawable.ic_nav_flag, tap, if (showing.phase == SportsPhase.LIVE) 1.65f else 1.2f)
+    }
+
+    /** The game's page (the ESPN app opens it when installed), after unlocking. */
+    private fun gameTap(context: Context, link: String?, key: String): PendingIntent {
+        val code = REQUEST_BASE + (key.hashCode() and 0xFFFF)
+        return if (link != null) Style.gated(context, Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)), code)
+        else Style.gatedApp(context, "com.espn.score_center", code)
+    }
+
+    private fun clock(context: Context, time: Long): String =
+        DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm a", Date(time)).toString()
+
+    /** "Today 20:00", "Sat 16:30", or "1 Nov 16:30" further ahead. */
+    private fun day(context: Context, time: Long): String {
+        val days = (time - System.currentTimeMillis()) / (24 * 3_600_000L)
+        val prefix = when {
+            DateUtils.isToday(time) -> "Today"
+            days < 6 -> DateFormat.format("EEE", Date(time)).toString()
+            else -> DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), "dMMM"), Date(time)).toString()
+        }
+        return "$prefix ${clock(context, time)}"
+    }
+
+    /** "in 1 h 20 min", "in 25 min", or "Starting" once the time has come. */
+    private fun countdown(time: Long): String {
+        val minutes = ((time - System.currentTimeMillis()) / 60_000L).toInt()
+        return when {
+            minutes <= 0 -> "Starting"
+            minutes < 60 -> "in $minutes min"
+            else -> "in ${minutes / 60} h ${minutes % 60} min"
+        }
+    }
+
     // --- Extra chips ---
 
     /** A card of chips that did not fit on the other cards: up to 4 per row, two rows. */
@@ -502,6 +622,8 @@ object LiveCards {
     private const val TEAL = 0xFF2DD4BF.toInt()
     private const val NAV_GREEN = 0xFF6EE7B7.toInt()
     private const val UP = 0xFF34D399.toInt()
+    private const val LIVE_RED = 0xFFF87171.toInt()
+    private const val DIMMED = 0x99FFFFFF.toInt()
     private const val DOWN = 0xFFF87171.toInt()
     private const val MAX_STOCKS = 6
     private const val ALARM_WINDOW_MS = 12 * 60 * 60 * 1000L
