@@ -35,15 +35,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -74,27 +79,52 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * A small dashboard for a chip's data, opened by tapping the chip: steps (today by hour and the
  * last 7 days), sleep (last night's stages and the last 7 nights) or screen time (today's apps
  * and the last 7 days). Each links on to the app that keeps the data.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 class DashboardActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val kind = intent.getStringExtra(EXTRA_KIND)
+        val refresh = Refresh()
         setContent {
             val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+            var refreshing by remember { mutableStateOf(false) }
             val scheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             MaterialTheme(colorScheme = scheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
+                  CompositionLocalProvider(LocalRefresh provides refresh) {
+                    // Pull down: refresh what the home screen shows for this dashboard (its card or
+                    // chip), then load the dashboard again, so both agree.
+                    PullToRefreshBox(
+                        isRefreshing = refreshing,
+                        onRefresh = {
+                            refreshing = true
+                            scope.launch {
+                                runCatching { refreshHome(context, kind) }
+                                    .onFailure { com.ataglanceplus.CrashLog.record(context, "Refreshing from a dashboard", it) }
+                                refresh.generation++
+                                val target = refresh.generation
+                                withTimeoutOrNull(REFRESH_TIMEOUT_MS) { snapshotFlow { refresh.loaded }.first { it >= target } }
+                                refreshing = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+                    ) {
                     Column(
                         modifier = Modifier
-                            .safeDrawingPadding()
+                            .fillMaxSize()
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -111,13 +141,34 @@ class DashboardActivity : ComponentActivity() {
                             }
                         }
                     }
+                    }
+                  }
                 }
             }
         }
     }
 
+    /**
+     * The home screen's side of a refresh: prices for a stock (the finance card), schedules and
+     * scores for a game or race (the sports cards), or every chip for the rest. Prices and sports
+     * finish before the dashboard reloads, since it reads them; chips refresh in the service.
+     */
+    private suspend fun refreshHome(context: Context, kind: String?) {
+        when {
+            kind == null -> Unit
+            kind.startsWith(KIND_STOCK_PREFIX) -> com.ataglanceplus.live.FinanceSource.refresh(context)
+            kind.startsWith(KIND_GAME_PREFIX) || kind.startsWith(KIND_RACE_PREFIX) -> {
+                com.ataglanceplus.live.SportsSource.refreshSchedules(context)
+                com.ataglanceplus.live.SportsSource.refreshLive(context)
+            }
+            else -> com.ataglanceplus.complications.ComplicationEngine.requestRefresh()
+        }
+    }
+
     companion object {
         private const val EXTRA_KIND = "kind"
+        /** The longest the refresh spinner waits for a dashboard to load again. */
+        private const val REFRESH_TIMEOUT_MS = 20_000L
         const val KIND_STEPS = "steps"
         const val KIND_SLEEP = "sleep"
         const val KIND_SCREEN = "screen"
@@ -133,6 +184,18 @@ class DashboardActivity : ComponentActivity() {
             Intent(context, DashboardActivity::class.java).putExtra(EXTRA_KIND, kind).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 }
+
+/**
+ * Pull to refresh: each pull raises [generation]; a dashboard's loader is keyed on it, loads again
+ * (keeping what it shows until the new data is in), and reports the generation it finished in
+ * [loaded], which ends the spinner.
+ */
+private class Refresh {
+    var generation by mutableIntStateOf(0)
+    var loaded by mutableIntStateOf(0)
+}
+
+private val LocalRefresh = staticCompositionLocalOf { Refresh() }
 
 /** What a dashboard has loaded: still loading, the data, or why there is none. */
 private sealed interface Load<out T> {
@@ -150,11 +213,13 @@ private fun dayAndDate(date: LocalDate) = date.format(DateTimeFormatter.ofPatter
 @Composable
 private fun StepsDashboard() {
     val context = LocalContext.current
-    val load by produceState<Load<Pair<List<Long>, List<Pair<LocalDate, Long>>>>>(Load.Loading) {
+    val refresh = LocalRefresh.current
+    val load by produceState<Load<Pair<List<Long>, List<Pair<LocalDate, Long>>>>>(Load.Loading, refresh.generation) {
         value = withContext(Dispatchers.IO) {
             if (HealthSource.STEPS !in HealthSource.granted(context)) Load.Missing("Allow Health Connect access for steps in the app's Chips tab.")
             else runCatching { Load.Ready(HealthSource.stepsWeek(context)) }.getOrElse { Load.Missing("Health Connect did not answer: ${it.message}") }
         }
+        refresh.loaded = refresh.generation
     }
     Title("Steps")
     when (val state = load) {
@@ -195,11 +260,13 @@ private fun StepsDashboard() {
 @Composable
 private fun SleepDashboard() {
     val context = LocalContext.current
-    val load by produceState<Load<List<Pair<LocalDate, HealthSource.Night?>>>>(Load.Loading) {
+    val refresh = LocalRefresh.current
+    val load by produceState<Load<List<Pair<LocalDate, HealthSource.Night?>>>>(Load.Loading, refresh.generation) {
         value = withContext(Dispatchers.IO) {
             if (HealthSource.SLEEP !in HealthSource.granted(context)) Load.Missing("Allow Health Connect access for sleep in the app's Chips tab.")
             else runCatching { Load.Ready(HealthSource.sleepWeek(context)) }.getOrElse { Load.Missing("Health Connect did not answer: ${it.message}") }
         }
+        refresh.loaded = refresh.generation
     }
     Title("Sleep")
     when (val state = load) {
@@ -313,11 +380,13 @@ private fun stageColours(): Map<HealthSource.StageKind, Color> {
 @Composable
 private fun ScreenDashboard() {
     val context = LocalContext.current
-    val load by produceState<Load<Pair<List<Pair<String, Long>>, List<Pair<LocalDate, Long>>>>>(Load.Loading) {
+    val refresh = LocalRefresh.current
+    val load by produceState<Load<Pair<List<Pair<String, Long>>, List<Pair<LocalDate, Long>>>>>(Load.Loading, refresh.generation) {
         value = withContext(Dispatchers.IO) {
             if (!SimpleSources.hasUsageAccess(context)) Load.Missing("Allow usage access for screen time in the app's Chips tab.")
             else Load.Ready(SimpleSources.screenTimeWeek(context))
         }
+        refresh.loaded = refresh.generation
     }
     Title("Screen time")
     when (val state = load) {
@@ -384,7 +453,8 @@ private sealed interface MetricData {
 @Composable
 private fun MetricDashboard(metric: HealthMetric) {
     val context = LocalContext.current
-    val load by produceState<Load<MetricData>>(Load.Loading, metric) {
+    val refresh = LocalRefresh.current
+    val load by produceState<Load<MetricData>>(Load.Loading, metric, refresh.generation) {
         value = withContext(Dispatchers.IO) {
             if (metric.permission !in HealthSource.granted(context)) {
                 Load.Missing("Allow Health Connect access for ${metric.label.lowercase()} in the app's Chips tab.")
@@ -402,6 +472,7 @@ private fun MetricDashboard(metric: HealthMetric) {
                 )
             }.getOrElse { Load.Missing("Health Connect did not answer: ${it.message}") }
         }
+        refresh.loaded = refresh.generation
     }
     Title(metric.label)
     when (val state = load) {
@@ -626,12 +697,17 @@ private fun StockDashboard(initial: String) {
     val tickers = remember { Prefs.financeTickers(context).ifEmpty { listOf(initial) } }
     var symbol by remember { mutableStateOf(initial) }
     var range by remember { mutableStateOf(com.ataglanceplus.live.FinanceSource.Range.DAY) }
-    val load by produceState<Load<com.ataglanceplus.live.FinanceSource.History>>(Load.Loading, symbol, range) {
-        value = Load.Loading
+    val refresh = LocalRefresh.current
+    var shown by remember { mutableStateOf<Pair<String, Any>?>(null) }
+    val load by produceState<Load<com.ataglanceplus.live.FinanceSource.History>>(Load.Loading, symbol, range, refresh.generation) {
+        // A new stock or range starts from "Loading…"; a refresh keeps the chart until the new one is in.
+        if (shown != (symbol to range)) value = Load.Loading
+        shown = symbol to range
         value = withContext(Dispatchers.IO) {
             com.ataglanceplus.live.FinanceSource.history(symbol, range)?.let { Load.Ready(it) }
                 ?: Load.Missing("Yahoo Finance did not answer. Try again in a moment.")
         }
+        refresh.loaded = refresh.generation
     }
     Title("Stocks")
     if (tickers.size > 1) {
@@ -841,12 +917,14 @@ private suspend fun ensureSports(context: Context) {
 @Composable
 private fun GameDashboard(eventId: String) {
     val context = LocalContext.current
-    val load by produceState<Load<Pair<com.ataglanceplus.live.Followed?, List<com.ataglanceplus.live.Game>>>>(Load.Loading, eventId) {
+    val refresh = LocalRefresh.current
+    val load by produceState<Load<Pair<com.ataglanceplus.live.Followed?, List<com.ataglanceplus.live.Game>>>>(Load.Loading, eventId, refresh.generation) {
         withContext(Dispatchers.IO) { ensureSports(context) }
         val all = com.ataglanceplus.live.SportsSource.games.value
         val key = all.entries.firstOrNull { (_, games) -> games.any { it.eventId == eventId } }?.key
         value = if (key == null) Load.Missing("This game is no longer in your teams' fixtures.")
         else Load.Ready(Prefs.sportsFollowed(context).firstOrNull { it.key == key } to all.getValue(key))
+        refresh.loaded = refresh.generation
     }
     var revealed by remember { mutableStateOf(false) }
     when (val state = load) {
@@ -856,7 +934,7 @@ private fun GameDashboard(eventId: String) {
             val (team, games) = state.data
             val game = games.first { it.eventId == eventId }
             val hidden = !revealed && com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)
-            val detail by produceState<com.ataglanceplus.live.GameDetail?>(null, game.eventId) {
+            val detail by produceState<com.ataglanceplus.live.GameDetail?>(null, game.eventId, refresh.generation) {
                 while (true) {
                     value = withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsSource.detail(game) } ?: value
                     if (game.state != "in") break
@@ -1084,10 +1162,12 @@ private fun FixtureRow(game: com.ataglanceplus.live.Game, team: com.ataglanceplu
 @Composable
 private fun RaceDashboard(eventId: String) {
     val context = LocalContext.current
-    val load by produceState<Load<List<com.ataglanceplus.live.RaceSession>>>(Load.Loading, eventId) {
+    val refresh = LocalRefresh.current
+    val load by produceState<Load<List<com.ataglanceplus.live.RaceSession>>>(Load.Loading, eventId, refresh.generation) {
         withContext(Dispatchers.IO) { ensureSports(context) }
         val sessions = com.ataglanceplus.live.SportsSource.races.value.values.flatten().filter { it.eventId == eventId }.sortedBy { it.start }
         value = if (sessions.isEmpty()) Load.Missing("This race weekend is no longer in the calendar.") else Load.Ready(sessions)
+        refresh.loaded = refresh.generation
     }
     when (val state = load) {
         Load.Loading -> { Title("Formula 1"); Text("Loading…") }

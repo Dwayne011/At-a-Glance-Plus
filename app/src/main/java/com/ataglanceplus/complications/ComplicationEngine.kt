@@ -18,7 +18,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -56,6 +58,7 @@ class ComplicationEngine(private val context: Context) {
         buds.start()
         watchContent()
         scope.launch { NotificationCounter.counts.collect { updateNotificationChips(it) } }
+        scope.launch { refreshRequests.collect { refreshAll() } }
         scope.launch { WeatherRepository.weather.collect { set(Complication.SUNSET, SimpleSources.sunEvent(context)) } }
         // Once a minute: values that change with the clock (alarm "Fri" → time, countdown, sun).
         scope.launch {
@@ -181,5 +184,12 @@ class ComplicationEngine(private val context: Context) {
 
     companion object {
         private const val MINUTE_MS = 60_000L
+
+        private val refreshRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+        /** Asks the running engine, if there is one, to refresh every chip now (a dashboard was pulled down). */
+        fun requestRefresh() {
+            refreshRequests.tryEmit(Unit)
+        }
     }
 }
