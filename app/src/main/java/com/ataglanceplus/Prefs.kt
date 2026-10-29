@@ -25,6 +25,7 @@ object Prefs {
     private const val KEY_GMAIL_LABELS = "gmail_labels_"
     private const val KEY_COUNTDOWN = "countdown_day"
     private const val KEY_COUNTDOWN_NAME = "countdown_name"
+    private const val KEY_COUNTDOWN_EVENT = "countdown_event"
     private const val KEY_STEP_GOAL = "step_goal"
     private const val KEY_CHIP_SIZE = "chip_size_"
     private const val KEY_CHIP_REFRESH = "chip_refresh"
@@ -51,7 +52,7 @@ object Prefs {
     /** Settings that change what the complication engine has to watch. */
     fun isChipSettingKey(key: String?): Boolean =
         key != null && (key == KEY_CHIPS || key.startsWith(KEY_GMAIL_LABELS) || key == KEY_COUNTDOWN || key == KEY_CHIP_REFRESH ||
-            key == KEY_COUNTDOWN_NAME || key == KEY_STEP_GOAL)
+            key == KEY_COUNTDOWN_NAME || key == KEY_STEP_GOAL || key == KEY_COUNTDOWN_EVENT)
 
     /** Tells the service a chip permission was granted, so it starts watching that source. */
     fun chipPermissionsChanged(context: Context) {
@@ -152,7 +153,26 @@ object Prefs {
     fun countdownDay(context: Context): Long? =
         get(context).getLong(KEY_COUNTDOWN, Long.MIN_VALUE).takeIf { it != Long.MIN_VALUE }
 
+    /** A date picked by hand; the countdown no longer follows a calendar event. */
     fun setCountdownDay(context: Context, epochDay: Long) {
+        get(context).edit().putLong(KEY_COUNTDOWN, epochDay).remove(KEY_COUNTDOWN_EVENT).apply()
+    }
+
+    /** The calendar event the countdown follows (its date moves with the event), or null. */
+    fun countdownEvent(context: Context): Long? =
+        get(context).getLong(KEY_COUNTDOWN_EVENT, -1L).takeIf { it >= 0 }
+
+    /** Counts down to a calendar event: its date now, its title as the name, and follows it from then on. */
+    fun setCountdownEvent(context: Context, eventId: Long, epochDay: Long, title: String) {
+        get(context).edit()
+            .putLong(KEY_COUNTDOWN_EVENT, eventId)
+            .putLong(KEY_COUNTDOWN, epochDay)
+            .putString(KEY_COUNTDOWN_NAME, title.trim().take(30))
+            .apply()
+    }
+
+    /** Remembers where a followed event has moved to, without letting go of it. */
+    fun moveCountdownDay(context: Context, epochDay: Long) {
         get(context).edit().putLong(KEY_COUNTDOWN, epochDay).apply()
     }
 

@@ -132,6 +132,13 @@ object SimpleSources {
 
     /** Days to the chosen date: "12d", "Today" on the day, nothing once it has passed. */
     fun countdown(context: Context): ChipValues.Value? {
+        // A followed calendar event: its next date, wherever it has moved. If it has gone, the
+        // last date seen stands.
+        Prefs.countdownEvent(context)?.let { eventId ->
+            com.ataglanceplus.live.CalendarSource.nextOf(context, eventId)?.day?.toEpochDay()?.let { day ->
+                if (day != Prefs.countdownDay(context)) Prefs.moveCountdownDay(context, day)
+            }
+        }
         val target = Prefs.countdownDay(context) ?: return null
         val days = target - LocalDate.now().toEpochDay()
         val text = when {

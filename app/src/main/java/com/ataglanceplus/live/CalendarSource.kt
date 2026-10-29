@@ -88,4 +88,50 @@ object CalendarSource {
         val today = LocalDate.now()
         return events.firstOrNull { it.allDay && Instant.ofEpochMilli(it.begin).atZone(ZoneOffset.UTC).toLocalDate() == today }
     }
+
+    /** An event to count down to: its next start and the day that falls on. */
+    data class Upcoming(val eventId: Long, val begin: Long, val title: String, val allDay: Boolean) {
+        /** All-day events are stored against UTC midnight; others fall on the local day. */
+        val day: LocalDate
+            get() = Instant.ofEpochMilli(begin).atZone(if (allDay) ZoneOffset.UTC else java.time.ZoneId.systemDefault()).toLocalDate()
+    }
+
+    /** Events from today for a year, each once (a repeating event at its next date), soonest first. */
+    fun upcoming(context: Context): List<Upcoming> = instances(context, null).distinctBy { it.eventId }.take(MAX_UPCOMING)
+
+    /** [eventId]'s next date from today, or null when it has none (deleted, or all in the past). */
+    fun nextOf(context: Context, eventId: Long): Upcoming? = instances(context, eventId).firstOrNull()
+
+    private fun instances(context: Context, eventId: Long?): List<Upcoming> {
+        if (!hasPermission(context)) return emptyList()
+        // From the start of today, so an event later today (or all day today) still counts.
+        val from = LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+            ContentUris.appendId(it, from)
+            ContentUris.appendId(it, from + 366 * 24 * 60 * 60 * 1000L)
+        }.build()
+        val columns = arrayOf(
+            CalendarContract.Instances.EVENT_ID,
+            CalendarContract.Instances.BEGIN,
+            CalendarContract.Instances.TITLE,
+            CalendarContract.Instances.ALL_DAY,
+        )
+        var selection = "${CalendarContract.Instances.VISIBLE} = 1 AND " +
+            "${CalendarContract.Instances.SELF_ATTENDEE_STATUS} != ${CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED}"
+        if (eventId != null) selection += " AND ${CalendarContract.Instances.EVENT_ID} = $eventId"
+        return try {
+            context.contentResolver.query(uri, columns, selection, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
+                buildList {
+                    while (c.moveToNext()) {
+                        add(Upcoming(c.getLong(0), c.getLong(1), c.getString(2).orEmpty().ifEmpty { "(No title)" }, c.getInt(3) == 1))
+                    }
+                }
+            } ?: emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "calendar query failed", e)
+            emptyList()
+        }.filter { it.day >= LocalDate.now() }
+    }
+
+    private const val MAX_UPCOMING = 300
 }

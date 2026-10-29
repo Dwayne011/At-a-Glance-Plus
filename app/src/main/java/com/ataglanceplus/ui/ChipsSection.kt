@@ -51,6 +51,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
@@ -67,6 +68,7 @@ import com.ataglanceplus.complications.GmailSource
 import com.ataglanceplus.complications.HealthSource
 import com.ataglanceplus.complications.NotificationCounter
 import com.ataglanceplus.complications.SimpleSources
+import com.ataglanceplus.live.CalendarSource
 import com.ataglanceplus.wadb.Activator
 import com.ataglanceplus.wadb.Wadb
 import com.ataglanceplus.weather.WeatherRepository
@@ -349,6 +351,11 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
     var chosenLabels by remember { mutableStateOf(spec.arg?.let { Prefs.gmailLabels(context, it) } ?: emptySet()) }
     var countdown by remember { mutableStateOf(Prefs.countdownDay(context)) }
     var countdownName by remember { mutableStateOf(Prefs.countdownName(context)) }
+    var countdownEvent by remember { mutableStateOf(Prefs.countdownEvent(context)) }
+    var pickingEvent by remember { mutableStateOf(false) }
+    val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) pickingEvent = true
+    }
     var size by remember { mutableStateOf(Prefs.chipSize(context, spec.key)) }
     var goal by remember { mutableStateOf(Prefs.stepGoal(context).toString()) }
     if (spec.kind == Complication.GMAIL && spec.arg != null) {
@@ -433,15 +440,38 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                 if (spec.kind == Complication.COUNTDOWN) {
                     item {
                         Text("Count down to", style = MaterialTheme.typography.labelLarge)
-                        Text(countdown?.let { LocalDate.ofEpochDay(it).toString() } ?: "No date chosen")
-                        OutlinedButton(onClick = {
-                            val start = countdown?.let { LocalDate.ofEpochDay(it) } ?: LocalDate.now().plusDays(1)
-                            DatePickerDialog(context, { _, y, m, d ->
-                                val day = LocalDate.of(y, m + 1, d).toEpochDay()
-                                Prefs.setCountdownDay(context, day)
-                                countdown = day
-                            }, start.year, start.monthValue - 1, start.dayOfMonth).show()
-                        }) { Text("Choose date") }
+                        Text(
+                            countdown?.let { LocalDate.ofEpochDay(it).format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.FULL)) }
+                                ?.let { if (countdownEvent != null) "$it · from your calendar (follows the event if it moves)" else it }
+                                ?: "No date chosen"
+                        )
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            OutlinedButton(onClick = {
+                                val start = countdown?.let { LocalDate.ofEpochDay(it) } ?: LocalDate.now().plusDays(1)
+                                DatePickerDialog(context, { _, y, m, d ->
+                                    val day = LocalDate.of(y, m + 1, d).toEpochDay()
+                                    Prefs.setCountdownDay(context, day)
+                                    countdown = day
+                                    countdownEvent = null
+                                }, start.year, start.monthValue - 1, start.dayOfMonth).show()
+                            }) { Text("Choose date") }
+                            OutlinedButton(onClick = {
+                                if (CalendarSource.hasPermission(context)) pickingEvent = true
+                                else calendarPermission.launch(Manifest.permission.READ_CALENDAR)
+                            }) { Text("Pick from calendar") }
+                        }
+                        if (pickingEvent) {
+                            EventPickerDialog(
+                                onPick = { event ->
+                                    Prefs.setCountdownEvent(context, event.eventId, event.day.toEpochDay(), event.title)
+                                    countdown = event.day.toEpochDay()
+                                    countdownEvent = event.eventId
+                                    countdownName = Prefs.countdownName(context)
+                                    pickingEvent = false
+                                },
+                                onDismiss = { pickingEvent = false }
+                            )
+                        }
                         OutlinedTextField(
                             value = countdownName,
                             onValueChange = {
@@ -472,6 +502,39 @@ private fun ChipSettingsDialog(spec: ChipSpec, onPickApp: (((String) -> Unit)) -
                         ) {
                             Checkbox(checked = label.canonicalName in chosenLabels, onCheckedChange = null)
                             Text("${GmailSource.displayName(label)} (${label.unread} unread)", modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            }
+        }
+    )
+}
+
+/** Upcoming calendar events to count down to, searchable, soonest first. */
+@Composable
+private fun EventPickerDialog(onPick: (CalendarSource.Upcoming) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var events by remember { mutableStateOf<List<CalendarSource.Upcoming>?>(null) }
+    var query by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { events = withContext(Dispatchers.IO) { CalendarSource.upcoming(context) } }
+    val dateFormat = remember { java.time.format.DateTimeFormatter.ofPattern(android.text.format.DateFormat.getBestDateTimePattern(java.util.Locale.getDefault(), "EEEdMMMyyyy")) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Count down to an event") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search") }, singleLine = true)
+                val shown = events.orEmpty().filter { query.isBlank() || it.title.contains(query, ignoreCase = true) }
+                when {
+                    events == null -> Text("Loading events…")
+                    shown.isEmpty() -> Text(if (query.isBlank()) "No events in the next year." else "No events match.")
+                }
+                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                    items(shown, key = { it.eventId }) { event ->
+                        Column(modifier = Modifier.fillMaxWidth().clickable { onPick(event) }.padding(vertical = 10.dp)) {
+                            Text(event.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(event.day.format(dateFormat), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
