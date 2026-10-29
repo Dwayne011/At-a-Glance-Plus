@@ -376,6 +376,9 @@ private fun SportsSettings(settingsVersion: Int) {
                 Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(f.leagueName, style = MaterialTheme.typography.bodySmall)
             }
+            // Hides scores and results for this team or series, on the cards and dashboards.
+            val hidden = f.key in Prefs.sportsHidden(context)
+            FilterChip(selected = hidden, onClick = { Prefs.setSportsHidden(context, f.key, !hidden) }, label = { Text("Hide scores") })
             TextButton(onClick = { Prefs.setSportsFollowed(context, followed.filter { it.key != f.key }) }) { Text("Remove") }
         }
     }
@@ -434,7 +437,9 @@ private fun SportsSettings(settingsVersion: Int) {
             SegmentedButton(
                 selected = open == option,
                 onClick = { Prefs.setSportsOpen(context, option) },
-                shape = SegmentedButtonDefaults.itemShape(index = index, count = Prefs.SportsOpen.entries.size)
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = Prefs.SportsOpen.entries.size),
+                // No tick: with three options it squeezes the labels; the fill shows the choice.
+                icon = {}
             ) { Text(option.label) }
         }
     }

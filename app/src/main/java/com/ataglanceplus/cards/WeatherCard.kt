@@ -212,11 +212,18 @@ object WeatherCard {
             val big = extended && slots + 2 <= MAX_ANCHORS && used + wide <= room
             // Never shrunk, except as the first chip, so the row is not left empty.
             if (extended && !big && placed.isNotEmpty()) continue
-            val width = if (big) wide else standard
-            if (placed.isNotEmpty() && used + width > room) continue
+            var width = if (big) wide else standard
+            var squeezed: Float? = null
+            if (placed.isNotEmpty() && used + width > room) {
+                // A standard chip that nearly fits goes in with its text up to 15% smaller.
+                val tight = 2 * Chips.ANCHOR.padDp + Chips.ANCHOR.iconDp + 4 + 0.85f * Chips.textWidthDp(context, value.text, Chips.ANCHOR.textSp) + gap
+                if (big || value.parts.size > 1 || used + tight > room) continue
+                squeezed = room - used - gap
+                width = room - used
+            }
             used += width
             slots += if (big) 2 else 1
-            placed += Chips.Placed(spec, value, big)
+            placed += Chips.Placed(spec, value, big, squeezed)
         }
         return placed
     }

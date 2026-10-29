@@ -282,8 +282,11 @@ object Chips {
         return paint.measureText(text) / metrics.density
     }
 
-    /** A chip placed in a spot, and whether it takes 2 slots there. */
-    data class Placed(val spec: ChipSpec, val value: ChipValues.Value, val big: Boolean)
+    /**
+     * A chip placed in a spot, and whether it takes 2 slots there. [roomDp], when set, is the
+     * most its pill may take there (a chip squeezed into the end of a row); its text shrinks to fit.
+     */
+    data class Placed(val spec: ChipSpec, val value: ChipValues.Value, val big: Boolean, val roomDp: Float? = null)
 
     /**
      * Whether [spec] takes 2 slots: an extended chip (or any chip that can be, when [always], as on
@@ -381,14 +384,14 @@ object Chips {
      */
     fun addPlaced(context: Context, views: RemoteViews, placed: List<Placed>, style: ChipStyle, aod: Boolean, container: Int) {
         views.setViewVisibility(container, if (placed.isEmpty()) View.GONE else View.VISIBLE)
-        placed.forEach { (spec, value, big) ->
-            val child = if (big) bigChip(context, style, spec, value, aod) else normalChip(context, style, spec, value, aod)
+        placed.forEach { (spec, value, big, room) ->
+            val child = if (big) bigChip(context, style, spec, value, aod) else normalChip(context, style, spec, value, aod, room)
             child.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
             views.addView(container, child)
         }
     }
 
-    private fun normalChip(context: Context, style: ChipStyle, spec: ChipSpec, value: ChipValues.Value, aod: Boolean): RemoteViews {
+    private fun normalChip(context: Context, style: ChipStyle, spec: ChipSpec, value: ChipValues.Value, aod: Boolean, roomDp: Float? = null): RemoteViews {
         val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
         val child = RemoteViews(context.packageName, style.layout)
         if (value.parts.size > 1) {
@@ -404,7 +407,7 @@ object Chips {
             child.setTextViewText(R.id.chip_text, value.text)
             child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: ${value.text}")
             look(child, spec, value, aod, textColour)
-            fit(context, child, style, value.text)
+            fit(context, child, style, value.text, roomDp)
         }
         return child
     }
@@ -654,8 +657,8 @@ object Chips {
     private fun dp(context: Context, value: Int): Int = (value * context.resources.displayMetrics.density).toInt()
 
     /** Makes [given] fit the pill (see [addPlaced]). */
-    private fun fit(context: Context, chip: RemoteViews, style: ChipStyle, given: String) {
-        val room = (style.maxPillDp?.let { it - 2 * style.padDp } ?: Int.MAX_VALUE).toFloat()
+    private fun fit(context: Context, chip: RemoteViews, style: ChipStyle, given: String, maxPillDp: Float? = null) {
+        val room = (maxPillDp ?: style.maxPillDp?.toFloat())?.let { it - 2 * style.padDp } ?: Float.MAX_VALUE
         val withIcon = minOf(room - style.iconDp - 4, style.maxTextDp.toFloat())
         // "5h 13m" first loses its spaces ("5h13m"), so the icon can stay.
         var text = given

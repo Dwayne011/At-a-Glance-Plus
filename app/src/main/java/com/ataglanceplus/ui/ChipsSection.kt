@@ -273,7 +273,9 @@ internal fun ChipsSection() {
                 SegmentedButton(
                     selected = look == option,
                     onClick = { Prefs.setWeatherLook(context, option) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = WeatherLook.entries.size)
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = WeatherLook.entries.size),
+                    // No tick: with three options it squeezes the labels; the fill shows the choice.
+                    icon = {}
                 ) { Text(if (option == WeatherLook.ANIMATED) "Animated" else option.label, maxLines = 1) }
             }
         }

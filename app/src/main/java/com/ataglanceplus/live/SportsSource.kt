@@ -77,6 +77,9 @@ data class RaceSession(
     /** Leading drivers, e.g. "K. Antonelli". */
     val top: List<String>,
     val link: String?,
+    /** The circuit's name and city, as ESPN gives them, for its outline. */
+    val circuitName: String? = null,
+    val circuitCity: String? = null,
 )
 
 /**
@@ -230,6 +233,19 @@ object SportsSource {
         )
     }
 
+    /** [game] in detail (box score, line-ups, events), for the dashboard; null if the feed did not answer. */
+    fun detail(game: Game): GameDetail? =
+        getJson("$BASE/${game.sport}/${game.league}/summary?event=${game.eventId}")?.let { runCatching { GameDetail.parse(it) }.getOrNull() }
+
+    /** The followed keys whose fixtures include [eventId] (two, when two followed teams meet). */
+    fun keysFor(eventId: String): Set<String> =
+        _games.value.filterValues { games -> games.any { it.eventId == eventId } }.keys +
+            _races.value.filterValues { sessions -> sessions.any { it.eventId == eventId } }.keys
+
+    /** Whether the user hides scores for any followed team or series in [eventId]. */
+    fun scoresHidden(context: Context, eventId: String): Boolean =
+        keysFor(eventId).any { it in Prefs.sportsHidden(context) }
+
     private fun summary(game: Game): Game? {
         val root = getJson("$BASE/${game.sport}/${game.league}/summary?event=${game.eventId}") ?: return null
         val competition = root.optJSONObject("header")?.optJSONArray("competitions")?.optJSONObject(0) ?: return null
@@ -261,6 +277,9 @@ object SportsSource {
         val event = root.optJSONArray("events")?.optJSONObject(0) ?: return emptyList()
         val name = event.optString("shortName").ifEmpty { event.optString("name") }
         val link = event.optJSONArray("links")?.optJSONObject(0)?.optString("href")
+        val circuit = event.optJSONObject("circuit")
+        val circuitName = circuit?.optString("fullName")?.ifEmpty { null }
+        val circuitCity = circuit?.optJSONObject("address")?.optString("city")?.ifEmpty { null }
         val competitions = event.optJSONArray("competitions") ?: return emptyList()
         return (0 until competitions.length()).mapNotNull { i ->
             val c = competitions.getJSONObject(i)
@@ -279,6 +298,8 @@ object SportsSource {
                 status = type.optString("shortDetail"),
                 top = top,
                 link = link,
+                circuitName = circuitName,
+                circuitCity = circuitCity,
             )
         }.sortedBy { it.start }
     }

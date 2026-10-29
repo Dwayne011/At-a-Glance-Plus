@@ -38,6 +38,7 @@ object Prefs {
     private const val KEY_SPORTS_NEXT = "sports_next_always"
     private const val KEY_SPORTS_STEP = "sports_race_step"
     private const val KEY_SPORTS_OPEN = "sports_open"
+    private const val KEY_SPORTS_HIDDEN = "sports_hidden"
     private const val KEY_FINANCE_OPEN = "finance_open"
     private const val KEY_FIN_TICKERS = "finance_tickers"
     private const val KEY_FIN_REFRESH = "finance_refresh_minutes"
@@ -369,6 +370,14 @@ object Prefs {
 
     fun setSportsOpen(context: Context, open: SportsOpen) {
         get(context).edit().putString(KEY_SPORTS_OPEN, open.name).apply()
+    }
+
+    /** Followed teams and series whose scores are hidden (on the cards and dashboards), by key. */
+    fun sportsHidden(context: Context): Set<String> = get(context).getStringSet(KEY_SPORTS_HIDDEN, emptySet()).orEmpty()
+
+    fun setSportsHidden(context: Context, key: String, hidden: Boolean) {
+        val now = sportsHidden(context)
+        get(context).edit().putStringSet(KEY_SPORTS_HIDDEN, if (hidden) now + key else now - key).apply()
     }
 
     /** Tapping a stock opens this app's dashboard (else its Google Finance page). */

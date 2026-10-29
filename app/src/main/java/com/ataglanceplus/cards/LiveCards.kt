@@ -371,7 +371,9 @@ object LiveCards {
             if (bitmap != null) views.setImageViewBitmap(logo, bitmap) else views.setViewVisibility(logo, View.GONE)
             views.setTextViewText(abbr, side.abbr)
         }
-        val scored = showing.phase == SportsPhase.LIVE || showing.phase == SportsPhase.AFTER
+        // The user may hide this team's scores: then the card says the game is on or over, not how.
+        val hidden = SportsSource.scoresHidden(context, game.eventId)
+        val scored = !hidden && (showing.phase == SportsPhase.LIVE || showing.phase == SportsPhase.AFTER)
         listOf(game.home to R.id.sports_home_score, game.away to R.id.sports_away_score).forEach { (side, id) ->
             if (scored) {
                 views.setTextViewText(id, side.score ?: "0")
@@ -386,7 +388,7 @@ object LiveCards {
         views.setTextViewText(R.id.sports_league, game.leagueName)
         val (status, note) = when (showing.phase) {
             SportsPhase.LIVE -> game.status to "LIVE"
-            SportsPhase.AFTER -> game.status to null
+            SportsPhase.AFTER -> game.status to if (hidden) "Score hidden" else null
             SportsPhase.BEFORE -> clock(context, game.start) to countdown(game.start)
             SportsPhase.NEXT -> day(context, game.start) to "Next game"
         }
@@ -398,14 +400,14 @@ object LiveCards {
         }
         if (aod) {
             Style.aodBody(
-                views, R.id.sports_home_abbr, R.id.sports_away_abbr, R.id.sports_home_score, R.id.sports_away_score,
+                views, R.id.sports_home_abbr, R.id.sports_away_abbr, R.id.sports_home_side, R.id.sports_away_side, R.id.sports_home_score, R.id.sports_away_score,
                 R.id.sports_league, R.id.sports_status, R.id.sports_note
             )
         }
         val tap = gameTap(context, "${game.home.name} vs ${game.away.name}", game.link, key, com.ataglanceplus.ui.DashboardActivity.KIND_GAME_PREFIX + game.eventId)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
-        val title = "${game.home.abbr} ${game.home.score ?: ""} ${game.away.abbr} ${game.away.score ?: ""}".trim()
+        val title = if (scored) "${game.home.abbr} ${game.home.score ?: ""} ${game.away.abbr} ${game.away.score ?: ""}".trim() else "${game.home.abbr} v ${game.away.abbr}"
         return Style.target(context, targetId(key), views, title, "$status · ${game.leagueName}", R.drawable.ic_nav_flag, tap, if (showing.phase == SportsPhase.LIVE) 1.65f else 1.2f)
     }
 
@@ -415,7 +417,7 @@ object LiveCards {
         val key = showing.instanceKey
         val views = RemoteViews(context.packageName, R.layout.card_race)
         val title = "${session.eventName} · ${session.session}"
-        val podium = session.top.mapIndexed { i, name -> "${i + 1} ${name.substringAfter(". ")}" }.joinToString(" · ")
+        val podium = if (SportsSource.scoresHidden(context, session.eventId)) "" else session.top.mapIndexed { i, name -> "${i + 1} ${name.substringAfter(". ")}" }.joinToString(" · ")
         // The pill is the Next button, so what the session is doing leads the detail line.
         val detail: CharSequence = when (showing.phase) {
             SportsPhase.LIVE -> android.text.SpannableString("LIVE · " + podium.ifEmpty { session.status }).apply {
@@ -439,6 +441,8 @@ object LiveCards {
             views.setInt(R.id.race_badge_text, "setBackgroundResource", R.drawable.aod_outline_r14)
             views.setImageViewResource(R.id.race_icon, R.drawable.ic_nav_flag_aod)
         }
+        // The circuit's outline in place of the flag, when it is one we have.
+        CircuitIcons.find(session.circuitCity, session.circuitName, aod)?.let { views.setImageViewResource(R.id.race_icon, it) }
         val tap = gameTap(context, "F1 ${session.eventName} ${session.session}", session.link, key, com.ataglanceplus.ui.DashboardActivity.KIND_RACE_PREFIX + session.eventId)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)

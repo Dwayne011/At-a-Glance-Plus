@@ -43,6 +43,19 @@
                 android:maxLines="1"
                 android:textColor="#FFFFFFFF"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/sports_home_side"
+                android:layout_width="match_parent"
+                android:layout_height="11dp"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.08"
+                android:maxLines="1"
+                android:text="HOME"
+                android:textColor="#99FFFFFF"
+                android:textSize="8sp" />
         </LinearLayout>
 
         <TextView
@@ -149,6 +162,19 @@
                 android:maxLines="1"
                 android:textColor="#FFFFFFFF"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/sports_away_side"
+                android:layout_width="match_parent"
+                android:layout_height="11dp"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.08"
+                android:maxLines="1"
+                android:text="AWAY"
+                android:textColor="#99FFFFFF"
+                android:textSize="8sp" />
         </LinearLayout>
     </LinearLayout>
 

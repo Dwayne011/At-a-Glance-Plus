@@ -10,6 +10,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -715,8 +716,10 @@ private suspend fun ensureSports(context: Context) {
 }
 
 /**
- * A game: the scoreboard (live, final or kick-off), then the followed team's next fixtures and
- * latest results. Links on to Google and ESPN.
+ * A game: the scoreboard (live, final or kick-off); each side's line-up; then, unless the user
+ * hides this team's scores, the match's events (goals with scorer and assist, cards, subs), team
+ * stats, each team's leaders and the box score; then the team's next games and results. Hidden
+ * scores can be revealed for this visit. While the game is on, the detail refreshes every 30s.
  */
 @Composable
 private fun GameDashboard(eventId: String) {
@@ -728,24 +731,42 @@ private fun GameDashboard(eventId: String) {
         value = if (key == null) Load.Missing("This game is no longer in your teams' fixtures.")
         else Load.Ready(Prefs.sportsFollowed(context).firstOrNull { it.key == key } to all.getValue(key))
     }
+    var revealed by remember { mutableStateOf(false) }
     when (val state = load) {
         Load.Loading -> { Title("Game"); Text("Loading…") }
         is Load.Missing -> { Title("Game"); Text(state.why) }
         is Load.Ready -> {
             val (team, games) = state.data
             val game = games.first { it.eventId == eventId }
+            val hidden = !revealed && com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)
+            val detail by produceState<com.ataglanceplus.live.GameDetail?>(null, game.eventId) {
+                while (true) {
+                    value = withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsSource.detail(game) } ?: value
+                    if (game.state != "in") break
+                    kotlinx.coroutines.delay(30_000)
+                }
+            }
             Title(team?.name ?: game.leagueName)
-            Scoreboard(game)
+            Scoreboard(game, hidden)
+            if (hidden) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Scores are hidden for this team. Line-ups and fixtures still show.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        OutlinedButton(onClick = { revealed = true }, modifier = Modifier.padding(start = 12.dp)) { Text("Reveal") }
+                    }
+                }
+            }
+            detail?.let { d -> GameDetailSections(d, hidden) }
             val upcoming = games.filter { it.state == "pre" && it.eventId != eventId }.sortedBy { it.start }.take(5)
             if (upcoming.isNotEmpty()) {
                 ChartCard("Next games") {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { upcoming.forEach { FixtureRow(it, team) } }
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { upcoming.forEach { FixtureRow(it, team, hidden) } }
                 }
             }
             val results = games.filter { it.state == "post" && it.eventId != eventId }.sortedByDescending { it.start }.take(5)
             if (results.isNotEmpty()) {
                 ChartCard("Results") {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { results.forEach { FixtureRow(it, team) } }
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { results.forEach { FixtureRow(it, team, hidden) } }
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -757,20 +778,132 @@ private fun GameDashboard(eventId: String) {
     Text("Scores from ESPN's free public feed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
+/** The game's detail, as far as the sport has it. With scores hidden, only the line-ups. */
 @Composable
-private fun Scoreboard(game: com.ataglanceplus.live.Game) {
+private fun GameDetailSections(d: com.ataglanceplus.live.GameDetail, hidden: Boolean) {
+    if (d.lineups.isNotEmpty()) {
+        ChartCard("Line-ups") {
+            d.lineups.forEachIndexed { i, lineup ->
+                if (i > 0) androidx.compose.material3.HorizontalDivider()
+                Text(listOfNotNull(lineup.team, if (i == 0) "Home" else "Away", lineup.formation).joinToString(" · "), style = MaterialTheme.typography.titleSmall)
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    lineup.starters.forEach { PlayerRow(it) }
+                }
+                if (lineup.subs.isNotEmpty()) {
+                    Text("Substitutes", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { lineup.subs.forEach { PlayerRow(it) } }
+                }
+            }
+        }
+    }
+    if (hidden) return
+    if (d.events.isNotEmpty()) {
+        ChartCard("Match events") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                d.events.forEach { e ->
+                    Row {
+                        Text(e.clock, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(52.dp))
+                        Text(
+                            when (e.kind) {
+                                com.ataglanceplus.live.GameDetail.Kind.GOAL -> "⚽ "
+                                com.ataglanceplus.live.GameDetail.Kind.YELLOW -> "🟨 "
+                                com.ataglanceplus.live.GameDetail.Kind.RED -> "🟥 "
+                                com.ataglanceplus.live.GameDetail.Kind.SUB -> "⇄ "
+                                else -> ""
+                            } + e.text + (e.team?.let { " · $it" } ?: ""),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+    }
+    if (d.scoring.isNotEmpty()) {
+        ChartCard("Scoring") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                d.scoring.forEach { e ->
+                    Row {
+                        Text(e.clock, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(72.dp))
+                        Text(listOfNotNull(e.team, e.text).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+    if (d.leaders.isNotEmpty()) {
+        ChartCard("Top players") {
+            d.leaders.forEach { (team, rows) ->
+                Text(team, style = MaterialTheme.typography.titleSmall)
+                rows.forEach { (what, who, value) -> Stat(what, "$who · $value") }
+            }
+        }
+    }
+    if (d.teamStats.isNotEmpty()) {
+        ChartCard("Team stats") {
+            d.teamStats.forEach { (label, home, away) ->
+                Row {
+                    Text(home, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
+                    Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text(away, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                }
+            }
+        }
+    }
+    d.boxScores.forEach { box -> BoxScoreTable(box) }
+}
+
+@Composable
+private fun PlayerRow(p: com.ataglanceplus.live.GameDetail.Player) {
+    Row {
+        Text(p.number.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(28.dp))
+        Text(p.name + when {
+            p.subbedIn -> "  ↑"
+            p.subbedOut -> "  ↓"
+            else -> ""
+        }, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(p.position.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** One team's box score: a fixed name column and the sport's stat columns, scrolling sideways. */
+@Composable
+private fun BoxScoreTable(box: com.ataglanceplus.live.GameDetail.BoxScore) {
+    ChartCard("Box score · ${box.team}") {
+        Row {
+            Column(modifier = Modifier.width(120.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Player", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                box.players.forEach { p ->
+                    Text(p.name, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        fontWeight = if (p.starter) androidx.compose.ui.text.font.FontWeight.Medium else null)
+                }
+            }
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                box.labels.forEachIndexed { c, label ->
+                    Column(modifier = Modifier.width(48.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        box.players.forEach { p -> Text(p.stats.getOrElse(c) { "" }, style = MaterialTheme.typography.bodySmall, maxLines = 1) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Scoreboard(game: com.ataglanceplus.live.Game, hidden: Boolean = false) {
     val context = LocalContext.current
-    val scored = game.state != "pre"
+    val scored = game.state != "pre" && !hidden
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(game.leagueName, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TeamBlock(game.home, Modifier.weight(1f))
+                TeamBlock(game.home, "Home", Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (scored) {
-                        Text("${game.home.score ?: "0"} – ${game.away.score ?: "0"}", style = MaterialTheme.typography.displaySmall)
-                    } else {
-                        Text(clock(context, Instant.ofEpochMilli(game.start)), style = MaterialTheme.typography.headlineMedium)
+                    when {
+                        scored -> Text("${game.home.score ?: "0"} – ${game.away.score ?: "0"}", style = MaterialTheme.typography.displaySmall)
+                        game.state == "pre" -> Text(clock(context, Instant.ofEpochMilli(game.start)), style = MaterialTheme.typography.headlineMedium)
+                        else -> Text("– : –", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
                         when (game.state) {
@@ -782,24 +915,25 @@ private fun Scoreboard(game: com.ataglanceplus.live.Game) {
                         color = if (game.state == "in") DOWN else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                TeamBlock(game.away, Modifier.weight(1f))
+                TeamBlock(game.away, "Away", Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun TeamBlock(side: com.ataglanceplus.live.Side, modifier: Modifier) {
+private fun TeamBlock(side: com.ataglanceplus.live.Side, place: String, modifier: Modifier) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         val logo = remember(side.logoUrl) { com.ataglanceplus.live.SportsSource.logo(side.logoUrl)?.asImageBitmap() }
         if (logo != null) Image(logo, contentDescription = null, modifier = Modifier.size(48.dp)) else Spacer(Modifier.size(48.dp))
         Text(side.name, style = MaterialTheme.typography.bodyMedium, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(place, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 /** A fixture or result from the followed team's side: when, home or away, the opponent, and the score with W, D or L. */
 @Composable
-private fun FixtureRow(game: com.ataglanceplus.live.Game, team: com.ataglanceplus.live.Followed?) {
+private fun FixtureRow(game: com.ataglanceplus.live.Game, team: com.ataglanceplus.live.Followed?, hidden: Boolean = false) {
     val context = LocalContext.current
     val home = team?.teamId == null || game.home.id == team.teamId
     val us = if (home) game.home else game.away
@@ -816,7 +950,9 @@ private fun FixtureRow(game: com.ataglanceplus.live.Game, team: com.ataglanceplu
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        if (game.state == "post") {
+        if (game.state == "post" && hidden) {
+            Text("Result hidden", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else if (game.state == "post") {
             val outcome = when {
                 us.winner -> "W"
                 them.winner -> "L"
@@ -842,6 +978,19 @@ private fun RaceDashboard(eventId: String) {
         is Load.Ready -> {
             val sessions = state.data
             Title(sessions.first().eventName)
+            val first = sessions.first()
+            com.ataglanceplus.cards.CircuitIcons.find(first.circuitCity, first.circuitName, aod = false)?.let { outline ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Icon(
+                        androidx.compose.ui.res.painterResource(outline), contentDescription = first.circuitName,
+                        modifier = Modifier.size(96.dp), tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Column(modifier = Modifier.padding(start = 16.dp)) {
+                        first.circuitName?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
+                        first.circuitCity?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+            }
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     sessions.forEach { s ->
@@ -859,7 +1008,7 @@ private fun RaceDashboard(eventId: String) {
                                     color = if (s.state == "in") DOWN else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            if (s.top.isNotEmpty() && s.state != "pre") {
+                            if (s.top.isNotEmpty() && s.state != "pre" && !com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)) {
                                 Text(s.top.mapIndexed { i, n -> "${i + 1} $n" }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
                             }
                         }
