@@ -1,5 +1,14 @@
 At a Glance Plus
 
+Copyright (C) 2026 Dwayne Edwards. This program is free software: you can redistribute it and/or
+modify it under the terms of the GNU General Public License as published by the Free Software
+Foundation, version 3 (see LICENSE). It is distributed WITHOUT ANY WARRANTY.
+
+The Google Wallet sign-in and pass sync (app/src/main/java/com/ataglanceplus/wallet) follow the
+Google Wallet plugin of SmartspacerPlugins (https://github.com/KieronQuinn/SmartspacerPlugins),
+Copyright Kieron Quinn, licensed under the GNU General Public License version 3: its sign-in
+flow, token requests and the Wallet message field numbers (from its .proto definitions).
+
 The wireless debugging client in app/src/main/java/com/ataglanceplus/adb and the pairing
 code in app/src/main/cpp/adb_pairing.cpp are derived from Shizuku
 (https://github.com/RikkaApps/Shizuku), Copyright Rikka contributors, licensed under the

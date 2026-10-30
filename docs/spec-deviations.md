@@ -41,7 +41,7 @@ Every card except weather appears only while it has something real to show.
 | Sports | ESPN's public scoreboard feed (unofficial) for followed teams and Formula 1; live scores refresh every 30 s | During a game, for a chosen time before and after it, and the next fixture if switched on; one card per game. Tapping opens Google's page for the game (ESPN's if chosen); Next on the F1 card steps through the weekend's sessions for a minute |
 | Torch | The phone's torch, however it was turned on | While it is on. A tap turns it off; brightness by tapping a step of the bar or − / + (cards cannot follow a drag, so there is no slider) |
 | Extra chips | Chips that have something to report but no room on the cards on show | Only then |
-| Wallet | None yet (needs the place rules engine) | Never, for now |
+| Wallet | Google Wallet passes, synced over a Google sign-in workaround (see below) | Near a pass's places, in its time windows, or — for flights, events and transit — around its own time; tapping shows the code full-screen (after unlocking) at full brightness |
 
 Card text and layout read notification contents as each app posts them, so wording can differ
 between apps (for example the split between a distance and an instruction on navigation).
@@ -61,3 +61,32 @@ between apps (for example the split between a distance and an instruction on nav
 | Sports background: fixed team-tinted gradients | The arena slate washed with each team's real colour | Chosen: real team colours |
 | F1 card: always "Next ›" | "‹ Back" on the last session | Next steps through the weekend and back |
 | Standard look: the spec's surface | Same, drawn behind the content with its wave; the scenes are the same surface tinted for the weather | The Standard look follows the spec; Scenes and Animated redrawn to match |
+
+## Google Wallet passes (0.15.0)
+
+Google gives apps no supported way to read a user's Wallet passes. To show them without the
+user re-entering anything, the app signs in the way Google Play services does — the same
+workaround SmartspacerPlugins' Google Wallet plugin uses (credited in `NOTICE`; this is why the
+app is GPL-3.0). This is against Google's terms, so the user is shown a clear warning before the
+sign-in and must agree.
+
+| Area | As built | Why |
+|---|---|---|
+| Sign-in | Google's own `EmbeddedSetup` page in a WebView; the `oauth_token` cookie is traded, as Play services, for the account master token, then a `tapandpay` token | The only way to read Wallet passes |
+| Token storage | Master token encrypted with an Android Keystore key, on the phone only; sign-out deletes it; a 403 (revoked) signs out automatically | Keep the powerful token safe |
+| Sync | `syncvaluables` protobuf, parsed by a hand-written wire-format reader (no generated classes); every ~6 h, on screen-on when stale, and after signing in | Avoids the protobuf Gradle plugin, which is fragile on AGP 9.3.2 |
+| Where/when a pass shows | The user's rules: any number of places (Play services geofences, with a radius each) and time windows; flights, events and transit also use their own times | Passes carry no location, and Wallet never surfaces some passes (e.g. a Clubcard) |
+| The code | Rendered on the phone with ZXing (QR, Aztec, PDF417, the 1-D formats, or text) | No network needed to show a code |
+
+## Sports & F1 in-app dashboards (0.15.0)
+
+The sports and F1 detail screens (opened by tapping their cards) were rebuilt to the uploaded
+Material You dashboard spec: a dark full-screen layout with a pinned hero and a swipeable
+segmented-pill tab pager, instead of one long vertical scroll.
+
+| Spec | As built | Why |
+|---|---|---|
+| Fixed tabs (Leaders, Team Stats, Box Score, Schedule) | Tabs appear only for the data a sport actually has (Leaders / Team Stats / Box Score for the stat sports; Line-ups / Timeline for football; Schedule always) | The app covers every ESPN sport, not just the NBA; it shows what the live feed gives and hides the rest |
+| Hardcoded Hawks–Cavaliers / Mexico GP sample data | Live ESPN data (`GameDetail`, `RaceSession`); real team colours in the hero and tug-of-war bars | The app is live, not a mock-up |
+| Quarter splits in the NBA hero | Left out | The scoreboard feed doesn't carry period splits for every sport |
+| F1 Circuit Info and championship Standings tabs (circuit length, altitude, DRS zones, lap record, points) | Left out; the F1 hub shows the circuit, an up-next countdown, the weekend's sessions and results | The public feed doesn't provide circuit telemetry or championship points, and the app doesn't invent data |

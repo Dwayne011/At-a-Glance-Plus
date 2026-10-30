@@ -52,6 +52,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.ataglanceplus.wadb.Activator
 import com.ataglanceplus.wadb.Wadb
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -170,6 +171,9 @@ internal fun CardPreviewSection(maxCards: Int, sessions: Collection<com.ataglanc
             if (type == CardType.FINANCE && Prefs.cardEnabled(context, type)) {
                 // Passing the settings version makes it redraw when any option changes.
                 FinanceSettings(version)
+            }
+            if (type == CardType.WALLET && Prefs.cardEnabled(context, type)) {
+                WalletSettings(version)
             }
             if (type == CardType.MEDIA && Prefs.cardEnabled(context, type)) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -445,3 +449,207 @@ private fun SportsSettings(settingsVersion: Int) {
     }
     Text("Scores refresh every 30 seconds during a game. From ESPN's free public feed, which is unofficial and could change.", style = MaterialTheme.typography.bodySmall)
 }
+
+/** Google Wallet: sign in, and give each synced pass its places and times. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WalletSettings(settingsVersion: Int) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var tick by remember { mutableStateOf(0) }
+    @Suppress("UNUSED_EXPRESSION") settingsVersion
+
+    val signedIn = remember(tick) { com.ataglanceplus.wallet.GoogleAccount.isSignedIn(context) }
+    val email = remember(tick) { com.ataglanceplus.wallet.GoogleAccount.email(context) }
+    val signIn = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { tick++ }
+
+    if (!signedIn) {
+        Text(
+            "Show your Google Wallet passes on the deck — loyalty cards, tickets, boarding passes — near the places and at the times you choose.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
+            "Signing in uses the same workaround Smartspacer does: it signs in as Google Play services, which is against Google's terms. You'll see the full warning before anything happens.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        Button(onClick = { signIn.launch(android.content.Intent(context, com.ataglanceplus.wallet.WalletSignInActivity::class.java)) }) {
+            Text("Sign in to Google Wallet")
+        }
+        return
+    }
+
+    val passes by com.ataglanceplus.wallet.WalletSource.passes.collectAsStateWithLifecycle()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Signed in", style = MaterialTheme.typography.labelLarge)
+            if (!email.isNullOrEmpty()) Text(email, style = MaterialTheme.typography.bodySmall)
+        }
+        TextButton(onClick = { com.ataglanceplus.wallet.GoogleAccount.signOut(context); tick++ }) { Text("Sign out") }
+    }
+
+    val background = androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
+    val fine = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
+    val backgroundLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
+    if (!background) {
+        Text(
+            "To show passes by place while the app is closed, allow location all the time.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        OutlinedButton(onClick = {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                fine.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            } else {
+                backgroundLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
+        }) { Text("Allow location access") }
+    }
+
+    if (passes.isEmpty()) {
+        Text("No passes yet — they sync from Google Wallet in the background. Pull down in a moment, or sync now.", style = MaterialTheme.typography.bodySmall)
+    } else {
+        passes.forEach { pass -> WalletPassRules(pass) { tick++ } }
+    }
+    OutlinedButton(onClick = { scope.launch { withContext(Dispatchers.IO) { com.ataglanceplus.wallet.WalletSource.sync(context) } } }) {
+        Text("Sync now")
+    }
+}
+
+/** The places and times one Wallet pass shows. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WalletPassRules(pass: com.ataglanceplus.wallet.WalletPass, onChange: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var tick by remember { mutableStateOf(0) }
+    val timed = pass.kind in setOf(
+        com.ataglanceplus.wallet.WalletPass.Kind.EVENT,
+        com.ataglanceplus.wallet.WalletPass.Kind.FLIGHT,
+        com.ataglanceplus.wallet.WalletPass.Kind.TRANSIT,
+    )
+    val rule = remember(tick) {
+        com.ataglanceplus.wallet.WalletRules.ruleFor(context, pass.id)
+            ?: com.ataglanceplus.wallet.WalletRules.Rule(pass.id, auto = timed)
+    }
+    fun save(updated: com.ataglanceplus.wallet.WalletRules.Rule) {
+        com.ataglanceplus.wallet.WalletRules.upsert(context, updated); tick++; onChange()
+    }
+
+    HorizontalDivider()
+    Text(pass.title, style = MaterialTheme.typography.labelLarge)
+    pass.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+
+    if (timed) {
+        SwitchRow("Show automatically at its time", "Appears around the flight, event or journey time, like Google Wallet.", rule.auto) {
+            save(rule.copy(auto = it))
+        }
+    }
+
+    Text("Places", style = MaterialTheme.typography.labelMedium)
+    rule.places.forEachIndexed { index, place ->
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(place.label.ifEmpty { "Place" }, modifier = Modifier.weight(1f))
+                TextButton(onClick = { save(rule.copy(places = rule.places.filterIndexed { i, _ -> i != index })) }) { Text("Remove") }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(100, 150, 250, 500).forEach { metres ->
+                    FilterChip(
+                        selected = place.radiusM == metres,
+                        onClick = { save(rule.copy(places = rule.places.mapIndexed { i, p -> if (i == index) p.copy(radiusM = metres) else p })) },
+                        label = { Text("$metres m") },
+                    )
+                }
+            }
+        }
+    }
+    OutlinedButton(onClick = {
+        scope.launch {
+            val location = currentLocation(context)
+            if (location != null) {
+                save(rule.copy(places = rule.places + com.ataglanceplus.wallet.WalletRules.Place("Here", location.latitude, location.longitude, 150)))
+            }
+        }
+    }) { Text("Add current location") }
+
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<Pair<String, android.location.Address>>>(emptyList()) }
+    OutlinedTextField(
+        value = query,
+        onValueChange = { query = it },
+        label = { Text("Search a place or address") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    LaunchedEffect(query) {
+        if (query.length < 3) {
+            results = emptyList()
+        } else {
+            delay(400)
+            results = geocode(context, query)
+        }
+    }
+    results.forEach { (label, address) ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = {
+                save(rule.copy(places = rule.places + com.ataglanceplus.wallet.WalletRules.Place(label.take(30), address.latitude, address.longitude, 150)))
+                query = ""; results = emptyList()
+            }) { Text("Add") }
+        }
+    }
+
+    Text("Times", style = MaterialTheme.typography.labelMedium)
+    fun hm(m: Int) = String.format(java.util.Locale.ROOT, "%02d:%02d", m / 60, m % 60)
+    rule.windows.forEachIndexed { index, window ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("${hm(window.startMin)} – ${hm(window.endMin)}", modifier = Modifier.weight(1f))
+            TextButton(onClick = { save(rule.copy(windows = rule.windows.filterIndexed { i, _ -> i != index })) }) { Text("Remove") }
+        }
+    }
+    OutlinedButton(onClick = {
+        android.app.TimePickerDialog(context, { _, sh, sm ->
+            android.app.TimePickerDialog(context, { _, eh, em ->
+                save(rule.copy(windows = rule.windows + com.ataglanceplus.wallet.WalletRules.Window(emptySet(), sh * 60 + sm, eh * 60 + em)))
+            }, (sh + 1) % 24, sm, true).apply { setTitle("Until") }.show()
+        }, 8, 0, true).apply { setTitle("From") }.show()
+    }) { Text("Add a time window") }
+
+    if (rule.places.isEmpty() && rule.windows.isEmpty() && !rule.auto) {
+        Text("This pass won't show until you add a place, a time, or turn on its own time.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    }
+}
+
+/** A current fix, or null if location isn't permitted or available. */
+private suspend fun currentLocation(context: android.content.Context): android.location.Location? {
+    if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) !=
+        android.content.pm.PackageManager.PERMISSION_GRANTED &&
+        androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) !=
+        android.content.pm.PackageManager.PERMISSION_GRANTED
+    ) return null
+    return withContext(Dispatchers.IO) {
+        runCatching {
+            @Suppress("MissingPermission")
+            val task = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context)
+                .getCurrentLocation(com.google.android.gms.location.Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
+            com.google.android.gms.tasks.Tasks.await(task)
+        }.getOrNull()
+    }
+}
+
+/** Addresses matching [query], as "label to address", on a background thread. */
+private suspend fun geocode(context: android.content.Context, query: String): List<Pair<String, android.location.Address>> =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            @Suppress("DEPRECATION")
+            android.location.Geocoder(context, java.util.Locale.getDefault()).getFromLocationName(query, 5).orEmpty().map { address ->
+                val label = (0..address.maxAddressLineIndex).joinToString(", ") { address.getAddressLine(it) }
+                    .ifEmpty { listOfNotNull(address.featureName, address.locality).joinToString(", ") }
+                label to address
+            }
+        }.getOrDefault(emptyList())
+    }

@@ -31,6 +31,8 @@ data class CardData(
     val messageRemainingMs: Long,
     /** True until the message card has been shown on this surface: it plays its entrance. */
     val messageEntering: Boolean,
+    /** Wallet passes whose rules say to show them right now. */
+    val wallet: List<com.ataglanceplus.wallet.WalletPass>,
 )
 
 /** Everything shown on a surface, in order. */
@@ -38,6 +40,9 @@ object CardDeck {
 
     /** Live updates shown at once; more would push the other cards off. */
     private const val MAX_LIVE = 2
+
+    /** Wallet passes shown at once. */
+    private const val MAX_WALLET = 2
 
     /**
      * Cards with something real to show, most time-sensitive first: a new message, the torch while it is on, navigation,
@@ -71,6 +76,7 @@ object CardDeck {
         val sports = if (on(CardType.SPORTS)) data.sports.filter { it.instanceKey !in dismissed } else emptyList()
         val (liveSports, otherSports) = sports.partition { it.phase == com.ataglanceplus.live.SportsPhase.LIVE }
         val finance = if (on(CardType.FINANCE)) FinanceRules.showing(context, data.quotes)?.takeIf { it.instanceKey !in dismissed } else null
+        val wallet = if (on(CardType.WALLET)) data.wallet.filter { "wallet:${it.id}" !in dismissed }.take(MAX_WALLET) else emptyList()
 
         // Share out the user's chips. Before the user picks any, each card keeps the spec's own.
         val layout = Prefs.complicationLayout(context)
@@ -116,6 +122,7 @@ object CardDeck {
             alarm?.let { card("alarm") { LiveCards.alarm(context, aod, it, timerChips) } }
             media?.let { card("media") { LiveCards.media(context, aod, it) } }
             calendar?.let { card("calendar") { LiveCards.calendar(context, aod, it, calendarChips) } }
+            wallet.forEach { pass -> card("wallet") { LiveCards.wallet(context, aod, pass) } }
             otherSports.forEach { card("sports") { sportsCard(context, aod, it) } }
             finance?.let { card("finance") { LiveCards.finance(context, aod, data.quotes, it) } }
         }
@@ -150,5 +157,6 @@ object CardDeck {
         data.calendar?.let { add(it.instanceKey) }
         FinanceRules.showing(context, data.quotes)?.let { add(it.instanceKey) }
         data.sports.forEach { add(it.instanceKey) }
+        data.wallet.forEach { add("wallet:${it.id}") }
     }
 }

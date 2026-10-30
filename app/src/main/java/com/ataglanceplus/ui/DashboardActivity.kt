@@ -9,6 +9,15 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -18,6 +27,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -63,6 +73,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.ataglanceplus.Prefs
 import com.ataglanceplus.complications.HealthMetric
@@ -122,23 +133,27 @@ class DashboardActivity : ComponentActivity() {
                         },
                         modifier = Modifier.fillMaxSize().safeDrawingPadding(),
                     ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        when (kind) {
-                            KIND_STEPS -> StepsDashboard()
-                            KIND_SLEEP -> SleepDashboard()
-                            KIND_SCREEN -> ScreenDashboard()
-                            KIND_ETORO -> EtoroDashboard()
-                            else -> when {
-                                kind?.startsWith(KIND_STOCK_PREFIX) == true -> StockDashboard(kind.removePrefix(KIND_STOCK_PREFIX))
-                                kind?.startsWith(KIND_GAME_PREFIX) == true -> GameDashboard(kind.removePrefix(KIND_GAME_PREFIX))
-                                kind?.startsWith(KIND_RACE_PREFIX) == true -> RaceDashboard(kind.removePrefix(KIND_RACE_PREFIX))
-                                else -> HealthMetric.fromId(kind?.removePrefix(KIND_HEALTH_PREFIX))?.let { MetricDashboard(it) } ?: Text("Nothing to show.")
+                    // Sports and F1 get a full-screen, swipeable layout of their own; the rest
+                    // stack vertically in one scroll.
+                    when {
+                        kind?.startsWith(KIND_GAME_PREFIX) == true -> GameMatchDashboard(kind.removePrefix(KIND_GAME_PREFIX))
+                        kind?.startsWith(KIND_RACE_PREFIX) == true -> F1EventDashboard(kind.removePrefix(KIND_RACE_PREFIX))
+                        else -> Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            when (kind) {
+                                KIND_STEPS -> StepsDashboard()
+                                KIND_SLEEP -> SleepDashboard()
+                                KIND_SCREEN -> ScreenDashboard()
+                                KIND_ETORO -> EtoroDashboard()
+                                else -> when {
+                                    kind?.startsWith(KIND_STOCK_PREFIX) == true -> StockDashboard(kind.removePrefix(KIND_STOCK_PREFIX))
+                                    else -> HealthMetric.fromId(kind?.removePrefix(KIND_HEALTH_PREFIX))?.let { MetricDashboard(it) } ?: Text("Nothing to show.")
+                                }
                             }
                         }
                     }
@@ -1059,146 +1074,6 @@ private suspend fun ensureSports(context: Context) {
     }
 }
 
-/**
- * A game: the scoreboard (live, final or kick-off); each side's line-up; then, unless the user
- * hides this team's scores, the match's events (goals with scorer and assist, cards, subs), team
- * stats, each team's leaders and the box score; then the team's next games and results. Hidden
- * scores can be revealed for this visit. While the game is on, the detail refreshes every 30s.
- */
-@Composable
-private fun GameDashboard(eventId: String) {
-    val context = LocalContext.current
-    val refresh = LocalRefresh.current
-    val load by produceState<Load<Pair<com.ataglanceplus.live.Followed?, List<com.ataglanceplus.live.Game>>>>(Load.Loading, eventId, refresh.generation) {
-        withContext(Dispatchers.IO) { ensureSports(context) }
-        val all = com.ataglanceplus.live.SportsSource.games.value
-        val key = all.entries.firstOrNull { (_, games) -> games.any { it.eventId == eventId } }?.key
-        value = if (key == null) Load.Missing("This game is no longer in your teams' fixtures.")
-        else Load.Ready(Prefs.sportsFollowed(context).firstOrNull { it.key == key } to all.getValue(key))
-        refresh.loaded = refresh.generation
-    }
-    var revealed by remember { mutableStateOf(false) }
-    when (val state = load) {
-        Load.Loading -> { Title("Game"); Text("Loading…") }
-        is Load.Missing -> { Title("Game"); Text(state.why) }
-        is Load.Ready -> {
-            val (team, games) = state.data
-            val game = games.first { it.eventId == eventId }
-            val hidden = !revealed && com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)
-            val detail by produceState<com.ataglanceplus.live.GameDetail?>(null, game.eventId, refresh.generation) {
-                while (true) {
-                    value = withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsSource.detail(game) } ?: value
-                    if (game.state != "in") break
-                    kotlinx.coroutines.delay(30_000)
-                }
-            }
-            Title(team?.name ?: game.leagueName)
-            Scoreboard(game, hidden)
-            if (hidden) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Scores are hidden for this team. Line-ups and fixtures still show.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        OutlinedButton(onClick = { revealed = true }, modifier = Modifier.padding(start = 12.dp)) { Text("Reveal") }
-                    }
-                }
-            }
-            detail?.let { d -> GameDetailSections(d, hidden) }
-            val upcoming = games.filter { it.state == "pre" && it.eventId != eventId }.sortedBy { it.start }.take(5)
-            if (upcoming.isNotEmpty()) {
-                ChartCard("Next games") {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { upcoming.forEach { FixtureRow(it, team, hidden) } }
-                }
-            }
-            val results = games.filter { it.state == "post" && it.eventId != eventId }.sortedByDescending { it.start }.take(5)
-            if (results.isNotEmpty()) {
-                ChartCard("Results") {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { results.forEach { FixtureRow(it, team, hidden) } }
-                }
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OpenButton("Open in Google", com.ataglanceplus.cards.LiveCards.googleSearch(context, "${game.home.name} vs ${game.away.name}"))
-                game.link?.let { OpenButton("ESPN", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it))) }
-            }
-        }
-    }
-    Text("Scores from ESPN's free public feed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-/** The game's detail, as far as the sport has it. With scores hidden, only the line-ups. */
-@Composable
-private fun GameDetailSections(d: com.ataglanceplus.live.GameDetail, hidden: Boolean) {
-    if (d.lineups.isNotEmpty()) {
-        ChartCard("Line-ups") {
-            d.lineups.forEachIndexed { i, lineup ->
-                if (i > 0) androidx.compose.material3.HorizontalDivider()
-                Text(listOfNotNull(lineup.team, if (i == 0) "Home" else "Away", lineup.formation).joinToString(" · "), style = MaterialTheme.typography.titleSmall)
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    lineup.starters.forEach { PlayerRow(it) }
-                }
-                if (lineup.subs.isNotEmpty()) {
-                    Text("Substitutes", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { lineup.subs.forEach { PlayerRow(it) } }
-                }
-            }
-        }
-    }
-    if (hidden) return
-    if (d.events.isNotEmpty()) {
-        ChartCard("Match events") {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                d.events.forEach { e ->
-                    Row {
-                        Text(e.clock, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(52.dp))
-                        Text(
-                            when (e.kind) {
-                                com.ataglanceplus.live.GameDetail.Kind.GOAL -> "⚽ "
-                                com.ataglanceplus.live.GameDetail.Kind.YELLOW -> "🟨 "
-                                com.ataglanceplus.live.GameDetail.Kind.RED -> "🟥 "
-                                com.ataglanceplus.live.GameDetail.Kind.SUB -> "⇄ "
-                                else -> ""
-                            } + e.text + (e.team?.let { " · $it" } ?: ""),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-            }
-        }
-    }
-    if (d.scoring.isNotEmpty()) {
-        ChartCard("Scoring") {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                d.scoring.forEach { e ->
-                    Row {
-                        Text(e.clock, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(72.dp))
-                        Text(listOfNotNull(e.team, e.text).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
-    if (d.leaders.isNotEmpty()) {
-        ChartCard("Top players") {
-            d.leaders.forEach { (team, rows) ->
-                Text(team, style = MaterialTheme.typography.titleSmall)
-                rows.forEach { (what, who, value) -> Stat(what, "$who · $value") }
-            }
-        }
-    }
-    if (d.teamStats.isNotEmpty()) {
-        ChartCard("Team stats") {
-            d.teamStats.forEach { (label, home, away) ->
-                Row {
-                    Text(home, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
-                    Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    Text(away, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
-                }
-            }
-        }
-    }
-    d.boxScores.forEach { box -> BoxScoreTable(box) }
-}
-
 @Composable
 private fun PlayerRow(p: com.ataglanceplus.live.GameDetail.Player) {
     Row {
@@ -1236,46 +1111,6 @@ private fun BoxScoreTable(box: com.ataglanceplus.live.GameDetail.BoxScore) {
     }
 }
 
-@Composable
-private fun Scoreboard(game: com.ataglanceplus.live.Game, hidden: Boolean = false) {
-    val context = LocalContext.current
-    val scored = game.state != "pre" && !hidden
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(game.leagueName, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TeamBlock(game.home, "Home", Modifier.weight(1f))
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    when {
-                        scored -> Text("${game.home.score ?: "0"} – ${game.away.score ?: "0"}", style = MaterialTheme.typography.displaySmall)
-                        game.state == "pre" -> Text(clock(context, Instant.ofEpochMilli(game.start)), style = MaterialTheme.typography.headlineMedium)
-                        else -> Text("– : –", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Text(
-                        when (game.state) {
-                            "in" -> "LIVE · ${game.status}"
-                            "post" -> game.status
-                            else -> dayAndDate(Instant.ofEpochMilli(game.start).atZone(ZoneId.systemDefault()).toLocalDate())
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (game.state == "in") DOWN else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TeamBlock(game.away, "Away", Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun TeamBlock(side: com.ataglanceplus.live.Side, place: String, modifier: Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        val logo = remember(side.logoUrl) { com.ataglanceplus.live.SportsSource.logo(side.logoUrl)?.asImageBitmap() }
-        if (logo != null) Image(logo, contentDescription = null, modifier = Modifier.size(48.dp)) else Spacer(Modifier.size(48.dp))
-        Text(side.name, style = MaterialTheme.typography.bodyMedium, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        Text(place, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
 
 /** A fixture or result from the followed team's side: when, home or away, the opponent, and the score with W, D or L. */
 @Composable
@@ -1309,67 +1144,6 @@ private fun FixtureRow(game: com.ataglanceplus.live.Game, team: com.ataglanceplu
     }
 }
 
-/** A race weekend: each session's time, and its leaders once it has started. */
-@Composable
-private fun RaceDashboard(eventId: String) {
-    val context = LocalContext.current
-    val refresh = LocalRefresh.current
-    val load by produceState<Load<List<com.ataglanceplus.live.RaceSession>>>(Load.Loading, eventId, refresh.generation) {
-        withContext(Dispatchers.IO) { ensureSports(context) }
-        val sessions = com.ataglanceplus.live.SportsSource.races.value.values.flatten().filter { it.eventId == eventId }.sortedBy { it.start }
-        value = if (sessions.isEmpty()) Load.Missing("This race weekend is no longer in the calendar.") else Load.Ready(sessions)
-        refresh.loaded = refresh.generation
-    }
-    when (val state = load) {
-        Load.Loading -> { Title("Formula 1"); Text("Loading…") }
-        is Load.Missing -> { Title("Formula 1"); Text(state.why) }
-        is Load.Ready -> {
-            val sessions = state.data
-            Title(sessions.first().eventName)
-            val first = sessions.first()
-            com.ataglanceplus.cards.CircuitIcons.find(first.circuitCity, first.circuitName, aod = false)?.let { outline ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.Icon(
-                        androidx.compose.ui.res.painterResource(outline), contentDescription = first.circuitName,
-                        modifier = Modifier.size(96.dp), tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Column(modifier = Modifier.padding(start = 16.dp)) {
-                        first.circuitName?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
-                        first.circuitCity?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    }
-                }
-            }
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    sessions.forEach { s ->
-                        val start = Instant.ofEpochMilli(s.start)
-                        Column {
-                            Row {
-                                Text(s.session, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                                Text(
-                                    when (s.state) {
-                                        "in" -> "LIVE"
-                                        "post" -> "Finished"
-                                        else -> "${dayAndDate(start.atZone(ZoneId.systemDefault()).toLocalDate())} ${clock(context, start)}"
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (s.state == "in") DOWN else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            if (s.top.isNotEmpty() && s.state != "pre" && !com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)) {
-                                Text(s.top.mapIndexed { i, n -> "${i + 1} $n" }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                }
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OpenButton("Open in Google", com.ataglanceplus.cards.LiveCards.googleSearch(context, "F1 ${sessions.first().eventName}"))
-                sessions.first().link?.let { OpenButton("ESPN", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it))) }
-            }
-        }
-    }
-}
 
 // --- Shared pieces ---
 
@@ -1466,5 +1240,471 @@ private fun AxisLabels(axis: List<Pair<Int, String>>, count: Int) {
                 placeable.place((centre - placeable.width / 2f).toInt().coerceIn(0, (width - placeable.width).coerceAtLeast(0)), 0)
             }
         }
+    }
+}
+
+// --- Sports & F1 full-screen dashboards (Material You, swipeable) ---------------------------------
+
+private val SportBg = Color(0xFF0B0E14)
+private val SportCard = Color(0xFF151922)
+private val SportHigh = Color(0xFF1E2430)
+private val SportBorder = Color(0x14FFFFFF)
+private val SportText = Color(0xFFE2E2E6)
+private val SportSub = Color(0xFF9AA0A6)
+private val SportAccent = Color(0xFFA8C7FA)
+private val F1Emerald = Color(0xFF1A5C48)
+private val F1Mint = Color(0xFF6DD58C)
+
+private fun Int?.teamColour(fallback: Color): Color = this?.let { Color(it) } ?: fallback
+
+/** Mixes a colour toward black, for the hero's tonal wash. */
+private fun Color.dim(fraction: Float): Color = Color(
+    red = red * (1 - fraction), green = green * (1 - fraction), blue = blue * (1 - fraction), alpha = 1f,
+)
+
+@Composable
+private fun teamLogo(url: String?): androidx.compose.ui.graphics.ImageBitmap? =
+    remember(url) { com.ataglanceplus.live.SportsSource.logo(url)?.asImageBitmap() }
+
+/** The swipeable pill tab bar (spec 2.2): equal pills, the selected one raised. */
+@Composable
+private fun SegmentedPills(tabs: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(SportCard)
+            .border(1.dp, SportBorder, RoundedCornerShape(16.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        tabs.forEachIndexed { index, title ->
+            val on = index == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (on) SportHigh else Color.Transparent)
+                    .clickable { onSelect(index) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    title,
+                    color = if (on) Color.White else SportSub,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/** A dashboard header line (spec: 22sp medium). */
+@Composable
+private fun ScreenTitle(text: String) {
+    Text(text, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
+}
+
+@Composable
+private fun GameMatchDashboard(eventId: String) {
+    val context = LocalContext.current
+    val refresh = LocalRefresh.current
+    val load by produceState<Load<Pair<com.ataglanceplus.live.Followed?, List<com.ataglanceplus.live.Game>>>>(Load.Loading, eventId, refresh.generation) {
+        withContext(Dispatchers.IO) { ensureSports(context) }
+        val all = com.ataglanceplus.live.SportsSource.games.value
+        val key = all.entries.firstOrNull { (_, games) -> games.any { it.eventId == eventId } }?.key
+        value = if (key == null) Load.Missing("This game is no longer in your teams' fixtures.")
+        else Load.Ready(Prefs.sportsFollowed(context).firstOrNull { it.key == key } to all.getValue(key))
+        refresh.loaded = refresh.generation
+    }
+    Column(modifier = Modifier.fillMaxSize().background(SportBg).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        when (val state = load) {
+            Load.Loading -> { ScreenTitle("Game"); Text("Loading…", color = SportSub) }
+            is Load.Missing -> { ScreenTitle("Game"); Text(state.why, color = SportSub) }
+            is Load.Ready -> {
+                val (team, games) = state.data
+                val game = games.first { it.eventId == eventId }
+                var revealed by remember { mutableStateOf(false) }
+                val hidden = !revealed && com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)
+                val detail by produceState<com.ataglanceplus.live.GameDetail?>(null, game.eventId, refresh.generation) {
+                    while (true) {
+                        value = withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsSource.detail(game) } ?: value
+                        if (game.state != "in") break
+                        kotlinx.coroutines.delay(30_000)
+                    }
+                }
+                ScreenTitle(team?.name ?: game.leagueName)
+                MatchHero(game, hidden)
+                if (hidden) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Scores are hidden for this team.", color = SportSub, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        OutlinedButton(onClick = { revealed = true }) { Text("Reveal") }
+                    }
+                }
+                val d = detail
+                val tabs = buildList {
+                    if (!hidden && d != null) {
+                        if (d.leaders.isNotEmpty()) add("Leaders")
+                        if (d.teamStats.isNotEmpty()) add("Team Stats")
+                        if (d.boxScores.isNotEmpty()) add("Box Score")
+                        if (d.lineups.isNotEmpty()) add("Line-ups")
+                        if (d.events.isNotEmpty() || d.scoring.isNotEmpty()) add("Timeline")
+                    } else if (d != null && d.lineups.isNotEmpty()) add("Line-ups")
+                    add("Schedule")
+                }
+                val pager = rememberPagerState(pageCount = { tabs.size })
+                val scope = rememberCoroutineScope()
+                if (tabs.size > 1) {
+                    SegmentedPills(tabs, pager.currentPage.coerceIn(0, tabs.lastIndex)) { idx -> scope.launch { pager.animateScrollToPage(idx) } }
+                }
+                HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f)) { page ->
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        when (tabs.getOrNull(page)) {
+                            "Leaders" -> if (d != null) LeadersTab(d, game)
+                            "Team Stats" -> if (d != null) TeamStatsTab(d, game)
+                            "Box Score" -> if (d != null) BoxScoreTab(d, game)
+                            "Line-ups" -> if (d != null) d.lineups.forEachIndexed { i, l -> LineupCard(l, i == 0) }
+                            "Timeline" -> if (d != null) TimelineTab(d)
+                            "Schedule" -> ScheduleTab(games, eventId, team, hidden)
+                        }
+                    }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OpenButton("Open in Google", com.ataglanceplus.cards.LiveCards.googleSearch(context, "${game.home.name} vs ${game.away.name}"))
+                    game.link?.let { OpenButton("ESPN", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it))) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MatchHero(game: com.ataglanceplus.live.Game, hidden: Boolean) {
+    val context = LocalContext.current
+    val homeColour = game.home.colour.teamColour(SportAccent)
+    val awayColour = game.away.colour.teamColour(Color(0xFFFFB81C))
+    val scored = game.state != "pre" && !hidden
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Brush.linearGradient(listOf(homeColour.dim(0.72f), Color(0xFF161B26), awayColour.dim(0.72f))))
+            .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(24.dp))
+            .padding(vertical = 16.dp, horizontal = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HeroTeam(game.home, "HOME", homeColour, Color(0xFFF2B8B5))
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(game.leagueName.uppercase(), color = SportSub, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            when {
+                scored -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(game.home.score ?: "0", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    Text("–", color = Color(0xFF64748B), fontSize = 22.sp, modifier = Modifier.padding(horizontal = 9.dp))
+                    Text(game.away.score ?: "0", color = SportText, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                }
+                game.state == "pre" -> Text(clock(context, Instant.ofEpochMilli(game.start)), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                else -> Text("– : –", color = SportSub, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            }
+            val live = game.state == "in"
+            Text(
+                when (game.state) { "in" -> "LIVE · ${game.status}"; "post" -> game.status; else -> dayAndDate(Instant.ofEpochMilli(game.start).atZone(ZoneId.systemDefault()).toLocalDate()) },
+                color = if (live) Color(0xFFFF8989) else SportSub,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (live) Color(0x33E03A3E) else Color(0x33000000))
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+            )
+        }
+        HeroTeam(game.away, "AWAY", awayColour, Color(0xFFC4C6D0))
+    }
+}
+
+@Composable
+private fun HeroTeam(side: com.ataglanceplus.live.Side, place: String, ring: Color, pill: Color) {
+    Column(modifier = Modifier.width(86.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val logo = teamLogo(side.logoUrl)
+        Box(
+            modifier = Modifier.size(48.dp).clip(CircleShape).background(ring.dim(0.1f)).border(2.dp, Color(0x33FFFFFF), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (logo != null) Image(logo, contentDescription = null, modifier = Modifier.size(34.dp))
+            else Text(side.abbr, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+        }
+        Text(side.name, color = SportText, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, lineHeight = 15.sp)
+        Text(place, color = pill, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.clip(RoundedCornerShape(9.dp)).background(pill.copy(alpha = 0.18f)).padding(horizontal = 8.dp, vertical = 2.dp))
+    }
+}
+
+@Composable
+private fun LeadersTab(d: com.ataglanceplus.live.GameDetail, game: com.ataglanceplus.live.Game) {
+    val home = d.leaders.getOrNull(0)?.second.orEmpty()
+    val away = d.leaders.getOrNull(1)?.second.orEmpty()
+    val categories = home.map { it.first }.ifEmpty { away.map { it.first } }
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(game.home.abbr, color = Color(0xFFFF8989), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text("LEADERS", color = SportSub, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(game.away.abbr, color = Color(0xFFFFE082), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
+    categories.forEach { category ->
+        val h = home.firstOrNull { it.first == category }
+        val a = away.firstOrNull { it.first == category }
+        Row(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(SportHigh).padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(h?.second ?: "–", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text(category, color = SportSub, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("${h?.third ?: "–"}   ${a?.third ?: "–"}", color = SportAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                Text(a?.second ?: "–", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** Reads a comparable number from a stat value: a percentage if present, else the first number. */
+private fun statValue(s: String): Float {
+    Regex("""(\d+(?:\.\d+)?)\s*%""").find(s)?.let { return it.groupValues[1].toFloat() }
+    return Regex("""\d+(?:\.\d+)?""").find(s)?.value?.toFloatOrNull() ?: 0f
+}
+
+@Composable
+private fun TeamStatsTab(d: com.ataglanceplus.live.GameDetail, game: com.ataglanceplus.live.Game) {
+    val homeColour = game.home.colour.teamColour(Color(0xFFE03A3E))
+    val awayColour = game.away.colour.teamColour(Color(0xFFFFB81C))
+    d.teamStats.forEach { (label, homeText, awayText) ->
+        val h = statValue(homeText)
+        val a = statValue(awayText)
+        val total = h + a
+        val homeShare = if (total <= 0f) 0.5f else (h / total).coerceIn(0.05f, 0.95f)
+        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(homeText, color = SportText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(label, color = SportSub, fontSize = 12.sp)
+                Text(awayText, color = SportText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF262B36)),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Box(modifier = Modifier.weight(homeShare).fillMaxHeight().background(homeColour))
+                Box(modifier = Modifier.weight(1f - homeShare).fillMaxHeight().background(awayColour))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScoreTab(d: com.ataglanceplus.live.GameDetail, game: com.ataglanceplus.live.Game) {
+    if (d.boxScores.size < 2) { d.boxScores.forEach { BoxScoreTable(it) }; return }
+    var showHome by remember { mutableStateOf(true) }
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF0E1118)).padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        listOf(true, false).forEach { home ->
+            val on = showHome == home
+            Box(
+                modifier = Modifier.weight(1f).clip(RoundedCornerShape(9.dp))
+                    .background(if (on) SportHigh else Color.Transparent).clickable { showHome = home }.padding(vertical = 7.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text(if (home) game.home.name else game.away.name, color = if (on) Color.White else SportSub, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+        }
+    }
+    BoxScoreTable(if (showHome) d.boxScores[0] else d.boxScores[1])
+}
+
+@Composable
+private fun LineupCard(lineup: com.ataglanceplus.live.GameDetail.Lineup, home: Boolean) {
+    ChartCard(listOfNotNull(lineup.team, if (home) "Home" else "Away", lineup.formation).joinToString(" · ")) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { lineup.starters.forEach { PlayerRow(it) } }
+        if (lineup.subs.isNotEmpty()) {
+            Text("Substitutes", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { lineup.subs.forEach { PlayerRow(it) } }
+        }
+    }
+}
+
+@Composable
+private fun TimelineTab(d: com.ataglanceplus.live.GameDetail) {
+    val rows = (d.events + d.scoring)
+    rows.forEach { e ->
+        Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SportHigh).padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(e.clock, color = SportSub, fontSize = 12.sp, modifier = Modifier.width(52.dp))
+            Text(
+                when (e.kind) {
+                    com.ataglanceplus.live.GameDetail.Kind.GOAL -> "⚽ "
+                    com.ataglanceplus.live.GameDetail.Kind.YELLOW -> "🟨 "
+                    com.ataglanceplus.live.GameDetail.Kind.RED -> "🟥 "
+                    com.ataglanceplus.live.GameDetail.Kind.SUB -> "⇄ "
+                    else -> ""
+                } + e.text + (e.team?.let { " · $it" } ?: ""),
+                color = SportText, fontSize = 13.sp, modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScheduleTab(games: List<com.ataglanceplus.live.Game>, eventId: String, team: com.ataglanceplus.live.Followed?, hidden: Boolean) {
+    val upcoming = games.filter { it.state == "pre" && it.eventId != eventId }.sortedBy { it.start }.take(6)
+    val results = games.filter { it.state == "post" && it.eventId != eventId }.sortedByDescending { it.start }.take(6)
+    if (upcoming.isNotEmpty()) {
+        Text("Next games", color = SportSub, style = MaterialTheme.typography.labelLarge)
+        upcoming.forEach {
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp)) { FixtureRow(it, team, hidden) }
+        }
+    }
+    if (results.isNotEmpty()) {
+        Text("Results", color = SportSub, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+        results.forEach {
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp)) { FixtureRow(it, team, hidden) }
+        }
+    }
+    if (upcoming.isEmpty() && results.isEmpty()) Text("No other fixtures.", color = SportSub)
+}
+
+@Composable
+private fun F1EventDashboard(eventId: String) {
+    val context = LocalContext.current
+    val refresh = LocalRefresh.current
+    val load by produceState<Load<List<com.ataglanceplus.live.RaceSession>>>(Load.Loading, eventId, refresh.generation) {
+        withContext(Dispatchers.IO) { ensureSports(context) }
+        val sessions = com.ataglanceplus.live.SportsSource.races.value.values.flatten().filter { it.eventId == eventId }.sortedBy { it.start }
+        value = if (sessions.isEmpty()) Load.Missing("This race weekend is no longer in the calendar.") else Load.Ready(sessions)
+        refresh.loaded = refresh.generation
+    }
+    Column(modifier = Modifier.fillMaxSize().background(SportBg).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        when (val state = load) {
+            Load.Loading -> { ScreenTitle("Formula 1"); Text("Loading…", color = SportSub) }
+            is Load.Missing -> { ScreenTitle("Formula 1"); Text(state.why, color = SportSub) }
+            is Load.Ready -> {
+                val sessions = state.data
+                val first = sessions.first()
+                val hiddenTop = com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)
+                ScreenTitle(first.eventName)
+                F1Hero(first)
+                val next = sessions.firstOrNull { it.state == "pre" } ?: sessions.firstOrNull { it.state == "in" }
+                if (next != null) F1UpNext(context, next)
+                val results = sessions.filter { it.state != "pre" && it.top.isNotEmpty() && !hiddenTop }
+                val tabs = buildList { add("Weekend"); if (results.isNotEmpty()) add("Results") }
+                val pager = rememberPagerState(pageCount = { tabs.size })
+                val scope = rememberCoroutineScope()
+                if (tabs.size > 1) SegmentedPills(tabs, pager.currentPage.coerceIn(0, tabs.lastIndex)) { idx -> scope.launch { pager.animateScrollToPage(idx) } }
+                HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f)) { page ->
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        when (tabs.getOrNull(page)) {
+                            "Weekend" -> sessions.forEach { F1SessionRow(context, it, it == next) }
+                            "Results" -> results.forEach { s ->
+                                Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp)) {
+                                    Text(f1SessionName(s.session), color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                                    s.top.forEachIndexed { i, driver -> Text("${i + 1}. $driver", color = SportSub, fontSize = 12.5.sp) }
+                                }
+                            }
+                        }
+                    }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OpenButton("Open in Google", com.ataglanceplus.cards.LiveCards.googleSearch(context, "F1 ${first.eventName}"))
+                    first.link?.let { OpenButton("ESPN", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it))) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun F1Hero(session: com.ataglanceplus.live.RaceSession) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF10382C), Color(0xFF0D1F1B), Color(0xFF121722))))
+            .border(1.dp, Color(0x406DD58C), RoundedCornerShape(24.dp)).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val outline = com.ataglanceplus.cards.CircuitIcons.find(session.circuitCity, session.circuitName, aod = false)
+        Box(
+            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(Color(0x1F6DD58C)).border(1.dp, Color(0x4D6DD58C), RoundedCornerShape(18.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (outline != null) androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(outline), contentDescription = null, modifier = Modifier.size(44.dp), tint = F1Mint)
+            else Text("F1", color = F1Mint, fontWeight = FontWeight.ExtraBold)
+        }
+        Column(modifier = Modifier.padding(start = 14.dp)) {
+            Text(session.circuitName ?: session.eventName, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            session.circuitCity?.let { Text(it, color = Color(0xFFA8C7B8), fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun F1UpNext(context: Context, session: com.ataglanceplus.live.RaceSession) {
+    val label = if (session.state == "in") "Now: ${f1SessionName(session.session)}" else "Next: ${f1SessionName(session.session)}"
+    val countdown = if (session.state == "in") "LIVE" else countdownTo(session.start)
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0x266DD58C)).border(1.dp, Color(0x596DD58C), RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("⏱ $label", color = Color(0xFFD2FCE1), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+        Text(countdown, color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(F1Emerald).padding(horizontal = 8.dp, vertical = 3.dp))
+    }
+}
+
+@Composable
+private fun F1SessionRow(context: Context, session: com.ataglanceplus.live.RaceSession, isNext: Boolean) {
+    val race = session.session.equals("Race", true) || session.session.equals("R", true)
+    val dot = when { isNext -> F1Mint; race -> Color(0xFFFFB74D); else -> Color(0xFF4A505C) }
+    val start = Instant.ofEpochMilli(session.start)
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+            .background(if (isNext) Color(0x246DD58C) else if (race) Color(0x14FFB74D) else Color(0x08FFFFFF))
+            .border(1.dp, if (isNext) Color(0x666DD58C) else Color.Transparent, RoundedCornerShape(14.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dot))
+            Column(modifier = Modifier.padding(start = 10.dp)) {
+                Text(f1SessionName(session.session), color = if (race) Color(0xFFFFE082) else Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                if (isNext) Text("Up next", color = F1Mint, fontSize = 11.sp)
+            }
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(when (session.state) { "in" -> "LIVE"; "post" -> "Finished"; else -> dayAndDate(start.atZone(ZoneId.systemDefault()).toLocalDate()) },
+                color = if (session.state == "in") Color(0xFFFF8989) else SportText, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+            if (session.state == "pre") Text(clock(context, start), color = SportSub, fontSize = 11.5.sp)
+        }
+    }
+}
+
+private fun f1SessionName(code: String): String = when (code.uppercase()) {
+    "FP1" -> "Practice 1 (FP1)"; "FP2" -> "Practice 2 (FP2)"; "FP3" -> "Practice 3 (FP3)"
+    "QUAL", "Q" -> "Qualifying"; "SQ", "SS" -> "Sprint Qualifying"; "SPRINT", "SR" -> "Sprint"
+    "RACE", "R" -> "Grand Prix Race"
+    else -> code
+}
+
+/** A short "in 3h 20m" / "in 2d" until [epochMillis]. */
+private fun countdownTo(epochMillis: Long): String {
+    val mins = ((epochMillis - System.currentTimeMillis()) / 60_000L).coerceAtLeast(0)
+    return when {
+        mins >= 1440 -> "in ${mins / 1440}d ${(mins % 1440) / 60}h"
+        mins >= 60 -> "in ${mins / 60}h ${mins % 60}m"
+        else -> "in ${mins}m"
     }
 }

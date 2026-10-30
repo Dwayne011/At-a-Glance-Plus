@@ -15,6 +15,8 @@ bouncycastle = "1.86"
 ndk = "29.0.13113456"
 cmake = "3.31.6"
 healthConnect = "1.1.0"
+zxing = "3.5.3"
+playServicesLocation = "21.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -31,6 +33,8 @@ conscrypt-android = { group = "org.conscrypt", name = "conscrypt-android", versi
 bouncycastle-pkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
 
 health-connect-client = { group = "androidx.health.connect", name = "connect-client", version.ref = "healthConnect" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

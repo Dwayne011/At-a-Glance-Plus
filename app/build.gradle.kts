@@ -14,8 +14,8 @@ android {
         // (custom layouts) from Android 15 QPR2 / Android 16, and that is the whole point.
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 45
-        versionName = "0.13.0"
+        versionCode = 46
+        versionName = "0.15.0"
 
         // Pixel phones are arm64 only; this keeps Conscrypt and the pairing library small.
         ndk {
@@ -72,6 +72,9 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     // Steps and sleep for the complication chips.
     implementation(libs.health.connect.client)
+    // Wallet passes: drawing their barcodes, and showing them at the places the user chose.
+    implementation(libs.zxing.core)
+    implementation(libs.play.services.location)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(platform(libs.androidx.compose.bom))

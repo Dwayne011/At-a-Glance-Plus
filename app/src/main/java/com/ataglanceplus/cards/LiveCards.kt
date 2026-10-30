@@ -46,6 +46,7 @@ enum class CardType(val id: String, val label: String, val detail: String) {
     FINANCE("finance", "Finance", "Your stocks, when the rules below say so; one page each, taking turns"),
     SPORTS("sports", "Sports", "Your teams' games: live scores, results, kick-off times and the next fixture"),
     TORCH("torch", "Torch", "While the torch is on: tap to turn it off, and set its brightness"),
+    WALLET("wallet", "Wallet passes", "Your Google Wallet passes, near the places and times you set; tap to show the code"),
 }
 
 /**
@@ -217,6 +218,45 @@ object LiveCards {
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, targetId(key), views, event.title, detail, R.drawable.ic_comp_countdown, tap, 1.4f)
+    }
+
+    // --- 8.6 Wallet pass ---
+
+    fun wallet(context: Context, aod: Boolean, pass: com.ataglanceplus.wallet.WalletPass): SmartspaceTarget {
+        val key = "wallet:${pass.id}"
+        val views = RemoteViews(context.packageName, R.layout.card_wallet)
+        views.setTextViewText(R.id.wallet_title, pass.title)
+        val detail = pass.subtitle ?: pass.issuer ?: ""
+        views.setTextViewText(R.id.wallet_detail, detail)
+        views.setTextViewText(R.id.wallet_initial, pass.title.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "•")
+
+        val barcode = pass.barcode
+        when {
+            aod || barcode == null -> {
+                views.setViewVisibility(R.id.wallet_barcode_box, View.GONE)
+                views.setViewVisibility(R.id.wallet_qr_box, View.GONE)
+                views.setViewVisibility(R.id.wallet_open, if (aod) View.GONE else View.VISIBLE)
+            }
+            com.ataglanceplus.wallet.WalletBarcode.isSquare(barcode.format) -> {
+                views.setViewVisibility(R.id.wallet_barcode_box, View.GONE)
+                views.setViewVisibility(R.id.wallet_qr_box, View.VISIBLE)
+                views.setViewVisibility(R.id.wallet_open, View.GONE)
+                com.ataglanceplus.wallet.WalletBarcode.render(barcode, 180)?.let { views.setImageViewBitmap(R.id.wallet_qr, it) }
+            }
+            else -> {
+                views.setViewVisibility(R.id.wallet_barcode_box, View.VISIBLE)
+                views.setViewVisibility(R.id.wallet_qr_box, View.GONE)
+                views.setViewVisibility(R.id.wallet_open, View.GONE)
+                com.ataglanceplus.wallet.WalletBarcode.render(barcode, 320)?.let { views.setImageViewBitmap(R.id.wallet_barcode, it) }
+                views.setTextViewText(R.id.wallet_barcode_digits, barcode.displayText ?: barcode.value)
+            }
+        }
+        if (aod) Style.aodBody(views, R.id.wallet_title, R.id.wallet_detail)
+
+        val tap = Style.gated(context, com.ataglanceplus.wallet.WalletPassActivity.intent(context, pass.id), REQUEST_BASE + (key.hashCode() and 0xFFFF))
+        Style.holdBar(views, pinned = false, aod = aod)
+        views.setOnClickPendingIntent(R.id.card_root, tap)
+        return Style.target(context, targetId(key), views, pass.title, detail, R.drawable.ic_card, tap, 1.5f)
     }
 
     // --- 8.5 Timer and next alarm ---

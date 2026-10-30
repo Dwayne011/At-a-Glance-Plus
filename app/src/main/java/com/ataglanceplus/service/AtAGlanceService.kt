@@ -67,6 +67,7 @@ class AtAGlanceService : SmartspaceService() {
         if (Prefs.isChipSettingKey(key)) engine.settingsChanged()
         if (Prefs.isFinanceFetchKey(key)) restartFinance()
         if (Prefs.isSportsFollowKey(key)) restartSports()
+        if (key == com.ataglanceplus.wallet.WalletRules.KEY_RULES) com.ataglanceplus.wallet.WalletGeofences.refresh(this)
         // Calendar options or permission may have changed.
         refreshCalendar()
         pushAll()
@@ -116,6 +117,8 @@ class AtAGlanceService : SmartspaceService() {
     private var sportsCheckedAt = 0L
     private var financeJob: Job? = null
     private var sportsJob: Job? = null
+    private var walletJob: Job? = null
+    private var walletSyncedAt = 0L
     private var shownFinance: String? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -153,6 +156,11 @@ class AtAGlanceService : SmartspaceService() {
         TorchSource.start(this)
         scope.launch { TorchSource.torch.drop(1).collect { pushAll() } }
         restartSports()
+        // Wallet passes: redraw when they change or when a geofence/location says so.
+        com.ataglanceplus.wallet.WalletSource.ensureLoaded(this)
+        scope.launch { com.ataglanceplus.wallet.WalletSource.passes.drop(1).collect { pushAll() } }
+        scope.launch { com.ataglanceplus.wallet.WalletGeofences.changed.drop(1).collect { pushAll() } }
+        restartWalletSync()
         // The media track bar cannot move by itself; nudge it while playing.
         scope.launch {
             while (true) {
@@ -198,7 +206,10 @@ class AtAGlanceService : SmartspaceService() {
                 val finance = FinanceRules.showing(this@AtAGlanceService, FinanceSource.quotes.value)?.instanceKey
                 // Sports cards count down to kick-off and come and go with the time.
                 val sportsOn = Prefs.sportsFollowed(this@AtAGlanceService).isNotEmpty()
-                if (now != shownDate || day != shownDay || calendar != null || finance != shownFinance || sportsOn ||
+                // Wallet passes come and go with the time (windows and flight/event/transit times).
+                val walletOn = Prefs.cardEnabled(this@AtAGlanceService, CardType.WALLET) &&
+                    com.ataglanceplus.wallet.WalletRules.rules(this@AtAGlanceService).isNotEmpty()
+                if (now != shownDate || day != shownDay || calendar != null || finance != shownFinance || sportsOn || walletOn ||
                     LiveCards.upcomingAlarm(this@AtAGlanceService) != null
                 ) {
                     shownFinance = finance
@@ -333,6 +344,12 @@ class AtAGlanceService : SmartspaceService() {
         message = message,
         messageRemainingMs = (messageUntil - System.currentTimeMillis()).coerceAtLeast(0L),
         messageEntering = sessionId !in islandSeen,
+        wallet = runCatching {
+            val ids = com.ataglanceplus.wallet.WalletRules.activePassIds(
+                this, System.currentTimeMillis(), com.ataglanceplus.wallet.WalletGeofences.cachedLocation,
+            )
+            com.ataglanceplus.wallet.WalletSource.passes.value.filter { it.id in ids }
+        }.getOrDefault(emptyList()),
     )
 
     /** Fetches prices now and then at the user's interval, while the finance card is on and has tickers. */
@@ -385,7 +402,29 @@ class AtAGlanceService : SmartspaceService() {
         val now = System.currentTimeMillis()
         if (now - financeFetchedAt > Prefs.financeRefreshMinutes(this) * 60_000L) restartFinance()
         if (now - sportsScheduledAt > SPORTS_SCHEDULE_MS || now - sportsCheckedAt > SPORTS_STALE_MS) restartSports()
+        if (com.ataglanceplus.wallet.GoogleAccount.isSignedIn(this)) {
+            com.ataglanceplus.wallet.WalletGeofences.refreshLocation(this)
+            if (now - walletSyncedAt > WALLET_SYNC_MS) restartWalletSync()
+        }
         if (message != null && now >= messageUntil) endMessage()
+    }
+
+    /** Syncs Wallet passes now and every few hours while signed in, and keeps the geofences current. */
+    private fun restartWalletSync() {
+        walletJob?.cancel()
+        if (!com.ataglanceplus.wallet.GoogleAccount.isSignedIn(this)) return
+        com.ataglanceplus.wallet.WalletGeofences.refresh(this)
+        com.ataglanceplus.wallet.WalletGeofences.refreshLocation(this)
+        walletJob = scope.launch {
+            while (true) {
+                withContext(Dispatchers.IO) {
+                    runCatching { com.ataglanceplus.wallet.WalletSource.sync(this@AtAGlanceService) }
+                        .onFailure { CrashLog.record(this@AtAGlanceService, "Syncing Wallet", it) }
+                }
+                walletSyncedAt = System.currentTimeMillis()
+                delay(WALLET_SYNC_MS)
+            }
+        }
     }
 
     private fun refreshCalendar() {
@@ -434,6 +473,7 @@ class AtAGlanceService : SmartspaceService() {
         private const val MESSAGE_MAX_MS = 10 * 60_000L
         private const val SPORTS_SCHEDULE_MS = 30 * 60_000L
         private const val SPORTS_STALE_MS = 60_000L
+        private const val WALLET_SYNC_MS = 6 * 60 * 60_000L
         private const val TRACK_BAR_MS = 30_000L
     }
 }
