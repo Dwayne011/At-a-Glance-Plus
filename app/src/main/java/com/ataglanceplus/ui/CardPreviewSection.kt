@@ -5,6 +5,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -195,6 +197,24 @@ internal fun CardPreviewSection() {
                     }
                     SwitchRow("All-day events", "Show today's all-day event when nothing else is on.", Prefs.calendarAllDay(context)) {
                         Prefs.setCalendarAllDay(context, it)
+                    }
+                    // Which calendars the cards show; a calendar added later is shown until turned off.
+                    if (calendarAccess) {
+                        val calendars = remember(version) { CalendarSource.calendars(context) }
+                        val hidden = Prefs.calendarHidden(context)
+                        Text("Calendars", style = MaterialTheme.typography.labelLarge)
+                        calendars.forEach { cal ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.foundation.layout.Box(
+                                    Modifier.size(12.dp).background(androidx.compose.ui.graphics.Color(cal.colour), androidx.compose.foundation.shape.CircleShape)
+                                )
+                                Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                                    Text(cal.name.ifEmpty { "(No name)" })
+                                    if (cal.account.isNotEmpty() && cal.account != cal.name) Text(cal.account, style = MaterialTheme.typography.bodySmall)
+                                }
+                                Switch(checked = cal.id !in hidden, onCheckedChange = { Prefs.setCalendarHidden(context, cal.id, !it) })
+                            }
+                        }
                     }
                 }
                 CardType.SPORTS -> SportsSettings(version)

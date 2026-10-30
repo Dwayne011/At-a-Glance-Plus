@@ -28,11 +28,13 @@ data class CalendarNow(
 }
 
 /**
- * The next event from the phone's calendars (every calendar shown in the Calendar app):
- * - a timed event from [Prefs.calendarLeadMinutes] before it starts until it ends,
- *   if it lasts 4 hours or less (longer blocks would sit on the card all day);
+ * The events the calendar cards are about, from the phone's calendars (those shown in the
+ * Calendar app, less any the user turned off for the card):
+ * - every timed event from [Prefs.calendarLeadMinutes] before it starts until it ends, if it
+ *   lasts 4 hours or less (longer blocks would sit on the cards all day), one card each, soonest
+ *   first, so an event under way stays while the next one comes up;
  * - otherwise, if switched on, today's all-day event.
- * Declined events are skipped. An upcoming event wins over one already under way.
+ * Declined events are skipped.
  */
 object CalendarSource {
 
@@ -42,8 +44,40 @@ object CalendarSource {
     fun hasPermission(context: Context) =
         context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
-    fun next(context: Context): CalendarNow? {
-        if (!hasPermission(context)) return null
+    /** A calendar on the phone, for choosing which the card shows. */
+    data class Calendar(val id: Long, val name: String, val account: String, val colour: Int)
+
+    /** The calendars shown in the Calendar app, by account then name. */
+    fun calendars(context: Context): List<Calendar> {
+        if (!hasPermission(context)) return emptyList()
+        val columns = arrayOf(
+            CalendarContract.Calendars._ID,
+            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+            CalendarContract.Calendars.ACCOUNT_NAME,
+            CalendarContract.Calendars.CALENDAR_COLOR,
+        )
+        return try {
+            context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, columns, "${CalendarContract.Calendars.VISIBLE} = 1", null, null)?.use { c ->
+                buildList {
+                    while (c.moveToNext()) add(Calendar(c.getLong(0), c.getString(1).orEmpty(), c.getString(2).orEmpty(), c.getInt(3) or 0xFF000000.toInt()))
+                }
+            }.orEmpty().sortedWith(compareBy({ it.account }, { it.name }))
+        } catch (e: Exception) {
+            Log.w(TAG, "calendar list failed", e)
+            emptyList()
+        }
+    }
+
+    /** "visible, not declined, not in a calendar the user turned off" for an Instances query. */
+    private fun selection(context: Context): String {
+        val hidden = Prefs.calendarHidden(context)
+        return "${CalendarContract.Instances.VISIBLE} = 1 AND " +
+            "${CalendarContract.Instances.SELF_ATTENDEE_STATUS} != ${CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED}" +
+            if (hidden.isEmpty()) "" else " AND ${CalendarContract.Instances.CALENDAR_ID} NOT IN (${hidden.joinToString(",")})"
+    }
+
+    fun events(context: Context): List<CalendarNow> {
+        if (!hasPermission(context)) return emptyList()
         val now = System.currentTimeMillis()
         val lead = Prefs.calendarLeadMinutes(context) * 60_000L
         val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
@@ -59,8 +93,7 @@ object CalendarSource {
             CalendarContract.Instances.DISPLAY_COLOR,
             CalendarContract.Instances.ALL_DAY,
         )
-        val selection = "${CalendarContract.Instances.VISIBLE} = 1 AND " +
-            "${CalendarContract.Instances.SELF_ATTENDEE_STATUS} != ${CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED}"
+        val selection = selection(context)
         val events: List<CalendarNow> = try {
             context.contentResolver.query(uri, columns, selection, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
                 buildList<CalendarNow> {
@@ -81,17 +114,19 @@ object CalendarSource {
             } ?: emptyList()
         } catch (e: Exception) {
             Log.w(TAG, "calendar query failed", e)
-            return null
+            return emptyList()
         }
         val timed = events.filter { !it.allDay && it.end > now && it.end - it.begin <= MAX_TIMED_MS }
-        val chosen = timed.firstOrNull { it.begin > now } ?: timed.firstOrNull { it.begin <= now } ?: run {
-            if (!Prefs.calendarAllDay(context)) return null
+        val chosen = timed.ifEmpty {
+            if (!Prefs.calendarAllDay(context)) return emptyList()
             // All-day events are stored against UTC midnight.
             val today = LocalDate.now()
-            events.firstOrNull { it.allDay && Instant.ofEpochMilli(it.begin).atZone(ZoneOffset.UTC).toLocalDate() == today }
-        } ?: return null
-        val then = following(context, chosen, selection)
-        return chosen.copy(thenTitle = then?.second, thenBegin = then?.first)
+            listOfNotNull(events.firstOrNull { it.allDay && Instant.ofEpochMilli(it.begin).atZone(ZoneOffset.UTC).toLocalDate() == today })
+        }
+        return chosen.map { event ->
+            val then = following(context, event, selection)
+            event.copy(thenTitle = then?.second, thenBegin = then?.first)
+        }
     }
 
     /** The first timed event starting after [event] and before midnight: its start and title. */

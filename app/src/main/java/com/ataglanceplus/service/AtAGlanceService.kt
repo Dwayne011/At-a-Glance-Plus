@@ -93,7 +93,7 @@ class AtAGlanceService : SmartspaceService() {
 
     private val media by lazy { MediaSource(this) }
 
-    private var calendar: CalendarNow? = null
+    private var calendars: List<CalendarNow> = emptyList()
     private val calendarObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) = refreshCalendar()
     }
@@ -209,7 +209,7 @@ class AtAGlanceService : SmartspaceService() {
                 // Wallet passes come and go with the time (windows and flight/event/transit times).
                 val walletOn = Prefs.cardEnabled(this@AtAGlanceService, CardType.WALLET) &&
                     com.ataglanceplus.wallet.WalletRules.rules(this@AtAGlanceService).isNotEmpty()
-                if (now != shownDate || day != shownDay || calendar != null || finance != shownFinance || sportsOn || walletOn ||
+                if (now != shownDate || day != shownDay || calendars.isNotEmpty() || finance != shownFinance || sportsOn || walletOn ||
                     LiveCards.upcomingAlarm(this@AtAGlanceService) != null
                 ) {
                     shownFinance = finance
@@ -337,7 +337,7 @@ class AtAGlanceService : SmartspaceService() {
         live = NotificationHub.live.value,
         timer = NotificationHub.timer.value,
         media = MediaSource.now.value,
-        calendar = calendar,
+        calendars = calendars,
         quotes = FinanceSource.quotes.value,
         torch = TorchSource.torch.value,
         sports = runCatching { SportsRules.showing(this, SportsSource.games.value, SportsSource.races.value) }.getOrDefault(emptyList()),
@@ -429,9 +429,9 @@ class AtAGlanceService : SmartspaceService() {
 
     private fun refreshCalendar() {
         scope.launch {
-            val next = withContext(Dispatchers.IO) { CalendarSource.next(this@AtAGlanceService) }
-            if (next != calendar) {
-                calendar = next
+            val events = withContext(Dispatchers.IO) { CalendarSource.events(this@AtAGlanceService) }
+            if (events != calendars) {
+                calendars = events
                 pushAll()
             }
         }

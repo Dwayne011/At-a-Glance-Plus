@@ -41,7 +41,7 @@ enum class CardType(val id: String, val label: String, val detail: String) {
     LIVE("live", "Live updates", "Deliveries, rides, parcels and flights from any app that posts Live Updates"),
     TIMER("timer", "Timers and alarms", "A running timer, or your next alarm within 12 hours"),
     MEDIA("media", "Media", "Whatever is playing, with controls; stays 5 minutes after pausing"),
-    CALENDAR("calendar", "Calendar", "Your next event, shortly before it starts and while it is on"),
+    CALENDAR("calendar", "Calendar", "Each event from shortly before it starts until it ends (or you dismiss it); several stack"),
     MESSAGES("messages", "Message pop-up", "New messages show for 4.5 seconds in place of the first card"),
     FINANCE("finance", "Finance", "Your stocks, always up and updating; one page each, taking turns"),
     SPORTS("sports", "Sports", "Your teams' games: live scores, results, kick-off times and the next fixture"),

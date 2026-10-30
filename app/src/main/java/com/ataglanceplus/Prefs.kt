@@ -15,6 +15,7 @@ object Prefs {
     private const val KEY_DISABLED_CARDS = "disabled_cards"
     private const val KEY_CALENDAR_LEAD = "calendar_lead_minutes"
     private const val KEY_CALENDAR_ALL_DAY = "calendar_all_day"
+    private const val KEY_CALENDAR_HIDDEN = "calendar_hidden"
     private const val KEY_WEATHER_LOOK = "weather_look"
     private const val KEY_CHIPS = "chips"
     private const val KEY_DISMISSED = "dismissed_cards"
@@ -97,6 +98,15 @@ object Prefs {
     }
 
     /** Whether today's all-day events get a card when nothing else is on. */
+    /** Calendars (by id) whose events the calendar card leaves out; new calendars are shown. */
+    fun calendarHidden(context: Context): Set<Long> =
+        get(context).getStringSet(KEY_CALENDAR_HIDDEN, emptySet()).orEmpty().mapNotNull { it.toLongOrNull() }.toSet()
+
+    fun setCalendarHidden(context: Context, id: Long, hidden: Boolean) {
+        val now = calendarHidden(context)
+        get(context).edit().putStringSet(KEY_CALENDAR_HIDDEN, (if (hidden) now + id else now - id).map { it.toString() }.toSet()).apply()
+    }
+
     fun calendarAllDay(context: Context): Boolean = get(context).getBoolean(KEY_CALENDAR_ALL_DAY, false)
 
     fun setCalendarAllDay(context: Context, on: Boolean) {

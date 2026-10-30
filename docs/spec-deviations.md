@@ -36,7 +36,7 @@ Every card except weather appears only while it has something real to show.
 | Live update | Android 16 Live Updates (promoted ongoing or progress-style notifications) from any app | While the app keeps it up |
 | Timer / alarm | A countdown timer notification from a clock app; otherwise the next alarm | Timer while it exists; alarm within 12 h |
 | Media | The playing media session | While playing, and 5 min after pausing |
-| Calendar | The phone's visible calendars | From a chosen lead time (1 h by default) until the end, for events of 4 h or less; all-day events optional |
+| Calendar | The phone's visible calendars, less any switched off in Cards › Calendar | One card per event, from a chosen lead time (1 h by default) until it ends or is dismissed, for events of 4 h or less; several stack, soonest first; all-day events optional |
 | Finance | Yahoo Finance's public chart feed for the user's tickers (Google Finance has no public data) | On big moves, every few hours for 10 minutes, and/or in time windows, as chosen |
 | Sports | ESPN's public scoreboard feed (unofficial) for followed teams and Formula 1; live scores refresh every 30 s | During a game, for a chosen time before and after it, and the next fixture if switched on; one card per game. Tapping opens Google's page for the game (ESPN's if chosen); Next on the F1 card steps through the weekend's sessions for a minute |
 | Torch | The phone's torch, however it was turned on | While it is on. A tap turns it off; brightness by tapping a step of the bar or − / + (cards cannot follow a drag, so there is no slider) |
@@ -197,3 +197,12 @@ where real data exists).
 | When it shows | Always, while switched on and with prices, updating at "Refresh prices every". The "Every few hours" rule is gone | Chosen: it should stay up and update rather than come and go |
 | Big moves, time windows | Optional; while one matches, the card moves ahead of upcoming sports cards (otherwise it sits after them) | Kept as ways to bring it forward |
 | Dismissing | Hides it until the next price refresh, when it comes back with the new prices | Chosen: it should come back at the scheduled time |
+
+## Calendar cards (0.24.0)
+
+| Area | As built | Why |
+|---|---|---|
+| Several events | One card each, soonest first; an event under way stays while the next comes up | Before, the next event replaced the one under way, so a card went before its event ended |
+| When a card goes | When its event ends, or earlier only if dismissed | Chosen |
+| Which calendars | Cards › Calendar lists the phone's calendars with a switch each; new calendars are shown. Not in the settings backup (calendar ids differ between phones) | Chosen |
+| Chips | On the first calendar card only | The rest stack without them |

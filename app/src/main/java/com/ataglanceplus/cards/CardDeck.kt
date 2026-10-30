@@ -23,7 +23,8 @@ data class CardData(
     val live: List<LiveNow>,
     val timer: TimerNow?,
     val media: MediaNow?,
-    val calendar: CalendarNow?,
+    /** Every calendar event with a card now, soonest first. */
+    val calendars: List<CalendarNow>,
     val quotes: List<Quote>,
     val sports: List<com.ataglanceplus.live.SportsShowing>,
     val torch: com.ataglanceplus.live.TorchNow?,
@@ -41,7 +42,7 @@ object CardDeck {
 
     /**
      * Cards with something real to show, most time-sensitive first: a new message, the torch while it is on, navigation,
-     * live updates, live games, a timer or alarm, media, the next calendar event, Wallet passes,
+     * live updates, live games, a timer or alarm, media, calendar events (one card each, soonest first), Wallet passes,
      * finance on a big move or in a time window, other sports cards (before, after, next game),
      * finance the rest of the time (it is always up), then the weather
      * card, which is always there and cannot be dismissed. Switched-off types and dismissed
@@ -68,7 +69,7 @@ object CardDeck {
             LiveCards.upcomingAlarm(context)?.takeIf { "alarm:${it.triggerTime}" !in dismissed }
         } else null
         val media = data.media?.takeIf { on(CardType.MEDIA) && "media:${it.pkg}" !in dismissed }
-        val calendar = data.calendar?.takeIf { on(CardType.CALENDAR) && it.instanceKey !in dismissed }
+        val calendars = if (on(CardType.CALENDAR)) data.calendars.filter { it.instanceKey !in dismissed } else emptyList()
         val sports = if (on(CardType.SPORTS)) data.sports.filter { it.instanceKey !in dismissed } else emptyList()
         val (liveSports, otherSports) = sports.partition { it.phase == com.ataglanceplus.live.SportsPhase.LIVE }
         val finance = if (on(CardType.FINANCE)) FinanceRules.showing(context, data.quotes) else null
@@ -84,7 +85,8 @@ object CardDeck {
         val weatherChips = pool?.let { p -> WeatherCard.chipsTaken(context, p).also { p.removeAll(it) } }
         val navChips = if (nav != null) takeForCard() else null
         val timerChips = if (timer != null || alarm != null) takeForCard() else null
-        val calendarChips = if (calendar != null) takeForCard() else null
+        // Chips go on the first calendar card; the others stack without any.
+        val calendarChips = if (calendars.isNotEmpty()) takeForCard() else null
         // The rest on extra chips cards, two rows each.
         val extraChips = buildList {
             while (!pool.isNullOrEmpty()) {
@@ -115,7 +117,7 @@ object CardDeck {
             timer?.let { card("timer") { LiveCards.timer(context, aod, it, timerChips) } }
             alarm?.let { card("alarm") { LiveCards.alarm(context, aod, it, timerChips) } }
             media?.let { card("media") { LiveCards.media(context, aod, it) } }
-            calendar?.let { card("calendar") { LiveCards.calendar(context, aod, it, calendarChips) } }
+            calendars.forEachIndexed { i, event -> card("calendar") { LiveCards.calendar(context, aod, event, if (i == 0) calendarChips else emptyList()) } }
             wallet.forEach { pass -> card("wallet") { LiveCards.wallet(context, aod, pass) } }
             // Finance is always up; a big move or a time window brings it ahead of upcoming games.
             finance?.takeIf { it.forward }?.let { card("finance") { LiveCards.finance(context, aod, data.quotes, it) } }
@@ -151,7 +153,7 @@ object CardDeck {
         data.timer?.let { add("timer:${it.key}") }
         LiveCards.upcomingAlarm(context)?.let { add("alarm:${it.triggerTime}") }
         data.media?.let { add("media:${it.pkg}") }
-        data.calendar?.let { add(it.instanceKey) }
+        data.calendars.forEach { add(it.instanceKey) }
         addAll(FinanceRules.instanceKeys(context, data.quotes))
         data.sports.forEach { add(it.instanceKey) }
         data.wallet.forEach { add("wallet:${it.id}") }
