@@ -31,7 +31,7 @@ object LiveTiming {
     private const val TAG = "LiveTiming"
     private const val BASE = "https://livetiming.formula1.com/signalrcore"
     private const val RS = '\u001e'
-    private val TOPICS = listOf("SessionInfo", "SessionStatus", "TrackStatus", "LapCount", "TimingData", "DriverList", "ExtrapolatedClock")
+    private val TOPICS = listOf("SessionInfo", "SessionStatus", "TrackStatus", "LapCount", "TimingData", "TimingAppData", "DriverList", "ExtrapolatedClock")
 
     /** One car on the card. [lapFraction] is how far round the lap it is (0 to 1), by mini-sector. */
     data class Car(
@@ -44,6 +44,16 @@ object LiveTiming {
         val lapFraction: Float,
         val inPit: Boolean,
         val out: Boolean,
+        val name: String = "",
+        /** The race: the gap to the car ahead. */
+        val interval: String = "",
+        val bestLap: String = "",
+        val lastLap: String = "",
+        val laps: Int = 0,
+        val pitStops: Int = 0,
+        /** The current tyre ("SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET") and its age in laps. */
+        val tyre: String = "",
+        val tyreAge: Int = 0,
     )
 
     data class State(
@@ -246,6 +256,14 @@ object LiveTiming {
                 lapFraction = lastSegment[number]?.let { (it + 1f) / total } ?: 0f,
                 inPit = line.optBoolean("InPit") || line.optBoolean("PitOut"),
                 out = line.optBoolean("Retired") || line.optBoolean("Stopped") || line.optBoolean("KnockedOut"),
+                name = driver?.optString("FullName")?.ifEmpty { null } ?: driver?.optString("BroadcastName").orEmpty(),
+                interval = line.optJSONObject("IntervalToPositionAhead")?.optString("Value").orEmpty(),
+                bestLap = best,
+                lastLap = line.optJSONObject("LastLapTime")?.optString("Value").orEmpty(),
+                laps = line.optInt("NumberOfLaps"),
+                pitStops = line.optInt("NumberOfPitStops"),
+                tyre = stint(number)?.optString("Compound").orEmpty(),
+                tyreAge = stint(number)?.optInt("TotalLaps") ?: 0,
             )
         }.sortedBy { it.position }.toList()
         val clock = data.optJSONObject("ExtrapolatedClock")
@@ -268,6 +286,10 @@ object LiveTiming {
             at = System.currentTimeMillis(),
         )
     }
+
+    /** A car's current tyre stint (its last), from TimingAppData. */
+    private fun stint(number: String): JSONObject? =
+        data.optJSONObject("TimingAppData")?.optJSONObject("Lines")?.optJSONObject(number)?.opt("Stints").asList().lastOrNull() as? JSONObject
 
     /** "00:31:39" as milliseconds. */
     private fun parseClock(text: String): Long? {

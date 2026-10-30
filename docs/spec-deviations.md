@@ -253,3 +253,15 @@ where real data exists).
 |---|---|---|
 | Results tab | Every finished session of the weekend, newest first, each a full classification in the Standings style (position, team colour, driver code, name, figure, extra): practice — best lap, gaps, laps run; qualifying — best time in the last part reached and Q1/Q2/Q3; race and sprint — time, gaps, points, fastest lap | ESPN gives only the top three |
 | Sources | Races and sprints from Jolpica (points and status); practice and qualifying from OpenF1's session results (api.openf1.org, open source, free between sessions); failing both, ESPN's top three | Jolpica has no practice; OpenF1 answers only paid keys while a session is live |
+
+## F1 sessions in the dashboard (0.28.0)
+
+Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: the race card is as before, and the detail lives in the dashboard.
+
+| Area | As built | Why |
+|---|---|---|
+| Race card | As before 0.26.0 (ESPN), no live timing | Chosen: the card stays simple |
+| Dashboard tabs | Weekend and Standings; tapping a session on the Weekend list opens it (back returns to the weekend) | Chosen |
+| A live session | F1's live timing while the screen is open (connected only then): the flag and the time or lap (ticking between updates), the circuit with every car (by mini-sector), and the full order with gap (practice: to the fastest; race: to the car ahead), best or last lap, tyre and its age, in pit / out | Speed, throttle and exact positions need an F1 TV token |
+| A finished session | The full classification: races and sprints from Jolpica, practice and qualifying from OpenF1, ESPN's top three failing both | |
+| An upcoming session | Countdown, start in the user's time and at the track, the forecast at the circuit for the start (Open-Meteo), the circuit, and last year's winner and pole there (Jolpica) | |

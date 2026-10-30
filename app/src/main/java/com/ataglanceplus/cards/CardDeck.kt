@@ -134,12 +134,7 @@ object CardDeck {
 
     private fun sportsCard(context: Context, aod: Boolean, showing: com.ataglanceplus.live.SportsShowing): SmartspaceTarget = when (showing) {
         is com.ataglanceplus.live.SportsShowing.Team -> LiveCards.sports(context, aod, showing)
-        is com.ataglanceplus.live.SportsShowing.Race -> {
-            // While the session is on and F1's live timing is coming in: the live card.
-            val live = com.ataglanceplus.live.LiveTiming.state.value
-            if (showing.phase == com.ataglanceplus.live.SportsPhase.LIVE && live != null && live.cars.isNotEmpty()) LiveCards.raceLive(context, aod, showing, live)
-            else LiveCards.race(context, aod, showing)
-        }
+        is com.ataglanceplus.live.SportsShowing.Race -> LiveCards.race(context, aod, showing)
     }
 
     /** A card's kind from its target id, in words: "timer", "weather", "extra chips". */
