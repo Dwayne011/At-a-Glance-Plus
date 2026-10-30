@@ -189,3 +189,11 @@ where real data exists).
 | Dismissing | Hides only that showing: a dismissed big-moves card no longer hides a window or periodic showing | Before, the first matching rule hid the others for the rest of the day |
 | Cards › Finance | A line saying why the card shows now, or that it is not, the next time by the clock, and the biggest move against the threshold | So the rules can be checked |
 | Card order (0.22.4) | The finance card comes before upcoming, finished and next-game sports cards (live games still come first) | With four upcoming games it was the fifth page, and a periodic showing lasts only 10 minutes |
+
+## Finance card always up (0.23.0)
+
+| Area | As built | Why |
+|---|---|---|
+| When it shows | Always, while switched on and with prices, updating at "Refresh prices every". The "Every few hours" rule is gone | Chosen: it should stay up and update rather than come and go |
+| Big moves, time windows | Optional; while one matches, the card moves ahead of upcoming sports cards (otherwise it sits after them) | Kept as ways to bring it forward |
+| Dismissing | Hides it until the next price refresh, when it comes back with the new prices | Chosen: it should come back at the scheduled time |

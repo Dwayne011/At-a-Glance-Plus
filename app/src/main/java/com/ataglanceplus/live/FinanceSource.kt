@@ -52,6 +52,10 @@ data class ExtendedPrice(val session: ExtendedSession, val price: Double, val cl
  */
 object FinanceSource {
 
+    /** When prices were last fetched (epoch ms): a dismissed finance card comes back after the next fetch. */
+    @Volatile var refreshedAt = 0L
+        private set
+
     private const val TAG = "FinanceSource"
 
     private val _quotes = MutableStateFlow<List<Quote>>(emptyList())
@@ -73,6 +77,7 @@ object FinanceSource {
         val fresh = tickers.mapNotNull { symbol ->
             fetch(symbol) ?: previous[symbol].also { failed++ }
         }
+        refreshedAt = System.currentTimeMillis()
         _quotes.value = fresh
         _status.value = if (failed == 0) "Updated" else "Could not update $failed of ${tickers.size}; showing the last prices"
     }

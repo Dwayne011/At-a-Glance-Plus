@@ -43,7 +43,7 @@ enum class CardType(val id: String, val label: String, val detail: String) {
     MEDIA("media", "Media", "Whatever is playing, with controls; stays 5 minutes after pausing"),
     CALENDAR("calendar", "Calendar", "Your next event, shortly before it starts and while it is on"),
     MESSAGES("messages", "Message pop-up", "New messages show for 4.5 seconds in place of the first card"),
-    FINANCE("finance", "Finance", "Your stocks, when their rules say so; one page each, taking turns"),
+    FINANCE("finance", "Finance", "Your stocks, always up and updating; one page each, taking turns"),
     SPORTS("sports", "Sports", "Your teams' games: live scores, results, kick-off times and the next fixture"),
     TORCH("torch", "Torch", "While the torch is on: tap to turn it off, and set its brightness"),
     WALLET("wallet", "Wallet passes", "Your Google Wallet passes, near the places and times you set; tap to show the code"),

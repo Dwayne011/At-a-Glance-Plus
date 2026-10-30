@@ -42,8 +42,6 @@ object Prefs {
     private const val KEY_FIN_REFRESH = "finance_refresh_minutes"
     private const val KEY_FIN_MOVES = "finance_show_moves"
     private const val KEY_FIN_THRESHOLD = "finance_move_threshold"
-    private const val KEY_FIN_PERIODIC = "finance_show_periodic"
-    private const val KEY_FIN_PERIOD_HOURS = "finance_period_hours"
     private const val KEY_FIN_WINDOWS_ON = "finance_show_windows"
     private const val KEY_FIN_WINDOWS = "finance_windows"
     private const val KEY_FIN_VWAP_SOURCE = "finance_vwap_source"
@@ -277,20 +275,7 @@ object Prefs {
         get(context).edit().putInt(KEY_FIN_THRESHOLD, percent).apply()
     }
 
-    /** Show the card for 10 minutes every [financePeriodHours] hours. */
-    fun financePeriodic(context: Context): Boolean = get(context).getBoolean(KEY_FIN_PERIODIC, false)
-
-    fun setFinancePeriodic(context: Context, on: Boolean) {
-        get(context).edit().putBoolean(KEY_FIN_PERIODIC, on).apply()
-    }
-
-    fun financePeriodHours(context: Context): Int = get(context).getInt(KEY_FIN_PERIOD_HOURS, 2)
-
-    fun setFinancePeriodHours(context: Context, hours: Int) {
-        get(context).edit().putInt(KEY_FIN_PERIOD_HOURS, hours).apply()
-    }
-
-    /** Show the card during the user's time windows. */
+    /** Bring the card to the front during the user's time windows. */
     fun financeInWindows(context: Context): Boolean = get(context).getBoolean(KEY_FIN_WINDOWS_ON, false)
 
     fun setFinanceInWindows(context: Context, on: Boolean) {

@@ -25,7 +25,7 @@ object SettingsBackup {
     private val KEYS = setOf(
         "activate_on_boot", "aod_preview", "calendar_all_day", "calendar_lead_minutes", "card_height_dp", "chips",
         "countdown_day", "countdown_name", "disabled_cards", "finance_open", "finance_show_moves",
-        "finance_show_periodic", "finance_period_hours", "finance_refresh_minutes", "finance_move_threshold",
+        "finance_refresh_minutes", "finance_move_threshold",
         "finance_tickers", "finance_windows", "finance_show_windows", "finance_vwap_source", "finance_vwap_anchor",
         "finance_extended_hours", "media_wave",
         "wallet_rules", "show_all_cards", "sports_after_hours", "sports_before_hours", "sports_followed",

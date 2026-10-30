@@ -392,7 +392,7 @@ private fun FinanceSettings(settingsVersion: Int) {
         }
     }
 
-    Text("Show the card", style = MaterialTheme.typography.labelLarge)
+    Text("The card is always up, updating as prices refresh. These bring it to the front:", style = MaterialTheme.typography.labelLarge)
     SwitchRow("Open stocks in this app", "Tapping a stock shows its dashboard here. Off: its Google Finance page.", Prefs.financeOpensDashboard(context)) {
         Prefs.setFinanceOpensDashboard(context, it)
     }
@@ -402,15 +402,6 @@ private fun FinanceSettings(settingsVersion: Int) {
             val threshold = Prefs.financeThreshold(context)
             listOf(1, 2, 3, 5, 10).forEach { percent ->
                 FilterChip(selected = threshold == percent, onClick = { Prefs.setFinanceThreshold(context, percent) }, label = { Text("$percent%") })
-            }
-        }
-    }
-    SwitchRow("Every few hours", "For 10 minutes at the start of each period.", Prefs.financePeriodic(context)) { Prefs.setFinancePeriodic(context, it) }
-    if (Prefs.financePeriodic(context)) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val hours = Prefs.financePeriodHours(context)
-            listOf(1, 2, 3, 4, 6).forEach { h ->
-                FilterChip(selected = hours == h, onClick = { Prefs.setFinancePeriodHours(context, h) }, label = { Text("Every $h h") })
             }
         }
     }
@@ -433,17 +424,12 @@ private fun FinanceSettings(settingsVersion: Int) {
             }, 8, 0, true).apply { setTitle("From") }.show()
         }) { Text("Add a time window") }
     }
-    if (!Prefs.financeOnMoves(context) && !Prefs.financePeriodic(context) && !Prefs.financeInWindows(context)) {
-        Text("Turn on at least one of these, or the card never shows.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-    } else {
-        // Why the card is (or is not) on now, from the same rules the cards use.
-        val quotes by FinanceSource.quotes.collectAsStateWithLifecycle()
-        Text(
-            com.ataglanceplus.live.FinanceRules.explain(context, quotes),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
+    // Whether the card is up now and why, from the same rules the cards use.
+    Text(
+        com.ataglanceplus.live.FinanceRules.explain(context, quotes),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
 }
 
 /** Teams and series to follow, and when their cards show. */
