@@ -70,7 +70,7 @@ object CardDeck {
         val calendar = data.calendar?.takeIf { on(CardType.CALENDAR) && it.instanceKey !in dismissed }
         val sports = if (on(CardType.SPORTS)) data.sports.filter { it.instanceKey !in dismissed } else emptyList()
         val (liveSports, otherSports) = sports.partition { it.phase == com.ataglanceplus.live.SportsPhase.LIVE }
-        val finance = if (on(CardType.FINANCE)) FinanceRules.showing(context, data.quotes)?.takeIf { it.instanceKey !in dismissed } else null
+        val finance = if (on(CardType.FINANCE)) FinanceRules.showing(context, data.quotes) else null
         val wallet = if (on(CardType.WALLET)) data.wallet.filter { "wallet:${it.id}" !in dismissed } else emptyList()
 
         // Share out the user's chips. Before the user picks any, each card keeps the spec's own.
@@ -149,7 +149,7 @@ object CardDeck {
         LiveCards.upcomingAlarm(context)?.let { add("alarm:${it.triggerTime}") }
         data.media?.let { add("media:${it.pkg}") }
         data.calendar?.let { add(it.instanceKey) }
-        FinanceRules.showing(context, data.quotes)?.let { add(it.instanceKey) }
+        addAll(FinanceRules.instanceKeys(context, data.quotes))
         data.sports.forEach { add(it.instanceKey) }
         data.wallet.forEach { add("wallet:${it.id}") }
     }

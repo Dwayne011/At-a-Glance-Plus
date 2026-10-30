@@ -396,7 +396,7 @@ private fun FinanceSettings(settingsVersion: Int) {
     SwitchRow("Open stocks in this app", "Tapping a stock shows its dashboard here. Off: its Google Finance page.", Prefs.financeOpensDashboard(context)) {
         Prefs.setFinanceOpensDashboard(context, it)
     }
-    SwitchRow("On big moves", "When a stock has moved this much today.", Prefs.financeOnMoves(context)) { Prefs.setFinanceOnMoves(context, it) }
+    SwitchRow("On big moves", "When a stock has moved this much today, or outside regular hours since the close.", Prefs.financeOnMoves(context)) { Prefs.setFinanceOnMoves(context, it) }
     if (Prefs.financeOnMoves(context)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val threshold = Prefs.financeThreshold(context)
@@ -435,6 +435,14 @@ private fun FinanceSettings(settingsVersion: Int) {
     }
     if (!Prefs.financeOnMoves(context) && !Prefs.financePeriodic(context) && !Prefs.financeInWindows(context)) {
         Text("Turn on at least one of these, or the card never shows.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    } else {
+        // Why the card is (or is not) on now, from the same rules the cards use.
+        val quotes by FinanceSource.quotes.collectAsStateWithLifecycle()
+        Text(
+            com.ataglanceplus.live.FinanceRules.explain(context, quotes),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 

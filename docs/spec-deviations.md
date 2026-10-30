@@ -180,3 +180,11 @@ where real data exists).
 |---|---|---|
 | Restarting SystemUI | `am crash $(pidof com.android.systemui || echo com.android.systemui)`: the main process by its id | `am crash com.android.systemui` crashes only one of SystemUI's processes; once a screenshot had been taken it hit `com.android.systemui:screenshot`, so the lock screen never reconnected |
 | adb from a computer | The command in single quotes | So the computer's shell leaves `$(pidof …)` for the phone's |
+
+## Finance card rules (0.22.3)
+
+| Rule | As built | Why |
+|---|---|---|
+| Big moves | Shows once a stock's move today (or outside regular hours since the close) reaches the threshold, and stays until the biggest move falls below three quarters of it | A stock hovering at the threshold made the card come and go with each price refresh |
+| Dismissing | Hides only that showing: a dismissed big-moves card no longer hides a window or periodic showing | Before, the first matching rule hid the others for the rest of the day |
+| Cards › Finance | A line saying why the card shows now, or that it is not, the next time by the clock, and the biggest move against the threshold | So the rules can be checked |
