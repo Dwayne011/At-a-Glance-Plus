@@ -52,10 +52,9 @@ object Activator {
         try {
             // The setting cannot be read reliably, so only use it to decide whether to switch
             // debugging on ourselves. Whether it is really on is decided by port discovery below.
-            if (Wadb.wirelessDebuggingState(context) != true && Wadb.canWriteSecureSettings(context)) {
+            if (Wadb.wirelessDebuggingState(context) != true && Wadb.canSwitchDebuggingOn(context)) {
                 Wadb.setStatus("Turning wireless debugging on")
-                Wadb.enableWirelessDebugging(context)
-                delay(1_500)
+                if (Wadb.enableWirelessDebugging(context)) delay(1_500)
             }
             if (!Wadb.isWifiConnected(context)) {
                 return@withContext fail("Wireless debugging needs Wi-Fi. Connect to a network and try again.")
@@ -63,7 +62,10 @@ object Activator {
 
             Wadb.setStatus("Looking for the debugging port")
             val port = AdbMdns.discover(context, AdbMdns.TLS_CONNECT, DISCOVERY_TIMEOUT_MS)
-                ?: return@withContext fail("Could not find the wireless debugging port. Check that Wireless debugging is on in Developer options.")
+                ?: return@withContext fail(
+                    if (Prefs.debugSwitchBlocked(context)) "Wireless debugging is off, and this version of Android no longer lets apps turn it on. Turn it on in Developer options, then tap Activate again."
+                    else "Could not find the wireless debugging port. Check that Wireless debugging is on in Developer options.",
+                )
 
             Wadb.setStatus("Connecting on port $port")
             val log = StringBuilder()
@@ -81,9 +83,9 @@ object Activator {
                 Log.w(TAG, "adb failed", e)
                 return@withContext fail("ADB connection failed: ${e.message ?: e.javaClass.simpleName}. If this persists, pair again.")
             }
-            if (Wadb.canWriteSecureSettings(context)) {
+            if (Wadb.canSwitchDebuggingOn(context)) {
                 // Now that we hold the permission, make sure debugging stays on for next boot.
-                runCatching { Wadb.enableWirelessDebugging(context) }
+                Wadb.enableWirelessDebugging(context)
             }
             Wadb.setStatus(done)
             Outcome.Success

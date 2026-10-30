@@ -50,7 +50,18 @@ object Prefs {
     private const val KEY_FIN_EXTENDED_HOURS = "finance_extended_hours"
 
     /** Keys that only matter to the wireless-debugging screens; changing them needs no redraw. */
-    val NON_CARD_KEYS = setOf(KEY_PAIRED, KEY_ACTIVATE_ON_BOOT)
+    private const val KEY_DEBUG_SWITCH_BLOCKED = "wadb_switch_blocked"
+    val NON_CARD_KEYS = setOf(KEY_PAIRED, KEY_ACTIVATE_ON_BOOT, KEY_DEBUG_SWITCH_BLOCKED)
+
+    /**
+     * Android refused to let the app switch wireless debugging on (newer Android needs the
+     * system-only MANAGE_DEBUGGING permission for it), so the user has to turn it on.
+     */
+    fun debugSwitchBlocked(context: Context): Boolean = get(context).getBoolean(KEY_DEBUG_SWITCH_BLOCKED, false)
+
+    fun setDebugSwitchBlocked(context: Context, blocked: Boolean) {
+        get(context).edit().putBoolean(KEY_DEBUG_SWITCH_BLOCKED, blocked).apply()
+    }
 
     /** Settings that change what the complication engine has to watch. */
     fun isChipSettingKey(key: String?): Boolean =

@@ -9,6 +9,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.provider.Settings
+import android.util.Log
 import com.ataglanceplus.Prefs
 import com.ataglanceplus.adb.AdbKey
 import com.ataglanceplus.adb.PreferenceAdbKeyStore
@@ -65,13 +66,30 @@ object Wadb {
     fun canWriteSecureSettings(context: Context): Boolean =
         context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
 
-    /** Turns wireless debugging (and USB debugging, which it depends on) on. Needs WRITE_SECURE_SETTINGS. */
-    fun enableWirelessDebugging(context: Context) {
+    /**
+     * Whether the app can switch wireless debugging on by itself: it holds the secure-settings
+     * permission and Android has not refused it before (newer Android versions require the
+     * system-only MANAGE_DEBUGGING permission for these settings).
+     */
+    fun canSwitchDebuggingOn(context: Context): Boolean = canWriteSecureSettings(context) && !Prefs.debugSwitchBlocked(context)
+
+    /**
+     * Turns wireless debugging (and USB debugging, which it depends on) on. Returns false, and
+     * remembers it, when Android refuses; then the user has to turn it on in Developer options.
+     */
+    fun enableWirelessDebugging(context: Context): Boolean {
         val resolver = context.contentResolver
-        Settings.Global.putInt(resolver, Settings.Global.ADB_ENABLED, 1)
-        Settings.Global.putInt(resolver, SETTING_WIRELESS_DEBUGGING, 1)
-        // Stop Android from switching debugging off after a week without a connection.
-        Settings.Global.putLong(resolver, SETTING_ADB_ALLOWED_CONNECTION_TIME, 0L)
+        return try {
+            Settings.Global.putInt(resolver, Settings.Global.ADB_ENABLED, 1)
+            Settings.Global.putInt(resolver, SETTING_WIRELESS_DEBUGGING, 1)
+            // Stop Android from switching debugging off after a week without a connection.
+            Settings.Global.putLong(resolver, SETTING_ADB_ALLOWED_CONNECTION_TIME, 0L)
+            true
+        } catch (e: SecurityException) {
+            Log.w("Wadb", "Android refused to switch wireless debugging on", e)
+            Prefs.setDebugSwitchBlocked(context, true)
+            false
+        }
     }
 
     fun isWifiConnected(context: Context): Boolean {

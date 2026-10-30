@@ -97,9 +97,9 @@ class BootActivationService : Service() {
 
         scope.launch {
             try {
-                // Needs the secure-settings permission (granted at the first activation); without
-                // it, wireless debugging must already be on.
-                if (Wadb.canWriteSecureSettings(this@BootActivationService)) Wadb.enableWirelessDebugging(this@BootActivationService)
+                // Needs the secure-settings permission (granted at the first activation), and an
+                // Android version that still allows it; otherwise wireless debugging must be on.
+                if (Wadb.canSwitchDebuggingOn(this@BootActivationService)) Wadb.enableWirelessDebugging(this@BootActivationService)
                 if (!Wadb.awaitWifi(this@BootActivationService, WIFI_TIMEOUT_MS)) {
                     Log.w(TAG, "no Wi-Fi within timeout, giving up")
                     return@launch
@@ -118,12 +118,39 @@ class BootActivationService : Service() {
                     }
                     delay(RETRY_DELAY_MS)
                 }
+                // The app could not switch wireless debugging on: ask the user to.
+                if (Prefs.debugSwitchBlocked(this@BootActivationService)) askToTurnOn(manager)
             } finally {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
         }
         return START_NOT_STICKY
+    }
+
+    /**
+     * Android no longer lets the app switch wireless debugging on, so after a restart it asks:
+     * tapping opens the setting; Activate runs the activation once it is on.
+     */
+    private fun askToTurnOn(manager: NotificationManager) {
+        val settings = PendingIntent.getActivity(
+            this, 1, Wadb.wirelessDebuggingSettingsIntent(), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val activate = PendingIntent.getForegroundService(
+            this, 2, Intent(this, BootActivationService::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        manager.notify(
+            ASK_NOTIFICATION_ID,
+            Notification.Builder(this, CHANNEL)
+                .setSmallIcon(R.drawable.ic_card)
+                .setContentTitle(getString(R.string.boot_turn_on_title))
+                .setContentText(getString(R.string.boot_turn_on_text))
+                .setStyle(Notification.BigTextStyle().bigText(getString(R.string.boot_turn_on_text)))
+                .setContentIntent(settings)
+                .setAutoCancel(true)
+                .addAction(Notification.Action.Builder(null, getString(R.string.update_activate), activate).build())
+                .build(),
+        )
     }
 
     private fun notification(text: String): Notification =
@@ -150,6 +177,7 @@ class BootActivationService : Service() {
         const val TAG = "BootActivation"
         const val CHANNEL = "boot"
         const val NOTIFICATION_ID = 11
+        const val ASK_NOTIFICATION_ID = 13
         const val WIFI_TIMEOUT_MS = 10 * 60 * 1000L
         const val ATTEMPTS = 4
         const val RETRY_DELAY_MS = 15_000L

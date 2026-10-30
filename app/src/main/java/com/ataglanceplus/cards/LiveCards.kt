@@ -1008,6 +1008,8 @@ object LiveCards {
                 page.setInt(R.id.finance_change, "setBackgroundResource", if (up) R.drawable.finance_pill_up else R.drawable.finance_pill_down)
             }
             chart(quote, colour)?.let { page.setImageViewBitmap(R.id.finance_chart, it) }
+            // Each page takes its own taps, so it carries the hold ring too.
+            Style.holdBar(page, pinned = false, aod = aod, id = R.id.finance_hold)
             if (!aod) {
                 val open = stockTap(context, quote)
                 page.setOnClickPendingIntent(R.id.finance_page, Style.gated(context, open, REQUEST_BASE + ("stock:" + quote.symbol).hashCode().and(0xFFFF)))

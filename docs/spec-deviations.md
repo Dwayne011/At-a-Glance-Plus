@@ -238,3 +238,10 @@ where real data exists).
 |---|---|---|
 | Override length | 120 s, the most Android allows | More time for the lock screen and launcher to reconnect |
 | After stopping the launcher | `am start -W -a android.intent.action.MAIN -c android.intent.category.HOME` opens the home screen | A stopped launcher only started again when the user next went home; after the override ran out it reconnected to Google's provider, so Activate seemed to do nothing |
+
+## Wireless debugging on newer Android, finance hold ring (0.26.2)
+
+| Area | As built | Why |
+|---|---|---|
+| Switching wireless debugging on | The app still tries (with the secure-settings permission from the first activation); if Android refuses, it remembers, stops trying, and asks the user to turn it on: a message and an "Open wireless debugging" button on the App tab, and after a restart a notification that opens the setting, with Activate | A system update made these settings need MANAGE_DEBUGGING, which only system apps can hold; the refusal crashed Activate and the after-restart activation |
+| Finance hold ring | Each stock page carries its own ring and fills the card (the body has no side padding; the page has the usual 16 / 18dp inside) | Each page takes its own taps (to open that stock), so the card's ring never saw the press and did not animate |

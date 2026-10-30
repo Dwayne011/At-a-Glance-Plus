@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Finance: the user's stocks, one page each, taking turns every 4 seconds (the ViewFlipper
-    switches by itself). Pages are added from include_finance_page.xml.
+    switches by itself). Pages are added from include_finance_page.xml. Each page is tapped on its
+    own (it opens that stock), so each carries the hold ring; the body has no side padding so the
+    pages, and their rings, fill the card. The card's own ring stays hidden.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/card_root"
@@ -12,6 +14,8 @@
         style="@style/AagCardBody"
         android:background="@drawable/card_bg_finance"
         android:gravity="center_vertical"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
         android:orientation="horizontal">
 
         <ViewFlipper
@@ -33,5 +37,6 @@
         android:contentDescription="@null"
         android:duplicateParentState="true"
         android:scaleType="fitXY"
-        android:src="@drawable/hold_bar_red_400" />
+        android:src="@drawable/hold_bar_red_400"
+        android:visibility="gone" />
 </FrameLayout>

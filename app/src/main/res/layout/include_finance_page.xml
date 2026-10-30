@@ -1,11 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One stock on the finance card: trend badge, ticker and name, price, today's chart and change. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+    One stock on the finance card: trend badge, ticker and name, price, today's chart and change.
+    The page fills the card and is tapped on its own, so it carries the hold ring that traces the
+    card's edge while it is held (the card's own ring never sees the press).
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/finance_page"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+<LinearLayout
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:gravity="center_vertical"
-    android:orientation="horizontal">
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="18dp">
 
     <FrameLayout
         android:id="@+id/finance_badge"
@@ -71,3 +81,13 @@
             android:textStyle="bold" />
     </LinearLayout>
 </LinearLayout>
+
+    <ImageView
+        android:id="@+id/finance_hold"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:duplicateParentState="true"
+        android:scaleType="fitXY"
+        android:src="@drawable/hold_bar_red_400" />
+</FrameLayout>

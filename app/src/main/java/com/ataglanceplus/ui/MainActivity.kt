@@ -158,7 +158,8 @@ private fun AppTab() {
     }
     val paired = remember(refresh, wadbStatus) { Prefs.isPaired(context) }
     val wirelessOn = remember(refresh, wadbStatus) { Wadb.wirelessDebuggingState(context) }
-    val canSelfEnable = remember(refresh, wadbStatus) { Wadb.canWriteSecureSettings(context) }
+    val canSelfEnable = remember(refresh, wadbStatus) { Wadb.canSwitchDebuggingOn(context) }
+    val switchBlocked = remember(refresh, wadbStatus) { Prefs.debugSwitchBlocked(context) }
     val wifi = remember(refresh, wadbStatus) { Wadb.isWifiConnected(context) }
 
     val weather by WeatherRepository.weather.collectAsStateWithLifecycle()
@@ -233,6 +234,12 @@ private fun AppTab() {
         }
         if (wadbStatus.isNotEmpty()) {
             Text(wadbStatus, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+        }
+        // Android no longer lets the app switch wireless debugging on: a way straight to it.
+        if (paired && switchBlocked && !(home && lock)) {
+            OutlinedButton(onClick = { runCatching { context.startActivity(Wadb.wirelessDebuggingSettingsIntent()) } }) {
+                Text("Open wireless debugging")
+            }
         }
     }
 
@@ -329,7 +336,14 @@ private fun AppTab() {
                     }
                 }
             }
-            CheckRow("Can switch it on after a restart", canSelfEnable, if (canSelfEnable) "Secure-settings permission held" else "Granted automatically during the first activation")
+            CheckRow(
+                "Can switch it on after a restart", canSelfEnable,
+                when {
+                    canSelfEnable -> "Secure-settings permission held"
+                    switchBlocked -> "This version of Android no longer lets apps switch it on; turn it on yourself after a restart (a notification reminds you)"
+                    else -> "Granted automatically during the first activation"
+                },
+            )
             CheckRow("Wi-Fi connected", wifi, "Wireless debugging only works on Wi-Fi")
             if (paired) OutlinedButton(onClick = { startPairing(context) }) { Text("Pair again") }
             OutlinedButton(enabled = !busy && paired, onClick = {

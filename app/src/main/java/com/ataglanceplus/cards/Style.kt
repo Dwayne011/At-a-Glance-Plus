@@ -37,9 +37,9 @@ object Style {
      * elsewhere.
      * Hidden on the always-on display, where nothing can be pressed.
      */
-    fun holdBar(views: RemoteViews, pinned: Boolean, aod: Boolean) {
+    fun holdBar(views: RemoteViews, pinned: Boolean, aod: Boolean, id: Int = R.id.hold_bar) {
         if (aod) {
-            views.setViewVisibility(R.id.hold_bar, android.view.View.GONE)
+            views.setViewVisibility(id, android.view.View.GONE)
             return
         }
         val timeout = android.view.ViewConfiguration.getLongPressTimeout()
@@ -48,7 +48,7 @@ object Style {
             timeout < 1250 -> if (pinned) R.drawable.hold_bar_amber_1000 else R.drawable.hold_bar_red_1000
             else -> if (pinned) R.drawable.hold_bar_amber_1500 else R.drawable.hold_bar_red_1500
         }
-        views.setImageViewResource(R.id.hold_bar, res)
+        views.setImageViewResource(id, res)
     }
 
     /** An activity, opened only after the phone is unlocked. */

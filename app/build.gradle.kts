@@ -14,8 +14,8 @@ android {
         // (custom layouts) from Android 15 QPR2 / Android 16, and that is the whole point.
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 69
-        versionName = "0.26.1"
+        versionCode = 70
+        versionName = "0.26.2"
 
         // Pixel phones are arm64 only; this keeps Conscrypt and the pairing library small.
         ndk {
