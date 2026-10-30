@@ -476,10 +476,13 @@ object Chips {
         }
 
         if (!tall) {
-            val text = value.wide ?: value.text
+            // The whole story if it fits, else a shorter form of it that does; failing all, the
+            // whole story shrunk to fit the 2-slot pill (to 9sp at least) and ending in "…".
+            val room = inner - iconDp - ACROSS_GAP_DP
+            val whole = value.wide ?: value.text
+            val text = (listOf(whole) + value.shorter).firstOrNull { textWidthDp(context, it, style.textSp) <= room } ?: whole
             child.setTextViewText(R.id.chip_text, text)
-            // Shrink to fit the 2-slot pill (to 9sp at least); anything longer ends in "…" inside it.
-            shrink(context, child, R.id.chip_text, text, style.textSp, inner - iconDp - ACROSS_GAP_DP, 9f)
+            shrink(context, child, R.id.chip_text, text, style.textSp, room, 9f)
             child.setInt(R.id.chip_text, "setMaxWidth", dp(context, (inner - iconDp - ACROSS_GAP_DP).toInt()))
             child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: $text")
             return child
@@ -593,7 +596,10 @@ object Chips {
                 val room = inner - style.iconDp - 4
                 // The sun chip's story names itself ("Sunset 16:38 · Sunrise 07:05").
                 val named = if (spec.kind == Complication.SUNSET) null else "$name · $story"
-                val text = listOfNotNull(named, story, value.text).firstOrNull { textWidthDp(context, it, style.textSp) <= room } ?: value.text
+                // Longest first: with its name, the whole story, shorter forms of it, the name and value, the value.
+                val candidates = listOfNotNull(named, story) + (if (big) value.shorter else emptyList()) +
+                    listOfNotNull(if (spec.kind == Complication.SUNSET) null else "$name · ${value.text}", value.text)
+                val text = candidates.firstOrNull { textWidthDp(context, it, style.textSp) <= room } ?: value.text
                 child.setTextViewText(R.id.chip_text, text)
                 look(child, spec, value, aod)
                 shrink(context, child, R.id.chip_text, text, style.textSp, room, 9f)

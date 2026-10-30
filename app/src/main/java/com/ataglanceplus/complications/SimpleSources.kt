@@ -176,7 +176,8 @@ object SimpleSources {
         val name = Prefs.countdownName(context)
         val detail = listOf(name, date).filter { it.isNotEmpty() }.joinToString(" · ")
         val wide = if (name.isEmpty()) "$text · $date" else "$text · $name ($date)"
-        return ChipValues.Value(text, wide = wide, detail = detail, stacked = listOf(text, name, date).filter { it.isNotEmpty() })
+        val shorter = listOfNotNull(name.takeIf { it.isNotEmpty() }?.let { "$text · $it" }, "$text · $date".takeIf { name.isNotEmpty() })
+        return ChipValues.Value(text, wide = wide, detail = detail, stacked = listOf(text, name, date).filter { it.isNotEmpty() }, shorter = shorter)
     }
 
     /** Counts above 99 show as "99+" (spec 7.3, large number state). */

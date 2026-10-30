@@ -37,6 +37,11 @@ object ChipValues {
         val down: Boolean = false,
         /** Shorter [text] for a one-slot pill it does not fit ("+6.3%" for "+$412 · +6.3%"). */
         val compact: String? = null,
+        /**
+         * Shorter forms of [wide], longest first, for a wide pill that cannot fit the whole story
+         * ("3d · Holiday", "3d · Mon 2 Nov"), so it falls back to some of it rather than to [text].
+         */
+        val shorter: List<String> = emptyList(),
     ) {
         /** The stacked chip's lines: [stacked], else the value with its second line. */
         val lines: List<String> get() = stacked ?: listOfNotNull(text, detail)
