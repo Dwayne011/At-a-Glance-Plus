@@ -150,3 +150,9 @@ where real data exists).
 | Pre-market, after hours, overnight | For listings with extended trading (US ones), Yahoo's full-day price while it differs from the close, labelled Pre-market, After hours or Overnight (20:00 to 04:00 New York time, Sunday night to Friday morning). Its change is from the regular close, as eToro shows it. The finance card, the dashboard headline and the Cards tab show it; a big move outside regular hours counts towards "big moves" | ONDS and NOK fell overnight without the app showing it |
 | Dashboard chart outside regular hours | The 1D and 5D charts can include pre-market and after-hours candles (VWAP › Extended hours, off by default); Yahoo has no candles for the overnight session, so the chart ends at 20:00 New York time | The feed's limit |
 | VWAP | eToro's inputs: Source (Open, High, Low, Close, (H + L)/2, (H + L + C)/3, (O + H + L + C)/4) and Anchor period (Session, Week, Month, Quarter, Year, or the start of the range), in the exchange's own time. Defaults (H + L + C)/3 and Session, as in eToro. Before, ranges of a month or more were anchored to the start of the range | To match eToro's chart |
+
+## Weather right column (0.21.0)
+
+| Spec | As built | Why |
+|---|---|---|
+| Right column 72dp tall, in the main row | The card's full height (94dp inside the 104dp card), beside the main row and the summary line. Two pills: 26dp in 38dp zones, centred on the card, 12dp apart, as on the other cards. A stacked chip fills the column (card height − 14dp) with larger text (15sp value, 11.5sp lines, 14sp eToro value) | The pills sat high, and the space under a stacked chip went unused |

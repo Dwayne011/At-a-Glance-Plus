@@ -80,7 +80,7 @@ object WeatherCard {
         val shown = Chips.withValues(chips ?: Prefs.chips(context) ?: DEFAULTS).map { it.first }
         val (bottom, right) = materialPlan(context, shown)
         Chips.addPlaced(context, views, bottom, Chips.BOTTOM, aod, R.id.complications_anchor)
-        Chips.addPlaced(context, views, right, Chips.RIGHT_COLUMN, aod, R.id.complications)
+        Chips.addPlaced(context, views, right, Chips.forCardHeight(Prefs.cardHeightDp(context)), aod, R.id.complications)
         forecast(context, views, weather, if (right.isEmpty()) 4 else 3, aod)
         summary(context, views, weather, aod)
         return finish(context, views, reading, aod)

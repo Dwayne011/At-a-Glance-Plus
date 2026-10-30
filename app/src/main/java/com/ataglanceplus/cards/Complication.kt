@@ -210,13 +210,15 @@ object Chips {
         val wideCapDp: Int = 0,
         /** A stacked 2-slot pill's height, when set rather than following from the zone. */
         val stackPillHDp: Int? = null,
+        /** A stacked 2-slot chip's zone height, when set rather than twice a slot's. */
+        val stackZoneHDp: Int? = null,
     ) {
         /** The pill's natural width for [text] with its icon, in dp. */
         fun widthDp(context: Context, text: String): Float = 2 * padDp + iconDp + 4 + textWidthDp(context, text, textSp).coerceAtMost(maxTextDp.toFloat())
 
         /** A 2-slot chip's zone: twice as wide across a row, twice as tall in a stack. */
         val bigZoneWDp: Int? get() = if (stack) zoneWDp else zoneWDp?.let { 2 * it + gapDp }
-        val bigZoneHDp: Int get() = if (stack) 2 * zoneHDp else zoneHDp
+        val bigZoneHDp: Int get() = if (stack) stackZoneHDp ?: (2 * zoneHDp) else zoneHDp
         val bigPillHDp: Int get() = if (stack) stackPillHDp ?: (2 * zoneHDp - (zoneHDp - pillHDp)) else pillHDp
 
         /** Room inside a 2-slot pill, in dp. */
@@ -247,11 +249,18 @@ object Chips {
         R.layout.include_chip_bottom, 12.5f, 15, 8, null, 64,
         zoneHDp = 29, pillHDp = 27, wideCapDp = 136,
     )
-    /** Its right column (weather spec 1.4): 2 pills the same width, or one stacked over both (78 x 72dp at the 104dp card height). */
+    /**
+     * Its right column (weather spec 1.4), the card's full height: 2 pills the same width, spaced
+     * and centred as on the other cards (26dp pills in 38dp zones), or one stacked chip filling
+     * the column (sized for the card's height with [forCardHeight]).
+     */
     val RIGHT_COLUMN = ChipStyle(
         R.layout.include_chip_rightcol, 12.5f, 15, 8, 78, 42,
-        gapDp = 0, stack = true, zoneWDp = 78, zoneHDp = 36, pillHDp = 26, stackPillHDp = 72,
+        gapDp = 0, stack = true, zoneWDp = 78, zoneHDp = 38, pillHDp = 26, stackPillHDp = 86, stackZoneHDp = 94,
     )
+
+    /** [RIGHT_COLUMN] with its stacked chip filling a card body [cardHeightDp] tall (5dp padding above and below, 4dp clear inside). */
+    fun forCardHeight(cardHeightDp: Int): ChipStyle = RIGHT_COLUMN.copy(stackZoneHDp = cardHeightDp - 10, stackPillHDp = cardHeightDp - 14)
 
     /** Room kept spare when choosing text for the extra chips card, whose real width is estimated. */
     private const val TEXT_SPARE_DP = 12
@@ -422,10 +431,14 @@ object Chips {
         val pad = if (tall) STACK_PAD_DP else ACROSS_PAD_DP
         val padV = if (tall) STACK_PAD_V_DP else 0
         child.setViewPadding(R.id.chip_pill, dp(context, pad), dp(context, padV), dp(context, pad), dp(context, padV))
-        val iconDp = if (tall) STACK_ICON_DP else style.iconDp
+        // A stack the card's full height (the weather card's right column) has room for larger text.
+        val roomy = tall && style.bigPillHDp >= ROOMY_DP
+        val stackTextSp = if (roomy) ROOMY_TEXT_SP else STACK_TEXT_SP
+        val stackLineSp = if (roomy) ROOMY_LINE_SP else STACK_LINE_SP
+        val iconDp = if (tall) (if (roomy) ROOMY_ICON_DP else STACK_ICON_DP) else style.iconDp
         child.setViewLayoutWidth(R.id.chip_icon, iconDp.toFloat(), dip)
         child.setViewLayoutHeight(R.id.chip_icon, iconDp.toFloat(), dip)
-        child.setTextViewTextSize(R.id.chip_text, sp, if (tall) STACK_TEXT_SP else style.textSp)
+        child.setTextViewTextSize(R.id.chip_text, sp, if (tall) stackTextSp else style.textSp)
         if (!tall) child.setViewLayoutMargin(R.id.chip_text, RemoteViews.MARGIN_START, ACROSS_GAP_DP.toFloat(), dip)
         look(child, spec, value, aod, stacked = tall)
         val inner = ((if (tall) style.zoneWDp else zoneW) ?: style.wideCapDp) - 2f * pad
@@ -488,16 +501,16 @@ object Chips {
             lines.getOrNull(1)?.let { line(context, child, R.id.chip_detail, it, SUN_SP, secondary, inner) }
         } else {
             child.setTextViewText(R.id.chip_text, lines.first())
-            shrink(context, child, R.id.chip_text, lines.first(), STACK_TEXT_SP, inner - iconDp - 4, 9f)
+            shrink(context, child, R.id.chip_text, lines.first(), stackTextSp, inner - iconDp - 4, 9f)
             child.setInt(R.id.chip_text, "setMaxWidth", dp(context, (inner - iconDp - 4).toInt()))
-            lines.getOrNull(1)?.let { line(context, child, R.id.chip_detail, it, STACK_LINE_SP, secondary, inner) }
+            lines.getOrNull(1)?.let { line(context, child, R.id.chip_detail, it, stackLineSp, secondary, inner) }
             lines.getOrNull(2)?.let {
                 // eToro's third line is the portfolio's value, larger and white; others match line 2.
-                if (spec.kind == Complication.ETORO) line(context, child, R.id.chip_detail2, it, 12f, primary, inner)
-                else line(context, child, R.id.chip_detail2, it, STACK_LINE_SP, secondary, inner)
+                if (spec.kind == Complication.ETORO) line(context, child, R.id.chip_detail2, it, if (roomy) ROOMY_VALUE_SP else 12f, primary, inner)
+                else line(context, child, R.id.chip_detail2, it, stackLineSp, secondary, inner)
             }
             // A fourth line (eToro's move today) only where the stack is tall enough for it.
-            lines.getOrNull(3)?.takeIf { style.bigPillHDp >= FOUR_LINES_DP }?.let { line(context, child, R.id.chip_detail3, it, STACK_LINE_SP, secondary, inner) }
+            lines.getOrNull(3)?.takeIf { style.bigPillHDp >= FOUR_LINES_DP }?.let { line(context, child, R.id.chip_detail3, it, stackLineSp, secondary, inner) }
         }
         child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + lines.joinToString(", "))
         return child
@@ -737,6 +750,12 @@ object Chips {
     private const val STACK_ICON_DP = 14
     private const val STACK_TEXT_SP = 13f
     private const val STACK_LINE_SP = 10f
+    /** A stacked pill this tall or more takes larger text: [ROOMY_TEXT_SP], [ROOMY_LINE_SP], [ROOMY_VALUE_SP] and a [ROOMY_ICON_DP] icon. */
+    private const val ROOMY_DP = 80
+    private const val ROOMY_TEXT_SP = 15f
+    private const val ROOMY_LINE_SP = 11.5f
+    private const val ROOMY_VALUE_SP = 14f
+    private const val ROOMY_ICON_DP = 16
     /** The shortest stacked pill that fits a fourth line. */
     private const val FOUR_LINES_DP = 70
     private const val SUN_SP = 11f
