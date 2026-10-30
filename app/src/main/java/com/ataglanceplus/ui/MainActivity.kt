@@ -144,7 +144,7 @@ private fun StatusScreen() {
             }
 
             when (tab) {
-                1 -> CardPreviewSection(maxCards = sessions.values.maxOfOrNull { it.targetCount } ?: 0, sessions = sessions.values)
+                1 -> CardPreviewSection(sessions = sessions.values)
                 2 -> ChipsSection()
                 else -> {
                     ProblemsSection()
@@ -170,7 +170,7 @@ private fun StatusScreen() {
                             Text("Active sessions:")
                             sessions.values.forEach { s ->
                                 val pushed = if (s.lastPushAt == 0L) "no push yet" else "pushed " + DateFormat.getTimeInstance().format(Date(s.lastPushAt))
-                                Text("• ${s.surface} from ${s.clientPackage} (wants ${s.targetCount}) · $pushed", style = MaterialTheme.typography.bodySmall)
+                                Text("• ${s.surface} from ${s.clientPackage} · $pushed", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                         if (lastEvent.isNotEmpty()) {

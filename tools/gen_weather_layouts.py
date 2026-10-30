@@ -95,7 +95,7 @@ SCENE = '''
     <FrameLayout
         android:id="@+id/weather_scene"
         android:layout_width="match_parent"
-        android:layout_height="76dp"
+        android:layout_height="@dimen/card_body_height"
         android:layout_gravity="center_vertical"
         android:background="@drawable/card_scene_shape"
         android:clipToOutline="true"
@@ -152,7 +152,7 @@ RING = '''
     <ImageView
         android:id="@+id/hold_bar"
         android:layout_width="match_parent"
-        android:layout_height="76dp"
+        android:layout_height="@dimen/card_body_height"
         android:layout_gravity="center_vertical"
         android:contentDescription="@null"
         android:duplicateParentState="true"

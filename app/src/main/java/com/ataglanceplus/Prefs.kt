@@ -253,9 +253,9 @@ object Prefs {
     /** True for the 14-bar wave on the media card, false for the 3dp track bar. */
     /**
      * Send every card with something to show, ignoring how many the launcher or lock screen asks
-     * for (Smartspacer's "Force unlimited pages"). Off: follow the requested count.
+     * for (Smartspacer's "Force unlimited pages"); on by default. Off: follow the requested count.
      */
-    fun showAllCards(context: Context): Boolean = get(context).getBoolean(KEY_SHOW_ALL_CARDS, false)
+    fun showAllCards(context: Context): Boolean = get(context).getBoolean(KEY_SHOW_ALL_CARDS, true)
 
     fun setShowAllCards(context: Context, on: Boolean) {
         get(context).edit().putBoolean(KEY_SHOW_ALL_CARDS, on).apply()

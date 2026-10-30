@@ -33,7 +33,7 @@ Every card except weather appears only while it has something real to show.
 |---|---|---|
 | Message pop-up | New conversation notifications (any app) | 4.5 s in first place. On the lock screen only the sender shows, unless Android confirms private content is allowed there. |
 | Navigation | Ongoing navigation notification (Google Maps or another maps app); platform, travel mode and trip progress when the notification gives them | While navigating |
-| Live update | Android 16 Live Updates (promoted ongoing or progress-style notifications) from any app | While the app keeps it up, two at most |
+| Live update | Android 16 Live Updates (promoted ongoing or progress-style notifications) from any app | While the app keeps it up |
 | Timer / alarm | A countdown timer notification from a clock app; otherwise the next alarm | Timer while it exists; alarm within 12 h |
 | Media | The playing media session | While playing, and 5 min after pausing |
 | Calendar | The phone's visible calendars | From a chosen lead time (1 h by default) until the end, for events of 4 h or less; all-day events optional |
@@ -90,3 +90,11 @@ segmented-pill tab pager, instead of one long vertical scroll.
 | Hardcoded Hawks–Cavaliers / Mexico GP sample data | Live ESPN data (`GameDetail`, `RaceSession`); real team colours in the hero and tug-of-war bars | The app is live, not a mock-up |
 | Quarter splits in the NBA hero | Left out | The scoreboard feed doesn't carry period splits for every sport |
 | F1 Circuit Info and championship Standings tabs (circuit length, altitude, DRS zones, lap record, points) | Left out; the F1 hub shows the circuit, an up-next countdown, the weekend's sessions and results | The public feed doesn't provide circuit telemetry or championship points, and the app doesn't invent data |
+
+## Deck size and card height (0.16.0)
+
+| Spec | As built | Why |
+|---|---|---|
+| As many cards as the launcher asks for (5) | Every card with something to show; "Show all cards" (Cards tab, on by default) turns the limit back on | Chosen; Smartspacer's default ("Force unlimited pages") does the same |
+| At most two live updates, two Wallet passes | No cap on either | Chosen |
+| 76dp card body in the 88dp slot | 84dp (`@dimen/card_body_height`), 2dp clear above and below | Chosen, to try taller cards. The hold ring and weather scenes are drawn for 76dp and are stretched for now |

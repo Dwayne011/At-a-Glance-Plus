@@ -38,11 +38,6 @@ data class CardData(
 /** Everything shown on a surface, in order. */
 object CardDeck {
 
-    /** Live updates shown at once; more would push the other cards off. */
-    private const val MAX_LIVE = 2
-
-    /** Wallet passes shown at once. */
-    private const val MAX_WALLET = 2
 
     /**
      * Cards with something real to show, most time-sensitive first: a new message, the torch while it is on, navigation,
@@ -66,7 +61,7 @@ object CardDeck {
 
         val torch = data.torch?.takeIf { on(CardType.TORCH) && "torch" !in dismissed }
         val nav = data.nav?.takeIf { on(CardType.NAV) && "nav:${it.key}" !in dismissed }
-        val live = if (on(CardType.LIVE)) data.live.filter { "live:${it.key}" !in dismissed }.take(MAX_LIVE) else emptyList()
+        val live = if (on(CardType.LIVE)) data.live.filter { "live:${it.key}" !in dismissed } else emptyList()
         val timer = data.timer?.takeIf { on(CardType.TIMER) && "timer:${it.key}" !in dismissed }
         val alarm = if (timer == null && on(CardType.TIMER)) {
             LiveCards.upcomingAlarm(context)?.takeIf { "alarm:${it.triggerTime}" !in dismissed }
@@ -76,7 +71,7 @@ object CardDeck {
         val sports = if (on(CardType.SPORTS)) data.sports.filter { it.instanceKey !in dismissed } else emptyList()
         val (liveSports, otherSports) = sports.partition { it.phase == com.ataglanceplus.live.SportsPhase.LIVE }
         val finance = if (on(CardType.FINANCE)) FinanceRules.showing(context, data.quotes)?.takeIf { it.instanceKey !in dismissed } else null
-        val wallet = if (on(CardType.WALLET)) data.wallet.filter { "wallet:${it.id}" !in dismissed }.take(MAX_WALLET) else emptyList()
+        val wallet = if (on(CardType.WALLET)) data.wallet.filter { "wallet:${it.id}" !in dismissed } else emptyList()
 
         // Share out the user's chips. Before the user picks any, each card keeps the spec's own.
         val layout = Prefs.complicationLayout(context)

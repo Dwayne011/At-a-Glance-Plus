@@ -74,7 +74,7 @@
         <item name="android:ellipsize">none</item>
     </style>
 
-    <!-- Every card: the 88dp slot holding a 76dp body (spec section 1). -->
+    <!-- Every card: the 88dp slot holding the card body (@dimen/card_body_height). -->
     <style name="AagCardRoot">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">88dp</item>
@@ -84,7 +84,7 @@
 
     <style name="AagCardBody">
         <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">76dp</item>
+        <item name="android:layout_height">@dimen/card_body_height</item>
         <item name="android:layout_gravity">center_vertical</item>
         <item name="android:paddingStart">16dp</item>
         <item name="android:paddingEnd">18dp</item>
