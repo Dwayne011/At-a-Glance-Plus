@@ -33,6 +33,7 @@ object Prefs {
     private const val KEY_CHIP_REFRESH = "chip_refresh"
     private const val KEY_AOD_PREVIEW = "aod_preview"
     private const val KEY_MEDIA_WAVE = "media_wave"
+    private const val KEY_SHOW_ALL_CARDS = "show_all_cards"
     private const val KEY_SPORTS_FOLLOWED = "sports_followed"
     private const val KEY_SPORTS_BEFORE = "sports_before_hours"
     private const val KEY_SPORTS_AFTER = "sports_after_hours"
@@ -250,6 +251,16 @@ object Prefs {
     }
 
     /** True for the 14-bar wave on the media card, false for the 3dp track bar. */
+    /**
+     * Send every card with something to show, ignoring how many the launcher or lock screen asks
+     * for (Smartspacer's "Force unlimited pages"). Off: follow the requested count.
+     */
+    fun showAllCards(context: Context): Boolean = get(context).getBoolean(KEY_SHOW_ALL_CARDS, false)
+
+    fun setShowAllCards(context: Context, on: Boolean) {
+        get(context).edit().putBoolean(KEY_SHOW_ALL_CARDS, on).apply()
+    }
+
     fun mediaWave(context: Context): Boolean = get(context).getBoolean(KEY_MEDIA_WAVE, true)
 
     fun setMediaWave(context: Context, wave: Boolean) {

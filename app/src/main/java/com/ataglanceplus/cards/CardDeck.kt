@@ -128,7 +128,8 @@ object CardDeck {
         }
         val weatherCard = WeatherCard.build(context, surface, aod, data.weather, data.weatherStatus, weatherChips)
         val extras = buildList { extraChips.forEachIndexed { i, chips -> card("extra chips") { LiveCards.chips(context, aod, chips, i) } } }
-        if (maxCards <= 0) return contextual + weatherCard + extras
+        // No count asked for, or the user chose to show them all: send everything.
+        if (maxCards <= 0 || Prefs.showAllCards(context)) return contextual + weatherCard + extras
         // Out of room: the weather card always stays; the least urgent cards go first.
         return (contextual.take(maxCards - 1) + weatherCard + extras).take(maxCards)
     }

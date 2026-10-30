@@ -88,8 +88,20 @@ internal fun CardPreviewSection(maxCards: Int, sessions: Collection<com.ataglanc
             "The weather card is always there. Every other card appears only while it has something real to show, most time-sensitive first, and goes away by itself.",
             style = MaterialTheme.typography.bodySmall
         )
-        if (maxCards > 0) {
+        if (maxCards > 0 && !Prefs.showAllCards(context)) {
             Text("At a Glance shows up to $maxCards cards at once.", style = MaterialTheme.typography.bodySmall)
+        }
+        SwitchRow(
+            "Show all cards",
+            "Ignore the launcher's limit${if (maxCards > 0) " of $maxCards" else ""} and send every card that has something to show.",
+            Prefs.showAllCards(context),
+        ) { Prefs.setShowAllCards(context, it) }
+        if (Prefs.showAllCards(context)) {
+            Text(
+                "On some phones, more cards than the launcher asks for can make the lock screen or launcher restart now and then. If that happens, turn this off.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
         // What each surface was last sent, so a card that should be there but is not can be told
         // apart from one the launcher did not draw.
