@@ -93,6 +93,28 @@ internal fun CardPreviewSection(sessions: Collection<com.ataglanceplus.service.S
             "Every card that has something to show. Off: only as many as the launcher asks for.",
             Prefs.showAllCards(context),
         ) { Prefs.setShowAllCards(context, it) }
+        // Card height: saved when the slider is let go, so the cards redraw once, not on every step.
+        var height by remember(version) { androidx.compose.runtime.mutableFloatStateOf(Prefs.cardHeightDp(context).toFloat()) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Card height · ${height.toInt()} dp")
+                Text(
+                    "${com.ataglanceplus.cards.Style.CARD_HEIGHT_DEFAULT_DP} dp fills the slot on the smallest launcher grid. Taller cards are cut off where the launcher has no room.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            TextButton(onClick = {
+                height = com.ataglanceplus.cards.Style.CARD_HEIGHT_DEFAULT_DP.toFloat()
+                Prefs.setCardHeightDp(context, com.ataglanceplus.cards.Style.CARD_HEIGHT_DEFAULT_DP)
+            }) { Text("Reset") }
+        }
+        androidx.compose.material3.Slider(
+            value = height,
+            onValueChange = { height = it },
+            onValueChangeFinished = { Prefs.setCardHeightDp(context, height.toInt()) },
+            valueRange = 76f..140f,
+            steps = 15,
+        )
         // What each surface was last sent, so a card that should be there but is not can be told
         // apart from one the launcher did not draw.
         sessions.filter { it.lastPushAt > 0 }.sortedBy { it.surface }.forEach { session ->

@@ -34,6 +34,7 @@ object Prefs {
     private const val KEY_AOD_PREVIEW = "aod_preview"
     private const val KEY_MEDIA_WAVE = "media_wave"
     private const val KEY_SHOW_ALL_CARDS = "show_all_cards"
+    private const val KEY_CARD_HEIGHT = "card_height_dp"
     private const val KEY_SPORTS_FOLLOWED = "sports_followed"
     private const val KEY_SPORTS_BEFORE = "sports_before_hours"
     private const val KEY_SPORTS_AFTER = "sports_after_hours"
@@ -259,6 +260,14 @@ object Prefs {
 
     fun setShowAllCards(context: Context, on: Boolean) {
         get(context).edit().putBoolean(KEY_SHOW_ALL_CARDS, on).apply()
+    }
+
+    /** Every card's height in dp; [com.ataglanceplus.cards.Style.CARD_HEIGHT_DEFAULT_DP] fills the slot on the smallest grid. */
+    fun cardHeightDp(context: Context): Int =
+        get(context).getInt(KEY_CARD_HEIGHT, com.ataglanceplus.cards.Style.CARD_HEIGHT_DEFAULT_DP)
+
+    fun setCardHeightDp(context: Context, dp: Int) {
+        get(context).edit().putInt(KEY_CARD_HEIGHT, dp).apply()
     }
 
     fun mediaWave(context: Context): Boolean = get(context).getBoolean(KEY_MEDIA_WAVE, true)

@@ -67,6 +67,28 @@ object Style {
         return gated(context, intent, requestCode)
     }
 
+    /** The card height the layouts are drawn at (@dimen/card_body_height). */
+    const val CARD_HEIGHT_DEFAULT_DP = 88
+
+    /**
+     * Sets the card to the user's chosen height: the slot, the body, and the parts drawn to fill
+     * it. Only the views each layout has are touched.
+     */
+    private fun sizeCard(context: Context, views: RemoteViews) {
+        val height = com.ataglanceplus.Prefs.cardHeightDp(context)
+        if (height == CARD_HEIGHT_DEFAULT_DP) return
+        val layout = views.layoutId
+        val ids = mutableListOf(R.id.card_root, R.id.card_body)
+        if (layout != R.layout.card_chips && layout != R.layout.include_island_message_toast) ids += R.id.hold_bar
+        if (layout in WEATHER_SCENE_LAYOUTS) ids += R.id.weather_scene
+        if (layout == R.layout.card_sports) ids += R.id.sports_surface
+        ids.forEach { views.setViewLayoutHeight(it, height.toFloat(), android.util.TypedValue.COMPLEX_UNIT_DIP) }
+    }
+
+    private val WEATHER_SCENE_LAYOUTS = setOf(
+        R.layout.card_weather_columns, R.layout.card_weather_grid, R.layout.card_weather_material, R.layout.card_weather_split,
+    )
+
     /**
      * Wraps a card's layout in a target. The header, base and template fields carry a plain-text
      * version for any surface that ignores custom layouts.
@@ -81,6 +103,7 @@ object Style {
         tap: PendingIntent,
         score: Float,
     ): SmartspaceTarget {
+        sizeCard(context, views)
         val icon = Icon.createWithResource(context, iconRes)
         val header = SmartspaceAction.Builder("${id}_header", title)
             .setSubtitle(subtitle)
