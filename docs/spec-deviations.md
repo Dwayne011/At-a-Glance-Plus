@@ -276,3 +276,9 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | Finished session | A summary (fastest lap or winner, top speed, laps run or pit stops) and the full table with titled columns (practice: best lap, gap, laps; qualifying: best, gap, part reached; race: time/gap, best lap, points). Tap a driver for best sectors (session-fastest in purple), speed trap, tyres per stint, and grid/stops or Q1–Q3 | User: "bare bones" |
 | Result sources | Kept on the phone once read. When a session ends (and when a finished one is opened) the app reads F1's live timing feed once, which holds the last session's final state until the next starts; then OpenF1 (now with laps and stints); races and sprints keep Jolpica's official order and points, filled in from these | OpenF1 is closed while any session is live, which left only ESPN's top three |
 | Source text | Removed from the session screens and Standings | User request |
+
+## 0.28.2 — F1 tables: last column lined up
+
+| Area | Now | Why |
+|---|---|---|
+| F1 tables | The last column (Laps, Points, Out in, Tyre · laps) is 64dp wide and centred, title and figures alike; a tyre's age has a set width so the rings line up whether it has one digit or two | User: Laps not in line with its heading |

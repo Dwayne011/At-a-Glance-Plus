@@ -1787,11 +1787,12 @@ private fun TyreBadge(compound: String, laps: Int?) {
         Box(Modifier.size(16.dp).clip(CircleShape).border(2.dp, colour, CircleShape), contentAlignment = Alignment.Center) {
             Text(letter, color = colour, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
-        if (laps != null) Text("$laps", color = SportText, fontSize = 11.5.sp, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 4.dp))
+        // A set width, so the rings line up down the column whether the age has one digit or two.
+        if (laps != null) Text("$laps", color = SportText, fontSize = 11.5.sp, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 4.dp).width(18.dp))
     }
 }
 
-/** A table's column titles, lined up with [F1TimingLine]'s columns. */
+/** A table's column titles, lined up with [F1TimingLine]'s columns (the last one centred, as its figures are). */
 @Composable
 private fun F1TableHeader(first: String, second: String, third: String) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 2.dp)) {
@@ -1799,7 +1800,8 @@ private fun F1TableHeader(first: String, second: String, third: String) {
         Text("Driver", color = SportSub, fontSize = 10.5.sp, modifier = Modifier.padding(start = 12.dp).weight(1f))
         Text(first, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.width(76.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
         Text(second, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.width(64.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
-        Text(third, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.padding(start = 10.dp).width(52.dp), maxLines = 1, softWrap = false)
+        Text(third, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.padding(start = 8.dp).width(64.dp), maxLines = 1, softWrap = false,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
@@ -1812,7 +1814,8 @@ private fun F1TimingLine(position: String, colour: Int, code: String, faded: Boo
         Text(code, color = if (faded) SportSub else Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp).weight(1f), maxLines = 1)
         Text(first, color = if (faded) SportSub else Color.White, fontSize = 12.5.sp, modifier = Modifier.width(76.dp), maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.End)
         Text(second, color = SportSub, fontSize = 12.sp, modifier = Modifier.width(64.dp), maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.End)
-        Box(Modifier.padding(start = 10.dp).width(52.dp)) { third() }
+        // Centred under its title, as the figures in it are narrower than the title.
+        Box(Modifier.padding(start = 8.dp).width(64.dp), contentAlignment = Alignment.Center) { third() }
     }
 }
 
