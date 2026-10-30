@@ -1708,8 +1708,33 @@ private fun F1EventDashboard(eventId: String) {
                 // Full classifications and the championship, from Jolpica (the open Ergast successor).
                 val raceDay = (sessions.firstOrNull { it.session.equals("Race", ignoreCase = true) } ?: sessions.last()).start
                     .let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() }
+                // Every finished session, newest first: practice and qualifying from OpenF1 (best
+                // laps, gaps, laps run); races and sprints from Jolpica (times, points), else OpenF1;
+                // failing both, ESPN's top three.
                 val full by produceState<List<com.ataglanceplus.live.JolpicaSource.SessionResult>?>(null, eventId, refresh.generation) {
-                    value = withContext(Dispatchers.IO) { com.ataglanceplus.live.JolpicaSource.weekendResults(raceDay) }
+                    value = withContext(Dispatchers.IO) {
+                        val jolpica = com.ataglanceplus.live.JolpicaSource.weekendResults(raceDay)
+                        sessions.filter { it.state != "pre" }.sortedByDescending { it.start }.mapNotNull { s ->
+                            val title = f1SessionName(s.session)
+                            val name = s.session.lowercase()
+                            val fromJolpica = jolpica.firstOrNull { j ->
+                                when (j.title) {
+                                    "Race" -> name == "race"
+                                    "Sprint" -> name.contains("sprint") && !name.contains("qual") && !name.contains("shoot")
+                                    else -> false
+                                }
+                            }?.copy(title = title)
+                            val qualifyingFromJolpica = jolpica.firstOrNull { it.title == "Qualifying" && name.startsWith("qual") }?.copy(title = title)
+                            fromJolpica
+                                ?: com.ataglanceplus.live.OpenF1Source.result(s.start, title)
+                                ?: qualifyingFromJolpica
+                                ?: s.top.takeIf { it.isNotEmpty() }?.let { top ->
+                                    com.ataglanceplus.live.JolpicaSource.SessionResult(
+                                        title, top.mapIndexed { i, n -> com.ataglanceplus.live.JolpicaSource.ResultRow("${i + 1}", "", n, "", "", null, false) },
+                                    )
+                                }
+                        }
+                    }
                 }
                 val standings by produceState<Pair<List<com.ataglanceplus.live.JolpicaSource.DriverStanding>?, List<com.ataglanceplus.live.JolpicaSource.TeamStanding>?>?>(null, refresh.generation) {
                     value = withContext(Dispatchers.IO) {
@@ -1729,16 +1754,9 @@ private fun F1EventDashboard(eventId: String) {
                     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         when (tabs.getOrNull(page)) {
                             "Weekend" -> sessions.forEach { F1SessionRow(context, it, it == next) }
-                            "Results" -> if (fullResults.isNotEmpty()) {
+                            "Results" -> if (full == null) Text("Loading…", color = SportSub) else {
                                 fullResults.forEach { F1ResultTable(it) }
-                            } else {
-                                // Before Jolpica has the weekend (practice), the feed's top three.
-                                results.forEach { s ->
-                                    Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp)) {
-                                        Text(f1SessionName(s.session), color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
-                                        s.top.forEachIndexed { i, driver -> Text("${i + 1}. $driver", color = SportSub, fontSize = 12.5.sp) }
-                                    }
-                                }
+                                Text("Practice and qualifying from OpenF1; races from Jolpica.", color = SportSub, fontSize = 11.sp)
                             }
                             "Standings" -> F1Standings(standings)
                         }
@@ -1762,21 +1780,24 @@ private fun F1ResultTable(result: com.ataglanceplus.live.JolpicaSource.SessionRe
     ) {
         Text(result.title, color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
         result.rows.forEach { r ->
-            F1Row(r.position, r.teamId, r.code, r.name, r.time + if (r.fastestLap) "  ⏱" else "", r.points?.let { "$it pts" })
+            F1Row(
+                r.position, r.teamId, r.code, r.name, r.time + if (r.fastestLap) "  ⏱" else "",
+                r.points?.let { if (it.first().isDigit() && !it.contains(" ")) "$it pts" else it }, r.colour,
+            )
         }
     }
 }
 
 /** A table row: position, a bar in the team's colour, the driver (or team), then the figures on the right. */
 @Composable
-private fun F1Row(position: String, teamId: String, code: String, name: String, figure: String, extra: String?) {
+private fun F1Row(position: String, teamId: String, code: String, name: String, figure: String, extra: String?, colour: Int? = null) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(position, color = SportSub, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(24.dp))
-        Box(Modifier.size(width = 4.dp, height = 16.dp).clip(RoundedCornerShape(2.dp)).background(Color(com.ataglanceplus.live.JolpicaSource.teamColour(teamId))))
+        Box(Modifier.size(width = 4.dp, height = 16.dp).clip(RoundedCornerShape(2.dp)).background(Color(colour ?: com.ataglanceplus.live.JolpicaSource.teamColour(teamId))))
         if (code.isNotEmpty()) Text(code, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp).width(40.dp))
         Text(name, color = if (code.isEmpty()) Color.White else SportSub, modifier = Modifier.padding(start = if (code.isEmpty()) 8.dp else 0.dp).weight(1f), fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(figure, color = Color.White, fontSize = 12.5.sp, modifier = Modifier.padding(start = 8.dp))
-        if (extra != null) Text(extra, color = SportSub, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp).width(48.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        if (extra != null) Text(extra, color = SportSub, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp).width(54.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
     }
 }
 

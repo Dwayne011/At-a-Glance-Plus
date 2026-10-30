@@ -246,3 +246,10 @@ where real data exists).
 | Switching wireless debugging on | The app still tries (with the secure-settings permission from the first activation); if Android refuses, it remembers, stops trying, and asks the user to turn it on: a message and an "Open wireless debugging" button on the App tab, and after a restart a notification that opens the setting, with Activate | A system update made these settings need MANAGE_DEBUGGING, which only system apps can hold; the refusal crashed Activate and the after-restart activation |
 | Finance hold ring | Each stock page carries its own ring and fills the card (the body has no side padding; the page has the usual 16 / 18dp inside) | Each page takes its own taps (to open that stock), so the card's ring never saw the press and did not animate |
 | Extended chip wording (0.26.3) | A wide pill tries the whole story, then shorter forms of it (countdown: "3d · Holiday", then "3d · Mon 2 Nov"), then name and value, then the value | With a named countdown the whole story did not fit half the extra chips card, and it fell straight back to "3d" |
+
+## F1 results (0.27.0)
+
+| Area | As built | Why |
+|---|---|---|
+| Results tab | Every finished session of the weekend, newest first, each a full classification in the Standings style (position, team colour, driver code, name, figure, extra): practice — best lap, gaps, laps run; qualifying — best time in the last part reached and Q1/Q2/Q3; race and sprint — time, gaps, points, fastest lap | ESPN gives only the top three |
+| Sources | Races and sprints from Jolpica (points and status); practice and qualifying from OpenF1's session results (api.openf1.org, open source, free between sessions); failing both, ESPN's top three | Jolpica has no practice; OpenF1 answers only paid keys while a session is live |

@@ -22,7 +22,11 @@ object JolpicaSource {
     data class TeamStanding(val position: Int, val name: String, val teamId: String, val points: String, val wins: Int)
 
     /** One finisher (or not) of a session: [time] is the race time or gap, or the best lap in qualifying. */
-    data class ResultRow(val position: String, val code: String, val name: String, val teamId: String, val time: String, val points: String?, val fastestLap: Boolean)
+    data class ResultRow(
+        val position: String, val code: String, val name: String, val teamId: String, val time: String, val points: String?, val fastestLap: Boolean,
+        /** The team's colour when the source gives it (OpenF1); otherwise from [teamId]. */
+        val colour: Int? = null,
+    )
     data class SessionResult(val title: String, val rows: List<ResultRow>)
 
     private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, JSONObject>>()
