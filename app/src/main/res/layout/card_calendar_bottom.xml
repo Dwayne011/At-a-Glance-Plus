@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 8.4 Next calendar event, Layout B: 40dp top row with a 30dp colour bar, 36dp chip strip. -->
+<!--
+    8.4 Next calendar event, Layout B: the event (colour bar the height of its text, the title,
+    time and place, and the next event later today when there is one) over a 36dp chip strip.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/card_root"
     style="@style/AagCardRoot">
@@ -8,26 +11,26 @@
         android:id="@+id/card_body"
         style="@style/AagCardBody"
         android:background="@drawable/card_bg_calendar"
+        android:gravity="center_vertical"
         android:orientation="vertical">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="40dp"
-            android:layout_marginTop="2dp"
-            android:gravity="center_vertical"
+            android:layout_height="wrap_content"
             android:orientation="horizontal">
 
             <ImageView
                 android:id="@+id/calendar_bar"
                 android:layout_width="5dp"
-                android:layout_height="30dp"
+                android:layout_height="match_parent"
                 android:contentDescription="@null"
+                android:scaleType="fitXY"
                 android:src="@drawable/calendar_bar" />
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
+                android:layout_marginStart="12dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -36,26 +39,54 @@
                     style="@style/AagText.Title"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:lineHeight="17sp"
-                    android:textSize="14sp" />
+                    android:lineHeight="19sp"
+                    android:textSize="16sp" />
 
                 <TextView
                     android:id="@+id/calendar_detail"
                     style="@style/AagText.Label"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
                     android:fontFamily="sans-serif"
-                    android:lineHeight="14sp"
-                    android:textColor="#FFCBD5E1"
-                    android:textSize="11sp" />
+                    android:textColor="#FFCBD5E1" />
+
+                <LinearLayout
+                    android:id="@+id/calendar_next"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:id="@+id/calendar_next_icon"
+                        android:layout_width="13dp"
+                        android:layout_height="13dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_comp_countdown" />
+
+                    <TextView
+                        android:id="@+id/calendar_next_text"
+                        style="@style/AagText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:fontFamily="sans-serif-medium"
+                        android:textColor="#FF94A3B8"
+                        android:textSize="12sp" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/complications"
             android:layout_width="match_parent"
-            android:layout_height="34dp"
-            android:gravity="bottom|start"
+            android:layout_height="36dp"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical|start"
             android:orientation="horizontal" />
     </LinearLayout>
 

@@ -7,12 +7,12 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/chip_zone"
     android:layout_width="78dp"
-    android:layout_height="32dp">
+    android:layout_height="36dp">
 
     <LinearLayout
         android:id="@+id/chip_pill"
         android:layout_width="wrap_content"
-        android:layout_height="26dp"
+        android:layout_height="29dp"
         android:layout_gravity="end|center_vertical"
         android:duplicateParentState="true"
         android:gravity="center"
@@ -23,8 +23,8 @@
 
         <ImageView
             android:id="@+id/chip_icon"
-            android:layout_width="14dp"
-            android:layout_height="14dp"
+            android:layout_width="15dp"
+            android:layout_height="15dp"
             android:contentDescription="@null" />
 
         <TextView
@@ -33,6 +33,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="5dp"
-            android:maxWidth="50dp" />
+            android:maxWidth="50dp"
+            android:textSize="13sp" />
     </LinearLayout>
 </FrameLayout>

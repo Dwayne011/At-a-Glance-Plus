@@ -13,14 +13,14 @@
 
         <FrameLayout
             android:id="@+id/needed_badge"
-            android:layout_width="42dp"
-            android:layout_height="42dp"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
             android:background="@drawable/weather_needed_badge">
 
             <ImageView
                 android:id="@+id/needed_icon"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
                 android:layout_gravity="center"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_weather_location_off" />

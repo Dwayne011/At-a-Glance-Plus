@@ -37,8 +37,8 @@
 
         <ImageView
             android:id="@+id/sports_wave"
-            android:layout_width="96dp"
-            android:layout_height="64dp"
+            android:layout_width="117dp"
+            android:layout_height="78dp"
             android:layout_gravity="bottom|end"
             android:contentDescription="@null"
             android:src="@drawable/sports_wave"
@@ -56,14 +56,14 @@
 
         <!-- Home team: logo in its colour's circle, short name, HOME tag. -->
         <LinearLayout
-            android:layout_width="68dp"
+            android:layout_width="72dp"
             android:layout_height="match_parent"
             android:gravity="center"
             android:orientation="vertical">
 
             <FrameLayout
-                android:layout_width="36dp"
-                android:layout_height="36dp">
+                android:layout_width="40dp"
+                android:layout_height="40dp">
 
                 <ImageView
                     android:id="@+id/sports_home_circle"
@@ -81,8 +81,8 @@
 
                 <ImageView
                     android:id="@+id/sports_home_logo"
-                    android:layout_width="26dp"
-                    android:layout_height="26dp"
+                    android:layout_width="29dp"
+                    android:layout_height="29dp"
                     android:layout_gravity="center"
                     android:contentDescription="@null"
                     android:scaleType="fitCenter" />
@@ -98,13 +98,13 @@
                 android:letterSpacing="0.04"
                 android:singleLine="true"
                 android:textColor="#FFE2E2E6"
-                android:textSize="13sp"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/sports_home_side"
-                android:layout_width="42dp"
-                android:layout_height="13dp"
+                android:layout_width="45dp"
+                android:layout_height="14dp"
                 android:layout_marginTop="1dp"
                 android:background="@drawable/tag_home_live"
                 android:fontFamily="sans-serif-medium"
@@ -113,7 +113,7 @@
                 android:singleLine="true"
                 android:text="HOME"
                 android:textColor="#FF410002"
-                android:textSize="9sp"
+                android:textSize="9.5sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -126,7 +126,7 @@
             android:includeFontPadding="false"
             android:singleLine="true"
             android:textColor="#FFFFFFFF"
-            android:textSize="34sp"
+            android:textSize="36sp"
             android:textStyle="bold" />
 
         <LinearLayout
@@ -147,7 +147,7 @@
                 android:singleLine="true"
                 android:textAllCaps="true"
                 android:textColor="#FF94A3B8"
-                android:textSize="12sp" />
+                android:textSize="12.5sp" />
 
             <TextView
                 android:id="@+id/sports_status"
@@ -168,7 +168,7 @@
             <LinearLayout
                 android:id="@+id/sports_pill"
                 android:layout_width="wrap_content"
-                android:layout_height="18dp"
+                android:layout_height="20dp"
                 android:layout_marginTop="4dp"
                 android:background="@drawable/status_pill_live"
                 android:gravity="center"
@@ -194,7 +194,7 @@
                     android:letterSpacing="0.06"
                     android:singleLine="true"
                     android:textColor="#FFFF8A80"
-                    android:textSize="10sp"
+                    android:textSize="10.5sp"
                     android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
@@ -208,19 +208,19 @@
             android:includeFontPadding="false"
             android:singleLine="true"
             android:textColor="#FFFFFFFF"
-            android:textSize="34sp"
+            android:textSize="36sp"
             android:textStyle="bold" />
 
         <!-- Away team: logo in its colour's circle, short name, AWAY tag. -->
         <LinearLayout
-            android:layout_width="68dp"
+            android:layout_width="72dp"
             android:layout_height="match_parent"
             android:gravity="center"
             android:orientation="vertical">
 
             <FrameLayout
-                android:layout_width="36dp"
-                android:layout_height="36dp">
+                android:layout_width="40dp"
+                android:layout_height="40dp">
 
                 <ImageView
                     android:id="@+id/sports_away_circle"
@@ -238,8 +238,8 @@
 
                 <ImageView
                     android:id="@+id/sports_away_logo"
-                    android:layout_width="26dp"
-                    android:layout_height="26dp"
+                    android:layout_width="29dp"
+                    android:layout_height="29dp"
                     android:layout_gravity="center"
                     android:contentDescription="@null"
                     android:scaleType="fitCenter" />
@@ -255,13 +255,13 @@
                 android:letterSpacing="0.04"
                 android:singleLine="true"
                 android:textColor="#FFE2E2E6"
-                android:textSize="13sp"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/sports_away_side"
-                android:layout_width="42dp"
-                android:layout_height="13dp"
+                android:layout_width="45dp"
+                android:layout_height="14dp"
                 android:layout_marginTop="1dp"
                 android:background="@drawable/tag_away_live"
                 android:fontFamily="sans-serif-medium"
@@ -270,7 +270,7 @@
                 android:singleLine="true"
                 android:text="AWAY"
                 android:textColor="#FF1B1C1E"
-                android:textSize="9sp"
+                android:textSize="9.5sp"
                 android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>

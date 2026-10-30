@@ -24,6 +24,8 @@ data class MediaNow(
     val app: String,
     val title: String,
     val artist: String,
+    /** The album, when the app gives one ("" otherwise). */
+    val album: String = "",
     val art: Bitmap?,
     val durationMs: Long,
     /** Position at [positionAt] (SystemClock.elapsedRealtime), for working out the position later. */
@@ -133,6 +135,7 @@ class MediaSource(private val context: Context) {
             artist = meta?.getString(MediaMetadata.METADATA_KEY_ARTIST)
                 ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
                 ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE) ?: "",
+            album = meta?.getString(MediaMetadata.METADATA_KEY_ALBUM).orEmpty(),
             art = art,
             durationMs = meta?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L,
             positionMs = state?.position ?: 0L,

@@ -272,6 +272,8 @@ private fun StatusScreen() {
                         }) { Text("Refresh weather") }
                     }
 
+                    BackupSection()
+
                     Section("Fallback: from a computer") {
                         Text("The same commands, for adb over USB if wireless debugging is not an option.", style = MaterialTheme.typography.bodySmall)
                         CommandBlock(Commands.activateAdb(context))

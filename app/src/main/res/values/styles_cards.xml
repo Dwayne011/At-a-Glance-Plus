@@ -11,12 +11,12 @@
         <item name="android:textColor">#FFFFFFFF</item>
     </style>
 
-    <!-- type-hero-num: 36sp medium, line 38sp, -0.5sp -->
+    <!-- type-hero-num: 40sp medium, line 42sp, -0.5sp (the spec's 36sp, scaled for the 104dp card) -->
     <style name="AagText.Hero">
-        <item name="android:textSize">36sp</item>
+        <item name="android:textSize">40sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
-        <item name="android:lineHeight">38sp</item>
-        <item name="android:letterSpacing">-0.0139</item>
+        <item name="android:lineHeight">42sp</item>
+        <item name="android:letterSpacing">-0.0125</item>
         <item name="android:ellipsize">none</item>
     </style>
 
@@ -29,35 +29,35 @@
         <item name="android:ellipsize">none</item>
     </style>
 
-    <!-- type-title: 17sp medium, line 21sp -->
+    <!-- type-title: 18.5sp medium, line 23sp (the spec's 17sp, scaled for the 104dp card) -->
     <style name="AagText.Title">
-        <item name="android:textSize">17sp</item>
+        <item name="android:textSize">18.5sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
-        <item name="android:lineHeight">21sp</item>
+        <item name="android:lineHeight">23sp</item>
     </style>
 
-    <!-- type-badge: 15sp medium (bold where the spec says so), line 18sp -->
+    <!-- type-badge: 16sp medium (bold where the spec says so), line 19sp (the spec's 15sp, scaled) -->
     <style name="AagText.Badge">
-        <item name="android:textSize">15sp</item>
+        <item name="android:textSize">16sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
-        <item name="android:lineHeight">18sp</item>
+        <item name="android:lineHeight">19sp</item>
         <item name="android:ellipsize">none</item>
     </style>
 
-    <!-- type-detail: 13sp regular, line 17sp, +0.1sp -->
+    <!-- type-detail: 13.5sp regular, line 18sp, +0.1sp (the spec's 13sp, scaled) -->
     <style name="AagText.Detail">
-        <item name="android:textSize">13sp</item>
+        <item name="android:textSize">13.5sp</item>
         <item name="android:fontFamily">sans-serif</item>
-        <item name="android:lineHeight">17sp</item>
+        <item name="android:lineHeight">18sp</item>
         <item name="android:letterSpacing">0.0077</item>
         <item name="android:textColor">#FFD8E2F0</item>
     </style>
 
-    <!-- type-label: 12sp medium, line 15sp, +0.2sp -->
+    <!-- type-label: 12.5sp medium, line 16sp, +0.2sp (the spec's 12sp, scaled) -->
     <style name="AagText.Label">
-        <item name="android:textSize">12sp</item>
+        <item name="android:textSize">12.5sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
-        <item name="android:lineHeight">15sp</item>
+        <item name="android:lineHeight">16sp</item>
         <item name="android:letterSpacing">0.0167</item>
         <item name="android:textColor">#FF93C5FD</item>
     </style>
@@ -74,10 +74,10 @@
         <item name="android:ellipsize">none</item>
     </style>
 
-    <!-- Every card: the 88dp slot holding the card body (@dimen/card_body_height). -->
+    <!-- Every card: the slot holding the card body, both @dimen/card_body_height. -->
     <style name="AagCardRoot">
         <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">88dp</item>
+        <item name="android:layout_height">@dimen/card_body_height</item>
         <item name="android:clipChildren">false</item>
         <item name="android:clipToPadding">false</item>
     </style>

@@ -5,11 +5,11 @@
     <aapt:attr name="android:drawable">
         <vector
             android:width="420dp"
-            android:height="76dp"
+            android:height="104dp"
             android:viewportWidth="420"
-            android:viewportHeight="76">
-    <path android:name="bolt" android:fillColor="#FFFFF4C2" android:fillAlpha="0" android:pathData="M300,4 l-14,24 h9 l-10,22 l22,-30 h-10 l9,-16 Z" />
-    <path android:name="flash" android:fillColor="#FFFFFFFF" android:fillAlpha="0" android:pathData="M0,0 H420 V76 H0 Z" />
+            android:viewportHeight="104">
+    <path android:name="bolt" android:fillColor="#FFFFF4C2" android:fillAlpha="0" android:pathData="M300,18 l-14,24 h9 l-10,22 l22,-30 h-10 l9,-16 Z" />
+    <path android:name="flash" android:fillColor="#FFFFFFFF" android:fillAlpha="0" android:pathData="M0,0 H420 V104 H0 Z" />
         </vector>
     </aapt:attr>
     <target android:name="bolt">

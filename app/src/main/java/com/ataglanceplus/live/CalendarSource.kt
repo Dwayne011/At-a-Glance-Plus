@@ -20,6 +20,9 @@ data class CalendarNow(
     val location: String,
     val colour: Int,
     val allDay: Boolean,
+    /** The next timed event later today, for the card's "Then" line; null when there is none. */
+    val thenTitle: String? = null,
+    val thenBegin: Long? = null,
 ) {
     val instanceKey: String get() = "calendar:$eventId:$begin"
 }
@@ -81,12 +84,38 @@ object CalendarSource {
             return null
         }
         val timed = events.filter { !it.allDay && it.end > now && it.end - it.begin <= MAX_TIMED_MS }
-        timed.firstOrNull { it.begin > now }?.let { return it }
-        timed.firstOrNull { it.begin <= now }?.let { return it }
-        if (!Prefs.calendarAllDay(context)) return null
-        // All-day events are stored against UTC midnight.
-        val today = LocalDate.now()
-        return events.firstOrNull { it.allDay && Instant.ofEpochMilli(it.begin).atZone(ZoneOffset.UTC).toLocalDate() == today }
+        val chosen = timed.firstOrNull { it.begin > now } ?: timed.firstOrNull { it.begin <= now } ?: run {
+            if (!Prefs.calendarAllDay(context)) return null
+            // All-day events are stored against UTC midnight.
+            val today = LocalDate.now()
+            events.firstOrNull { it.allDay && Instant.ofEpochMilli(it.begin).atZone(ZoneOffset.UTC).toLocalDate() == today }
+        } ?: return null
+        val then = following(context, chosen, selection)
+        return chosen.copy(thenTitle = then?.second, thenBegin = then?.first)
+    }
+
+    /** The first timed event starting after [event] and before midnight: its start and title. */
+    private fun following(context: Context, event: CalendarNow, selection: String): Pair<Long, String>? {
+        val after = if (event.allDay) System.currentTimeMillis() else event.begin + 1
+        val midnight = LocalDate.now().plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        if (after >= midnight) return null
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+            ContentUris.appendId(it, after)
+            ContentUris.appendId(it, midnight)
+        }.build()
+        val columns = arrayOf(CalendarContract.Instances.BEGIN, CalendarContract.Instances.TITLE, CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.EVENT_ID)
+        return try {
+            context.contentResolver.query(uri, columns, selection, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
+                while (c.moveToNext()) {
+                    if (c.getInt(2) == 1 || c.getLong(0) < after || c.getLong(3) == event.eventId) continue
+                    return@use c.getLong(0) to c.getString(1).orEmpty().ifEmpty { "(No title)" }
+                }
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "calendar query failed", e)
+            null
+        }
     }
 
     /** An event to count down to: its next start and the day that falls on. */

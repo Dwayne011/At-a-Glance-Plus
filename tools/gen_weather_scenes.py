@@ -9,7 +9,7 @@ light or heavy clouds, fog, rain, snow and lightning, kept clear of the temperat
 the left (the left 190 of 420). Every layer comes as a still vector (the Scenes look) and
 an animated vector (Animated scenes): clouds and fog drift, rain and snow fall, stars twinkle, the
 sun glows and lightning flashes now and then. Falling layers repeat with the same step they move
-by, so the loop has no seam. All drawn for the 420 x 76dp card; the card stretches them to fit.
+by, so the loop has no seam. All drawn for the 420 x 104dp card; the card stretches them to fit.
 Run from the repository root; the output is committed.
 """
 import math
@@ -17,7 +17,7 @@ import os
 import random
 
 OUT = "app/src/main/res/drawable"
-W, H = 420, 76
+W, H = 420, 104
 HDR = '<?xml version="1.0" encoding="utf-8"?>\n'
 
 # Sky by conditions and day/night: the gradient's three stops (top left, middle, bottom right)
@@ -43,7 +43,7 @@ SKIES = {
 STANDARD = ("#F21E293B", "#F2172030", "#F20F172A", "#1F64B5F6")
 
 # The organic wave (weather spec 1.1): about 110 x 68 in the bottom right, behind the chip column.
-WAVE = "M300,76 C318,74 326,60 344,52 C364,43 380,46 396,34 C408,25 414,16 420,8 L420,76 Z"
+WAVE = "M300,104 C318,102 326,86 344,77 C364,67 380,70 396,56 C408,46 414,36 420,27 L420,104 Z"
 
 # Weather stays right of this, clear of the temperature and date.
 LEFT_CLEAR = 190
@@ -105,7 +105,7 @@ rng = random.Random(7)  # Fixed, so the output is the same on every run.
 # --- Layers: (still body, animated targets) ---
 
 def sun():
-    path = f'''    <path android:name="glow" android:pathData="M0,0 H{W} V{H} H0 Z">{radial_fill(300, 4, 80, "#80FFD54F", "#00FFD54F")}
+    path = f'''    <path android:name="glow" android:pathData="M0,0 H{W} V{H} H0 Z">{radial_fill(300, 6, 96, "#80FFD54F", "#00FFD54F")}
     </path>'''
     anim = [("glow", "fillAlpha", 1.0, 0.55, 4000, "reverse")]
     return path, anim
@@ -122,14 +122,14 @@ def stars():
     """A clear night: a few bright four-point stars and tiny pinpoints in the upper sky, with
     moonlight in the top right. Unlike snow: sparse, pointed, still, and twinkling in turn."""
     local = random.Random(23)
-    glow = f'''    <path android:pathData="M0,0 H{W} V{H} H0 Z">{radial_fill(392, 6, 70, "#40D0E1FD", "#00D0E1FD")}
+    glow = f'''    <path android:pathData="M0,0 H{W} V{H} H0 Z">{radial_fill(392, 8, 84, "#40D0E1FD", "#00D0E1FD")}
     </path>'''
     def points(n, y_max):
         return [(local.uniform(LEFT_CLEAR + 10, W - 30), local.uniform(5, y_max)) for _ in range(n)]
-    bright_a = "".join(sparkle(x, y, local.uniform(3.2, 4.4)) for x, y in points(3, 34))
-    bright_b = "".join(sparkle(x, y, local.uniform(2.6, 3.4)) for x, y in points(2, 30))
-    tiny_a = "".join(circle(x, y, local.uniform(0.45, 0.7)) for x, y in points(9, 46))
-    tiny_b = "".join(circle(x, y, local.uniform(0.45, 0.7)) for x, y in points(8, 46))
+    bright_a = "".join(sparkle(x, y, local.uniform(3.2, 4.4)) for x, y in points(3, 50))
+    bright_b = "".join(sparkle(x, y, local.uniform(2.6, 3.4)) for x, y in points(2, 44))
+    tiny_a = "".join(circle(x, y, local.uniform(0.45, 0.7)) for x, y in points(11, 66))
+    tiny_b = "".join(circle(x, y, local.uniform(0.45, 0.7)) for x, y in points(10, 66))
     path = glow + f'''
     <path android:name="bright_a" android:fillColor="#FFF4F8FF" android:fillAlpha="0.95" android:pathData="{bright_a}" />
     <path android:name="bright_b" android:fillColor="#FFD0E1FD" android:fillAlpha="0.6" android:pathData="{bright_b}" />
@@ -151,15 +151,15 @@ def clouds(heavy, night):
     colour = "#FFB7C0CC" if night else "#FFCFD8DC"
     top = "#FFD5DCE6" if night else "#FFF1F4F8"
     if heavy:
-        back = [(LEFT_CLEAR + 30, 14, 1.35), (LEFT_CLEAR + 105, 8, 1.6), (LEFT_CLEAR + 185, 12, 1.45)]
-        front = [(LEFT_CLEAR + 62, 24, 1.55), (LEFT_CLEAR + 150, 22, 1.75)]
+        back = [(LEFT_CLEAR + 30, 24, 1.35), (LEFT_CLEAR + 105, 18, 1.6), (LEFT_CLEAR + 185, 22, 1.45)]
+        front = [(LEFT_CLEAR + 62, 36, 1.55), (LEFT_CLEAR + 150, 34, 1.75)]
         shapes = lambda spots, dy=0: "".join(cloud(x, y + dy, sc) for x, y, sc in spots)
         body = f'''        <path android:fillColor="{colour}" android:fillAlpha="0.10" android:pathData="{shapes(back)}" />
         <path android:fillColor="{top}" android:fillAlpha="0.06" android:pathData="{shapes(back, -3)}" />
         <path android:fillColor="{colour}" android:fillAlpha="0.16" android:pathData="{shapes(front)}" />
         <path android:fillColor="{top}" android:fillAlpha="0.10" android:pathData="{shapes(front, -3)}" />'''
     else:
-        spots = [(LEFT_CLEAR + 60, 18, 1.1), (LEFT_CLEAR + 180, 30, 0.85)]
+        spots = [(LEFT_CLEAR + 60, 26, 1.1), (LEFT_CLEAR + 180, 42, 0.85)]
         body = f'''        <path android:fillColor="{colour}" android:fillAlpha="0.16" android:pathData="{"".join(cloud(x, y, sc) for x, y, sc in spots)}" />
         <path android:fillColor="{top}" android:fillAlpha="0.10" android:pathData="{"".join(cloud(x, y - 2.5, sc) for x, y, sc in spots)}" />'''
     path = f'''    <group android:name="drift">
@@ -172,7 +172,7 @@ def clouds(heavy, night):
 def fog():
     bands = "".join(
         f"M{x},{y} h{w} a5,5 0 0 1 0,10 h-{w} a5,5 0 0 1 0,-10 Z"
-        for x, y, w in [(LEFT_CLEAR + 10, 22, 220), (LEFT_CLEAR + 60, 38, 240), (LEFT_CLEAR + 20, 54, 230)]
+        for x, y, w in [(LEFT_CLEAR + 10, 26, 220), (LEFT_CLEAR + 60, 46, 240), (LEFT_CLEAR + 20, 66, 230)]
     )
     path = f'''    <group android:name="drift">
         <path android:fillColor="#FFCFD8DC" android:fillAlpha="0.14" android:pathData="{bands}" />
@@ -222,7 +222,7 @@ def snow():
     far = tile(SNOW_FAR, 10, lambda x, y: circle(x, y, 0.9))
     mid = tile(SNOW_MID, 8, lambda x, y: circle(x, y, 1.5))
     near = tile(SNOW_NEAR, 6, lambda x, y: flake(x, y, 2.6))
-    bank = f"M{LEFT_CLEAR},76 C{LEFT_CLEAR + 40},68 {LEFT_CLEAR + 90},70 {LEFT_CLEAR + 130},71 C180,72 220,66 260,67 C300,68 340,64 380,66 C400,67 412,65 420,64 L420,76 Z"
+    bank = f"M{LEFT_CLEAR},104 C{LEFT_CLEAR + 40},96 {LEFT_CLEAR + 90},98 {LEFT_CLEAR + 130},99 C180,100 220,94 260,95 C300,96 340,92 380,94 C400,95 412,93 420,92 L420,104 Z"
     path = f'''    <path android:fillColor="#FFF4F8FF" android:fillAlpha="0.16" android:pathData="{bank}" />
     <group android:name="far">
         <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.35" android:pathData="{far}" />
@@ -247,8 +247,8 @@ SNOW_FAR, SNOW_MID, SNOW_NEAR = 18, 24, 30
 
 
 def bolt():
-    path = '''    <path android:name="bolt" android:fillColor="#FFFFF4C2" android:fillAlpha="0" android:pathData="M300,4 l-14,24 h9 l-10,22 l22,-30 h-10 l9,-16 Z" />
-    <path android:name="flash" android:fillColor="#FFFFFFFF" android:fillAlpha="0" android:pathData="M0,0 H420 V76 H0 Z" />'''
+    path = '''    <path android:name="bolt" android:fillColor="#FFFFF4C2" android:fillAlpha="0" android:pathData="M300,18 l-14,24 h9 l-10,22 l22,-30 h-10 l9,-16 Z" />
+    <path android:name="flash" android:fillColor="#FFFFFFFF" android:fillAlpha="0" android:pathData="M0,0 H420 V104 H0 Z" />'''
     # Mostly dark; two quick flashes near the end of each 8 seconds.
     keys = [(0, 0), (0.86, 0), (0.88, 0.9), (0.9, 0), (0.92, 0.7), (0.95, 0), (1, 0)]
     flash = [(0, 0), (0.86, 0), (0.88, 0.12), (0.9, 0), (0.92, 0.08), (0.95, 0), (1, 0)]

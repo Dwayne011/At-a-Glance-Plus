@@ -11,8 +11,9 @@ long-press factor), and a view in a scrolling container only shows as pressed 10
 touch, which also keeps quick taps from flashing the ring. The ring closes at 90% of the time
 between the two, so it is complete just before the menu appears.
 
-The path is drawn for the spec's 380 x 76 dp card with 24 dp corners; on a card of another
-width the corners stretch slightly. Run from the repository root; the output is committed.
+The path is drawn for a 420 x 104 dp card (the card's width as laid out before the launcher
+scales it, and its default height) with 24 dp corners; on a card of another size (the Card height
+setting) the corners stretch slightly. Run from the repository root; the output is committed.
 """
 import os
 
@@ -22,7 +23,7 @@ TAP_TIMEOUT = 100
 LAUNCHER_FACTOR = 0.75
 FINISH_EARLY = 0.9
 TIMEOUTS = (400, 1000, 1500)
-W, H, R, STROKE = 380, 76, 24, 2.5
+W, H, R, STROKE = 420, 104, 24, 2.5
 i = STROKE / 2
 r = R - i
 PATH = (f"M{W/2},{i} H{W-R} A{r},{r} 0 0 1 {W-i},{R} V{H-R} A{r},{r} 0 0 1 {W-R},{H-i} "

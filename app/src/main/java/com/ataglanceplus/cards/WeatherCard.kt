@@ -100,6 +100,7 @@ object WeatherCard {
             Chips.addPlaced(context, views, bottom, Chips.BOTTOM, aod, R.id.complications_anchor)
             Chips.addPlaced(context, views, right, Chips.RIGHT_COLUMN, aod, R.id.complications)
             forecast(context, views, weather, if (right.isEmpty()) 4 else 3, aod, layout)
+            summary(context, views, weather, aod)
             return finish(context, views, reading, aod)
         }
         forecast(context, views, weather, if (layout == WeatherLayout.GRID) 2 else 3, aod, layout)
@@ -120,6 +121,24 @@ object WeatherCard {
             WeatherLayout.NONE, WeatherLayout.MATERIAL -> views.setViewVisibility(R.id.complications, View.GONE)
         }
         return finish(context, views, reading, aod)
+    }
+
+    /**
+     * The Material You card's line under the forecast: when the weather changes, rain on the way
+     * and the wind ([Weather.summary]), beside the icon of the weather coming next. Hidden when
+     * there is nothing to say, and the row above sits in the middle of the card.
+     */
+    private fun summary(context: Context, views: RemoteViews, weather: Weather, aod: Boolean) {
+        val now = System.currentTimeMillis()
+        val text = weather.summary(now) { DateFormat.getTimeFormat(context).format(Date(it)) }
+        views.setViewVisibility(R.id.weather_summary, if (text == null) View.GONE else View.VISIBLE)
+        text ?: return
+        views.setTextViewText(R.id.weather_summary_text, text)
+        val next = weather.hourly.firstOrNull { it.time > now && it.condition != weather.condition }
+        val condition = next?.condition ?: weather.condition
+        val day = next?.isDay ?: weather.isDayAt(now)
+        views.setImageViewResource(R.id.weather_summary_icon, if (aod) condition.aodIcon(day) else condition.icon(day))
+        if (aod) Style.aodBody(views, R.id.weather_summary_text)
     }
 
     private fun finish(context: Context, views: RemoteViews, reading: Reading, aod: Boolean): SmartspaceTarget {
@@ -162,8 +181,8 @@ object WeatherCard {
 
     /** Width of each variant's right side, including its margins (see tools/gen_weather_layouts.py). */
     private fun rightWidthDp(layout: WeatherLayout): Int = when (layout) {
-        // Material You: 3 hours (34dp each, 6dp each side) and the 78dp right column.
-        WeatherLayout.MATERIAL -> 6 + 3 * 34 + 6 + 78
+        // Material You: 3 hours (35dp each, 6dp each side) and the 78dp right column.
+        WeatherLayout.MATERIAL -> 6 + 3 * 35 + 6 + 78
         WeatherLayout.COLUMNS -> 6 + 102 + 4 + 72
         WeatherLayout.SPLIT -> 6 + 174
         WeatherLayout.GRID -> 6 + 82 + 6 + 96
@@ -263,7 +282,7 @@ object WeatherCard {
     fun materialPlan(context: Context, specs: List<ChipSpec>): Pair<List<Chips.Placed>, List<Chips.Placed>> {
         val all = Chips.withValues(specs).map { it.first }
         fun bottom(rightShown: Boolean): List<Chips.Placed> {
-            val room = cardWidthDp(context) - 30f - (6 + (if (rightShown) 3 else 4) * 34 + 6) - (if (rightShown) 78 else 0)
+            val room = cardWidthDp(context) - 30f - (6 + (if (rightShown) 3 else 4) * 35 + 6) - (if (rightShown) 78 else 0)
             return rowPlan(context, all, room, Chips.BOTTOM, slots = 3, chips = 2)
         }
         var under = bottom(rightShown = all.size >= 3)

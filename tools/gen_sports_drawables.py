@@ -48,10 +48,10 @@ def wash(name, left):
     x1, x2 = (0, 230) if left else (420, 190)
     write(name, f"Team colour wash from the {'left (home)' if left else 'right (away)'}: white, tinted in code.", f'''<vector {A} {AAPT}
     android:width="420dp"
-    android:height="76dp"
+    android:height="104dp"
     android:viewportWidth="420"
-    android:viewportHeight="76">
-    <path android:pathData="M0,0 H420 V76 H0 Z">
+    android:viewportHeight="104">
+    <path android:pathData="M0,0 H420 V104 H0 Z">
         <aapt:attr name="android:fillColor">
             <gradient android:type="linear" android:startX="{x1}" android:startY="0" android:endX="{x2}" android:endY="0"
                 android:startColor="#38FFFFFF" android:endColor="#00FFFFFF" />

@@ -91,10 +91,33 @@ segmented-pill tab pager, instead of one long vertical scroll.
 | Quarter splits in the NBA hero | Left out | The scoreboard feed doesn't carry period splits for every sport |
 | F1 Circuit Info and championship Standings tabs (circuit length, altitude, DRS zones, lap record, points) | Left out; the F1 hub shows the circuit, an up-next countdown, the weekend's sessions and results | The public feed doesn't provide circuit telemetry or championship points, and the app doesn't invent data |
 
-## Deck size and card height (0.16.0, 0.16.1)
+## Deck size and card height (0.16)
 
 | Spec | As built | Why |
 |---|---|---|
 | As many cards as the launcher asks for (5) | Every card with something to show; "Show all cards" (Cards tab, on by default) turns the limit back on | Chosen; Smartspacer's default ("Force unlimited pages") does the same |
 | At most two live updates, two Wallet passes | No cap on either | Chosen |
-| 76dp card body in the 88dp slot | 88dp (`@dimen/card_body_height`): the card fills the slot | Chosen (tried 84dp first). The hold ring and weather scenes are drawn for 76dp and are stretched for now |
+| 76dp card body in the 88dp slot | 104dp slot and body (`@dimen/card_body_height`); a "Card height" slider (76 to 140dp) changes it at run time | Chosen: 104dp fits comfortably on the smallest launcher grid (the launcher's page dots overlap the card's bottom-left a little); taller is cut off. The hold ring, weather scenes and sports washes are drawn for 104dp (stretched slightly at other slider heights) |
+
+## Content at 104dp (0.17.0)
+
+The cards were resized for the 104dp body ("Mix": about 10 to 15% larger, plus one extra line
+where real data exists).
+
+| Card | As built | Why |
+|---|---|---|
+| All cards | Text, icons, badges, buttons and chips about 10 to 15% larger | Chosen (option C) |
+| Material You weather | A summary line under the main row: when the weather changes, rain on the way and the wind (mph in the UK and US, km/h elsewhere), beside the icon of the weather coming next; hidden when there is nothing to say | Uses the extra height with real forecast data |
+| Hybrid weather variants (Columns, Split, Grid, No chips) | Unchanged | Only the default layout was redesigned |
+| Calendar | "Then HH:MM · title" for the next timed event later today; the colour bar spans the text exactly | Real data from the same calendars |
+| Media | The album, when the app reports one and it differs from the title | Real data from the media session |
+| Sports | Larger, but no extra line | The scoreboard feed has nothing more without fetching each game's details |
+| Gmail and other chips beside a wide chip | The wide chip takes only the room left, so a count such as "11" is never cut to "1"; counts above 99 read "99+" | A squeezed pill hid digits |
+
+## Backup (0.17.0)
+
+| Area | As built | Why |
+|---|---|---|
+| Google account backup | Android Auto Backup with a backup agent that saves an allowlisted settings snapshot only | The preferences file also holds secrets |
+| Export / import | App tab: a JSON file of the same settings; importing replaces them after a confirmation | Moving settings by hand |
+| Never included | The wireless-debugging key and pairing, eToro keys, Wallet sign-in, caches, the last location | Secrets and phone-specific state; Wallet and wireless debugging are set up again on a new phone |

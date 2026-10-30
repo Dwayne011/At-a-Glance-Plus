@@ -3,10 +3,10 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="420dp"
-    android:height="76dp"
+    android:height="104dp"
     android:viewportWidth="420"
-    android:viewportHeight="76">
+    android:viewportHeight="104">
     <group android:name="drift">
-        <path android:fillColor="#FFCFD8DC" android:fillAlpha="0.14" android:pathData="M200,22 h220 a5,5 0 0 1 0,10 h-220 a5,5 0 0 1 0,-10 ZM250,38 h240 a5,5 0 0 1 0,10 h-240 a5,5 0 0 1 0,-10 ZM210,54 h230 a5,5 0 0 1 0,10 h-230 a5,5 0 0 1 0,-10 Z" />
+        <path android:fillColor="#FFCFD8DC" android:fillAlpha="0.14" android:pathData="M200,26 h220 a5,5 0 0 1 0,10 h-220 a5,5 0 0 1 0,-10 ZM250,46 h240 a5,5 0 0 1 0,10 h-240 a5,5 0 0 1 0,-10 ZM210,66 h230 a5,5 0 0 1 0,10 h-230 a5,5 0 0 1 0,-10 Z" />
     </group>
 </vector>

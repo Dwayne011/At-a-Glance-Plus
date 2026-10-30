@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup to the Google account: only the settings snapshot (see SettingsBackup). -->
+<full-backup-content>
+    <include domain="file" path="backup/settings.json" />
+</full-backup-content>

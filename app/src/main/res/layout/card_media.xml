@@ -17,13 +17,13 @@
         android:orientation="horizontal">
 
         <FrameLayout
-            android:layout_width="48dp"
-            android:layout_height="48dp">
+            android:layout_width="56dp"
+            android:layout_height="56dp">
 
             <ImageView
                 android:id="@+id/media_art"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
                 android:background="@drawable/media_art_placeholder"
                 android:clipToOutline="true"
                 android:contentDescription="@null"
@@ -31,8 +31,8 @@
 
             <ImageView
                 android:id="@+id/media_art_fallback_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
                 android:layout_gravity="center"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_music_note"
@@ -40,8 +40,8 @@
 
             <ImageView
                 android:id="@+id/media_art_border"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
                 android:contentDescription="@null"
                 android:src="@drawable/media_art_border" />
         </FrameLayout>
@@ -49,7 +49,7 @@
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="12dp"
             android:layout_weight="1"
             android:orientation="vertical"
             android:paddingEnd="4dp">
@@ -82,6 +82,18 @@
                     android:layout_marginStart="6dp"
                     android:textColor="#FFFBCFE8" />
             </LinearLayout>
+
+            <!-- The album, when the app gives one. -->
+            <TextView
+                android:id="@+id/media_album"
+                style="@style/AagText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="#FFF5B5D4"
+                android:textSize="12sp"
+                android:visibility="gone" />
 
             <LinearLayout
                 android:id="@+id/media_wave_row"
@@ -132,14 +144,14 @@
 
         <FrameLayout
             android:id="@+id/media_prev"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="46dp"
+            android:layout_height="52dp"
             android:contentDescription="Previous track">
 
             <ImageView
                 android:id="@+id/media_prev_icon"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
                 android:layout_gravity="center"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_media_prev" />
@@ -147,15 +159,15 @@
 
         <FrameLayout
             android:id="@+id/media_play"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
             android:background="@drawable/media_play_bg"
             android:contentDescription="Play or pause">
 
             <ImageView
                 android:id="@+id/media_play_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:layout_gravity="center"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_media_pause" />
@@ -163,14 +175,14 @@
 
         <FrameLayout
             android:id="@+id/media_next"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="46dp"
+            android:layout_height="52dp"
             android:contentDescription="Next track">
 
             <ImageView
                 android:id="@+id/media_next_icon"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
                 android:layout_gravity="center"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_media_next" />

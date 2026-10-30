@@ -99,7 +99,7 @@ internal fun CardPreviewSection(sessions: Collection<com.ataglanceplus.service.S
             Column(modifier = Modifier.weight(1f)) {
                 Text("Card height · ${height.toInt()} dp")
                 Text(
-                    "${com.ataglanceplus.cards.Style.CARD_HEIGHT_DEFAULT_DP} dp fills the slot on the smallest launcher grid. Taller cards are cut off where the launcher has no room.",
+                    "${com.ataglanceplus.cards.Style.CARD_HEIGHT_DEFAULT_DP} dp by default. Taller cards are cut off where the launcher has no room.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }

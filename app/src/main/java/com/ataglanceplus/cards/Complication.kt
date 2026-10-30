@@ -273,13 +273,13 @@ object Chips {
     )
     /** The Material You weather card's strip under the temperature (weather spec 1.2). */
     val BOTTOM = ChipStyle(
-        R.layout.include_chip_bottom, 12f, 14, 8, null, 64,
-        zoneHDp = 26, pillHDp = 24, wideCapDp = 132,
+        R.layout.include_chip_bottom, 12.5f, 15, 8, null, 64,
+        zoneHDp = 29, pillHDp = 27, wideCapDp = 136,
     )
-    /** Its right column (weather spec 1.4): 2 pills, or one stacked over both (78 x 54dp, chips spec 2.1). */
+    /** Its right column (weather spec 1.4): 2 pills, or one stacked over both (78 x 64dp at the 104dp card height). */
     val RIGHT_COLUMN = ChipStyle(
-        R.layout.include_chip_rightcol, 12.5f, 14, 8, 78, 50,
-        gapDp = 0, stack = true, zoneWDp = 78, zoneHDp = 32, pillHDp = 26, stackPillHDp = 54,
+        R.layout.include_chip_rightcol, 13f, 15, 8, 78, 50,
+        gapDp = 0, stack = true, zoneWDp = 78, zoneHDp = 36, pillHDp = 29, stackPillHDp = 64,
     )
     val COLUMN = ChipStyle(R.layout.include_chip_column, 12f, 14, 6, 72, 56, gapDp = 0, stack = true, zoneWDp = 72, zoneHDp = 30)
     val WIDE = ChipStyle(R.layout.include_chip_wide, 12f, 14, 6, 84, 56, zoneWDp = 84)
@@ -404,7 +404,9 @@ object Chips {
     fun addPlaced(context: Context, views: RemoteViews, placed: List<Placed>, style: ChipStyle, aod: Boolean, container: Int) {
         views.setViewVisibility(container, if (placed.isEmpty()) View.GONE else View.VISIBLE)
         placed.forEach { (spec, value, big, room) ->
-            val child = if (big) bigChip(context, style, spec, value, aod) else normalChip(context, style, spec, value, aod, room)
+            // Under the temperature, a 2-slot chip takes what the row has left, so a count beside it
+            // ("11") is never squeezed when the card is a little narrower than planned.
+            val child = if (big) bigChip(context, style, spec, value, aod, fill = style == BOTTOM && !style.stack) else normalChip(context, style, spec, value, aod, room)
             child.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
             views.addView(container, child)
         }
@@ -440,7 +442,7 @@ object Chips {
      * chip has one. Stacked: a rounded card with the value beside the icon and up to two lines
      * under it, then the progress line; a Bluetooth chip shows the device and its level.
      */
-    private fun bigChip(context: Context, style: ChipStyle, spec: ChipSpec, value: ChipValues.Value, aod: Boolean): RemoteViews {
+    private fun bigChip(context: Context, style: ChipStyle, spec: ChipSpec, value: ChipValues.Value, aod: Boolean, fill: Boolean = false): RemoteViews {
         val dip = android.util.TypedValue.COMPLEX_UNIT_DIP
         val sp = android.util.TypedValue.COMPLEX_UNIT_SP
         val px = android.util.TypedValue.COMPLEX_UNIT_PX
@@ -448,10 +450,11 @@ object Chips {
         val match = android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat()
         val tall = style.stack
         val tone = ChipTones.of(spec, value)
-        val child = RemoteViews(context.packageName, R.layout.include_chip_big)
+        val child = RemoteViews(context.packageName, if (fill) R.layout.include_chip_big_row else R.layout.include_chip_big)
 
         val zoneW = style.bigZoneWDp
-        if (zoneW != null) child.setViewLayoutWidth(R.id.chip_zone, zoneW.toFloat(), dip) else child.setViewLayoutWidth(R.id.chip_zone, wrap, px)
+        if (fill) child.setViewLayoutWidth(R.id.chip_pill, match, px)
+        else if (zoneW != null) child.setViewLayoutWidth(R.id.chip_zone, zoneW.toFloat(), dip) else child.setViewLayoutWidth(R.id.chip_zone, wrap, px)
         child.setViewLayoutHeight(R.id.chip_zone, style.bigZoneHDp.toFloat(), dip)
         if (!tall && style.gapDp > 0) child.setViewLayoutMargin(R.id.chip_zone, RemoteViews.MARGIN_END, style.gapDp.toFloat(), dip)
         if (zoneW != null) child.setViewLayoutWidth(R.id.chip_pill, match, px)

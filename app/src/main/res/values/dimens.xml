@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-        Every card's body inside the 88dp At a Glance slot (one 4x1 widget row on the smallest
-        launcher grid; taller gets cropped). The spec's 76dp, raised to fill the slot. The hold
-        ring and the weather scenes are drawn for 76dp and are stretched to fit.
+        Every card's height: the slot (AagCardRoot) and the body inside it. The spec's 76dp in an
+        88dp slot, raised to 104dp, which fits comfortably on the smallest launcher grid (taller
+        is cut off). The user can change it at run time (Prefs.cardHeightDp, Style.sizeCard). The
+        hold ring and the weather scenes are drawn for 76dp and are stretched to fit.
     -->
-    <dimen name="card_body_height">88dp</dimen>
+    <dimen name="card_body_height">104dp</dimen>
 </resources>

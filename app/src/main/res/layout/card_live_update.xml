@@ -17,14 +17,14 @@
 
         <FrameLayout
             android:id="@+id/live_badge"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:background="@drawable/live_badge_bg">
 
             <ImageView
                 android:id="@+id/live_app_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:layout_gravity="center"
                 android:contentDescription="@null"
                 android:visibility="gone" />

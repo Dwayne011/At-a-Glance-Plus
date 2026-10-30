@@ -67,8 +67,8 @@ object Style {
         return gated(context, intent, requestCode)
     }
 
-    /** The card height the layouts are drawn at (@dimen/card_body_height). */
-    const val CARD_HEIGHT_DEFAULT_DP = 88
+    /** The card height the layouts are drawn at (@dimen/card_body_height): the default. */
+    const val CARD_HEIGHT_DEFAULT_DP = 104
 
     /**
      * Sets the card to the user's chosen height: the slot, the body, and the parts drawn to fill

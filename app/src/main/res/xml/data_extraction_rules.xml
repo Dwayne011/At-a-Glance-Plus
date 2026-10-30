@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup to the Google account and phone-to-phone transfer: only the settings snapshot, which
+    holds the user's settings and nothing secret or device-specific (see SettingsBackup).
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="backup/settings.json" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="backup/settings.json" />
+    </device-transfer>
+</data-extraction-rules>

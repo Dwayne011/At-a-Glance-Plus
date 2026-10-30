@@ -3,12 +3,12 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="420dp"
-    android:height="76dp"
+    android:height="104dp"
     android:viewportWidth="420"
-    android:viewportHeight="76">
-    <path android:name="glow" android:pathData="M0,0 H420 V76 H0 Z">
+    android:viewportHeight="104">
+    <path android:name="glow" android:pathData="M0,0 H420 V104 H0 Z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="300" android:centerY="4" android:gradientRadius="80"
+            <gradient android:type="radial" android:centerX="300" android:centerY="6" android:gradientRadius="96"
                 android:startColor="#80FFD54F" android:endColor="#00FFD54F" />
         </aapt:attr>
     </path>

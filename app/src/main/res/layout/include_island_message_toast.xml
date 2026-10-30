@@ -18,36 +18,32 @@
         android:background="@drawable/card_bg_island"
         android:clipToOutline="true">
 
-        <!-- Behind the avatar, centred on it (16dp padding + 21dp radius - 36dp). -->
+        <!-- Behind the avatar, centred on it: the card is centred vertically, and 16dp padding + 23dp radius - 39dp = 0 across. -->
         <ProgressBar
             android:id="@+id/island_fx_enter"
-            android:layout_width="72dp"
-            android:layout_height="72dp"
-            android:layout_gravity="start|top"
-            android:layout_marginStart="1dp"
-            android:layout_marginTop="1dp"
+            android:layout_width="78dp"
+            android:layout_height="78dp"
+            android:layout_gravity="start|center_vertical"
             android:indeterminate="true"
             android:indeterminateDrawable="@drawable/avd_island_enter"
             android:indeterminateOnly="true"
-            android:maxHeight="72dp"
-            android:maxWidth="72dp"
-            android:minHeight="72dp"
-            android:minWidth="72dp" />
+            android:maxHeight="78dp"
+            android:maxWidth="78dp"
+            android:minHeight="78dp"
+            android:minWidth="78dp" />
 
         <ProgressBar
             android:id="@+id/island_fx_pulse"
-            android:layout_width="72dp"
-            android:layout_height="72dp"
-            android:layout_gravity="start|top"
-            android:layout_marginStart="1dp"
-            android:layout_marginTop="1dp"
+            android:layout_width="78dp"
+            android:layout_height="78dp"
+            android:layout_gravity="start|center_vertical"
             android:indeterminate="true"
             android:indeterminateDrawable="@drawable/avd_island_pulse"
             android:indeterminateOnly="true"
-            android:maxHeight="72dp"
-            android:maxWidth="72dp"
-            android:minHeight="72dp"
-            android:minWidth="72dp" />
+            android:maxHeight="78dp"
+            android:maxWidth="78dp"
+            android:minHeight="78dp"
+            android:minWidth="78dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -58,25 +54,25 @@
             android:paddingEnd="18dp">
 
             <FrameLayout
-                android:layout_width="44dp"
-                android:layout_height="44dp">
+                android:layout_width="46dp"
+                android:layout_height="46dp">
 
                 <ImageView
                     android:id="@+id/island_avatar"
-                    android:layout_width="42dp"
-                    android:layout_height="42dp"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
                     android:contentDescription="@null"
                     android:src="@drawable/island_avatar_bg" />
 
                 <TextView
                     android:id="@+id/island_initial"
-                    android:layout_width="42dp"
-                    android:layout_height="42dp"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
                     android:fontFamily="sans-serif-medium"
                     android:gravity="center"
                     android:includeFontPadding="false"
                     android:textColor="#FF04130A"
-                    android:textSize="16sp"
+                    android:textSize="17sp"
                     android:textStyle="bold" />
 
                 <FrameLayout
@@ -161,14 +157,14 @@
 
             <FrameLayout
                 android:id="@+id/island_reply"
-                android:layout_width="64dp"
-                android:layout_height="36dp"
+                android:layout_width="66dp"
+                android:layout_height="40dp"
                 android:layout_marginStart="8dp"
                 android:contentDescription="Reply">
 
                 <TextView
                     android:layout_width="wrap_content"
-                    android:layout_height="28dp"
+                    android:layout_height="30dp"
                     android:layout_gravity="center"
                     android:background="@drawable/island_reply_bg"
                     android:duplicateParentState="true"
@@ -179,7 +175,7 @@
                     android:singleLine="true"
                     android:text="Reply ↵"
                     android:textColor="#FFFFFFFF"
-                    android:textSize="11sp"
+                    android:textSize="11.5sp"
                     android:textStyle="bold" />
             </FrameLayout>
         </LinearLayout>

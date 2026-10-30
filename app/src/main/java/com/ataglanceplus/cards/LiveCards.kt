@@ -129,6 +129,11 @@ object LiveCards {
         val views = RemoteViews(context.packageName, R.layout.card_media)
         views.setTextViewText(R.id.media_title, media.title)
         views.setTextViewText(R.id.media_detail, "$artist ·")
+        // The album under the artist, unless it only repeats the title.
+        val album = media.album.takeIf { it.isNotBlank() && !it.equals(media.title, ignoreCase = true) }
+        views.setViewVisibility(R.id.media_album, if (album == null) View.GONE else View.VISIBLE)
+        album?.let { views.setTextViewText(R.id.media_album, it) }
+        if (aod) Style.aodBody(views, R.id.media_album)
         if (media.art != null) {
             views.setImageViewBitmap(R.id.media_art, media.art)
         } else {
@@ -208,7 +213,12 @@ object LiveCards {
         views.setTextViewText(R.id.calendar_title, event.title)
         views.setTextViewText(R.id.calendar_detail, detail)
         views.setInt(R.id.calendar_bar, "setColorFilter", if (aod) Style.AOD_TEXT else event.colour)
-        if (aod) Style.aodBody(views, R.id.calendar_title, R.id.calendar_detail)
+        // The next event later today, under the time and place.
+        val then = event.thenTitle?.let { title -> event.thenBegin?.let { "Then ${time(it)} · $title" } }
+        views.setViewVisibility(R.id.calendar_next, if (then == null) View.GONE else View.VISIBLE)
+        then?.let { views.setTextViewText(R.id.calendar_next_text, it) }
+        views.setInt(R.id.calendar_next_icon, "setColorFilter", if (aod) Style.AOD_TEXT else CALENDAR_NEXT)
+        if (aod) Style.aodBody(views, R.id.calendar_title, R.id.calendar_detail, R.id.calendar_next_text)
         Chips.add(context, views, chips, if (bottom) ComplicationLayout.BOTTOM else ComplicationLayout.RIGHT, aod)
 
         val intent = Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, event.eventId))
@@ -843,6 +853,7 @@ object LiveCards {
 
     private const val REQUEST_BASE = 0x20000
     private const val TEAL = 0xFF2DD4BF.toInt()
+    private const val CALENDAR_NEXT = 0xFF94A3B8.toInt()
     private const val NAV_GREEN = 0xFF6EE7B7.toInt()
     private const val UP = 0xFF34D399.toInt()
     private const val LIVE_RED = 0xFFF87171.toInt()

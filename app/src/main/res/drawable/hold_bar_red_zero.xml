@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Hold ring, red, not started -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="380dp"
-    android:height="76dp"
-    android:viewportWidth="380"
-    android:viewportHeight="76">
+    android:width="420dp"
+    android:height="104dp"
+    android:viewportWidth="420"
+    android:viewportHeight="104">
     <path
         android:name="ring"
-        android:pathData="M190.0,1.25 H356 A22.75,22.75 0 0 1 378.75,24 V52 A22.75,22.75 0 0 1 356,74.75 H24 A22.75,22.75 0 0 1 1.25,52 V24 A22.75,22.75 0 0 1 24,1.25 Z"
+        android:pathData="M210.0,1.25 H396 A22.75,22.75 0 0 1 418.75,24 V80 A22.75,22.75 0 0 1 396,102.75 H24 A22.75,22.75 0 0 1 1.25,80 V24 A22.75,22.75 0 0 1 24,1.25 Z"
         android:strokeColor="#FFF43F5E"
         android:strokeLineCap="round"
         android:strokeWidth="2.5"

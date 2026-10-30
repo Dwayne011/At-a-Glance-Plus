@@ -25,7 +25,11 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 /** One hour of forecast. */
-data class HourForecast(val time: Long, val temperature: Double, val code: Int, val isDay: Boolean) {
+data class HourForecast(
+    val time: Long, val temperature: Double, val code: Int, val isDay: Boolean,
+    /** Chance of rain or snow in that hour, 0 to 100; null in old cached readings. */
+    val rainChance: Int? = null,
+) {
     val condition: WeatherCondition get() = WeatherCondition.fromWmo(code)
 }
 
@@ -44,7 +48,35 @@ data class Weather(
     val sunsets: List<Long> = emptyList(),
     /** The next few hours, oldest first; empty in old cached readings. */
     val hourly: List<HourForecast> = emptyList(),
+    /** Wind speed now in [windUnit] ("mph" or "km/h"); null in old cached readings. */
+    val wind: Double? = null,
+    val windUnit: String = "mph",
 ) {
+    /**
+     * One line for the card's extra row: when the weather changes ("Clear until 07:00, then
+     * sunny"), rain on the way if it is not already the change, and the wind. Null when there
+     * is nothing to say.
+     */
+    fun summary(now: Long = System.currentTimeMillis(), clock: (Long) -> String): String? {
+        val upcoming = hourly.filter { it.time > now }
+        val parts = mutableListOf<String>()
+        val change = upcoming.firstOrNull { it.condition != condition }
+        if (change != null) {
+            parts += "${phrase(condition, isDayAt(now))} until ${clock(change.time)}, then ${phrase(change.condition, change.isDay).lowercase()}"
+        } else if (upcoming.size >= 3) {
+            parts += "${phrase(condition, isDayAt(now))} for the next ${upcoming.size} hours"
+        }
+        val wet = setOf(WeatherCondition.DRIZZLE, WeatherCondition.RAIN, WeatherCondition.SNOW, WeatherCondition.THUNDER)
+        if (change?.condition !in wet && condition !in wet) {
+            upcoming.firstOrNull { (it.rainChance ?: 0) >= 50 }?.let { parts += "Rain likely at ${clock(it.time)} (${it.rainChance}%)" }
+        }
+        wind?.let { parts += "Wind ${it.roundToInt()} $windUnit" }
+        return parts.joinToString(" · ").ifEmpty { null }
+    }
+
+    /** "Sunny" for a clear day, "Clear" at night; otherwise the condition's name. */
+    private fun phrase(c: WeatherCondition, day: Boolean): String = if (c == WeatherCondition.CLEAR && day) "Sunny" else c.label
+
     /** The next [count] whole hours after now. */
     fun nextHours(count: Int, now: Long = System.currentTimeMillis()): List<HourForecast> =
         hourly.filter { it.time > now }.take(count)
@@ -143,9 +175,11 @@ object WeatherRepository {
                 hourly = json.optJSONArray("h")?.let { array ->
                     (0 until array.length()).map { i ->
                         val h = array.getJSONObject(i)
-                        HourForecast(h.getLong("t"), h.getDouble("v"), h.getInt("c"), h.getBoolean("d"))
+                        HourForecast(h.getLong("t"), h.getDouble("v"), h.getInt("c"), h.getBoolean("d"), if (h.has("r")) h.getInt("r") else null)
                     }
                 }.orEmpty(),
+                wind = json.optDoubleOrNull("w"),
+                windUnit = json.optString("wu", "mph"),
             )
         }
     }
@@ -180,17 +214,20 @@ object WeatherRepository {
         }
     }
 
+    /** Miles an hour where road speeds are in mph (the UK, the US and a few others), else km/h. */
+    private fun windApiUnit(): String = if (Locale.getDefault().country in setOf("GB", "US", "LR", "MM")) "mph" else "kmh"
+
     private fun fetch(lat: Double, lon: Double, unit: TemperatureUnit): Weather {
         // Two decimal places is about 1 km: enough for weather, not a precise position.
         val url = URL(
             String.format(
                 Locale.ROOT,
                 "https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f" +
-                    "&current=temperature_2m,apparent_temperature,weather_code,is_day" +
+                    "&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m" +
                     "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&forecast_days=2" +
-                    "&hourly=temperature_2m,weather_code,is_day&forecast_hours=6" +
-                    "&temperature_unit=%s&timezone=auto",
-                lat, lon, unit.apiValue
+                    "&hourly=temperature_2m,weather_code,is_day,precipitation_probability&forecast_hours=12" +
+                    "&temperature_unit=%s&wind_speed_unit=%s&timezone=auto",
+                lat, lon, unit.apiValue, windApiUnit()
             )
         )
         val connection = (url.openConnection() as HttpURLConnection).apply {
@@ -225,6 +262,8 @@ object WeatherRepository {
                 sunrises = times("sunrise"),
                 sunsets = times("sunset"),
                 hourly = hours(root.optJSONObject("hourly"), offset),
+                wind = current.optDoubleOrNull("wind_speed_10m"),
+                windUnit = if (windApiUnit() == "mph") "mph" else "km/h",
             )
         } finally {
             connection.disconnect()
@@ -276,8 +315,10 @@ object WeatherRepository {
             .put("sr", org.json.JSONArray(weather.sunrises))
             .put("ss", org.json.JSONArray(weather.sunsets))
             .put("h", org.json.JSONArray(weather.hourly.map {
-                JSONObject().put("t", it.time).put("v", it.temperature).put("c", it.code).put("d", it.isDay)
+                JSONObject().put("t", it.time).put("v", it.temperature).put("c", it.code).put("d", it.isDay).apply { it.rainChance?.let { r -> put("r", r) } }
             }))
+            .put("w", weather.wind)
+            .put("wu", weather.windUnit)
         Prefs.get(context).edit().putString(KEY_CACHE, json.toString()).apply()
     }
 }
@@ -292,11 +333,12 @@ private fun hours(hourly: JSONObject?, offset: java.time.ZoneOffset): List<HourF
     val temps = hourly.optJSONArray("temperature_2m") ?: return emptyList()
     val codes = hourly.optJSONArray("weather_code") ?: return emptyList()
     val days = hourly.optJSONArray("is_day")
+    val rain = hourly.optJSONArray("precipitation_probability")
     return (0 until times.length()).mapNotNull { i ->
         if (temps.isNull(i) || codes.isNull(i)) return@mapNotNull null
         val time = runCatching { java.time.LocalDateTime.parse(times.getString(i)).toInstant(offset).toEpochMilli() }.getOrNull()
             ?: return@mapNotNull null
-        HourForecast(time, temps.getDouble(i), codes.getInt(i), days?.optInt(i, 1) != 0)
+        HourForecast(time, temps.getDouble(i), codes.getInt(i), days?.optInt(i, 1) != 0, rain?.takeIf { !it.isNull(i) }?.optInt(i))
     }
 }
 

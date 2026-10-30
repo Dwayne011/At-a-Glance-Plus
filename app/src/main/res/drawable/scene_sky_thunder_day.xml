@@ -3,14 +3,14 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="420dp"
-    android:height="76dp"
+    android:height="104dp"
     android:viewportWidth="420"
-    android:viewportHeight="76">
-    <path android:pathData="M0,0 H420 V76 H0 Z">
+    android:viewportHeight="104">
+    <path android:pathData="M0,0 H420 V104 H0 Z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="420" android:endY="76"
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="420" android:endY="104"
                 android:startColor="#F2221F36" android:centerColor="#F21C1A2E" android:endColor="#F2161424" />
         </aapt:attr>
     </path>
-    <path android:fillColor="#1FB39DDB" android:pathData="M300,76 C318,74 326,60 344,52 C364,43 380,46 396,34 C408,25 414,16 420,8 L420,76 Z" />
+    <path android:fillColor="#1FB39DDB" android:pathData="M300,104 C318,102 326,86 344,77 C364,67 380,70 396,56 C408,46 414,36 420,27 L420,104 Z" />
 </vector>
