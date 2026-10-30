@@ -21,13 +21,36 @@ object JolpicaSource {
     data class DriverStanding(val position: Int, val code: String, val name: String, val team: String, val teamId: String, val points: String, val wins: Int)
     data class TeamStanding(val position: Int, val name: String, val teamId: String, val points: String, val wins: Int)
 
-    /** One finisher (or not) of a session: [time] is the race time or gap, or the best lap in qualifying. */
+    /**
+     * One finisher (or not) of a session: [time] is the race time or gap, or the best lap in
+     * practice and qualifying. The rest is filled in where a source has it.
+     */
     data class ResultRow(
         val position: String, val code: String, val name: String, val teamId: String, val time: String, val points: String?, val fastestLap: Boolean,
-        /** The team's colour when the source gives it (OpenF1); otherwise from [teamId]. */
+        /** The team's colour when the source gives it (OpenF1, F1's feed); otherwise from [teamId]. */
         val colour: Int? = null,
+        /** Practice and qualifying: the gap to the fastest lap ("" for the fastest). */
+        val gap: String = "",
+        val laps: Int? = null,
+        /** The car's best lap (in a race, its fastest). */
+        val bestLap: String? = null,
+        /** The best time in each of the three sectors, and whether it was the session's fastest. */
+        val sectors: List<String> = emptyList(),
+        val sectorFastest: List<Boolean> = emptyList(),
+        /** At the speed trap, in km/h. */
+        val topSpeed: Int? = null,
+        /** The tyres used, in order ("SOFT", "MEDIUM"…), with each stint's laps. */
+        val stints: List<Pair<String, Int>> = emptyList(),
+        val pitStops: Int? = null,
+        /** Races: the grid slot and how it ended ("Finished", "+1 Lap", "Engine"…). */
+        val grid: Int? = null,
+        val status: String? = null,
+        /** Qualifying: the best time in Q1, Q2 and Q3 ("" where it did not run). */
+        val qualifying: List<String> = emptyList(),
     )
-    data class SessionResult(val title: String, val rows: List<ResultRow>)
+
+    /** [final]: the classification is official; a capture from the feed just after the flag may still change. */
+    data class SessionResult(val title: String, val rows: List<ResultRow>, val final: Boolean = true)
 
     private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, JSONObject>>()
 
@@ -114,6 +137,11 @@ object JolpicaSource {
                 time = time(r),
                 points = r.optString("points").takeIf { it.isNotEmpty() && key != "QualifyingResults" },
                 fastestLap = r.optJSONObject("FastestLap")?.optString("rank") == "1",
+                laps = r.optString("laps").toIntOrNull(),
+                bestLap = r.optJSONObject("FastestLap")?.optJSONObject("Time")?.optString("time")?.ifEmpty { null },
+                grid = r.optString("grid").toIntOrNull(),
+                status = r.optString("status").ifEmpty { null },
+                qualifying = if (key == "QualifyingResults") listOf("Q1", "Q2", "Q3").map { r.optString(it) } else emptyList(),
             )
         }
         return SessionResult(title, rows)

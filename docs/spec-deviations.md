@@ -265,3 +265,14 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | A live session | F1's live timing while the screen is open (connected only then): the flag and the time or lap (ticking between updates), the circuit with every car (by mini-sector), and the full order with gap (practice: to the fastest; race: to the car ahead), best or last lap, tyre and its age, in pit / out | Speed, throttle and exact positions need an F1 TV token |
 | A finished session | The full classification: races and sprints from Jolpica, practice and qualifying from OpenF1, ESPN's top three failing both | |
 | An upcoming session | Countdown, start in the user's time and at the track, the forecast at the circuit for the start (Open-Meteo), the circuit, and last year's winner and pole there (Jolpica) | |
+
+## 0.28.1 — F1 sessions: live highlight, moving map, richer results
+
+| Area | Now | Why |
+|---|---|---|
+| Weekend list | The live session is highlighted (red, "● LIVE", "On now · tap for live timing"); "Up next" is highlighted only while nothing is live | User request |
+| Live map | Fixed: mini-sector status 2048 is a normal ("yellow") time, not "not crossed", so cars only moved on personal-best segments. Cars are now placed at their last mini-sector and moved on at their lap pace (never past the next one), redrawn about 20 times a second | User report: dots not moving |
+| Live tower | Column titles (Pos, Driver, Best lap / Gap or Interval / Last lap, Tyre · laps); every car shows its best lap; tyre age no longer wraps; a one-line tyre legend | User: icons and numbers unclear |
+| Finished session | A summary (fastest lap or winner, top speed, laps run or pit stops) and the full table with titled columns (practice: best lap, gap, laps; qualifying: best, gap, part reached; race: time/gap, best lap, points). Tap a driver for best sectors (session-fastest in purple), speed trap, tyres per stint, and grid/stops or Q1–Q3 | User: "bare bones" |
+| Result sources | Kept on the phone once read. When a session ends (and when a finished one is opened) the app reads F1's live timing feed once, which holds the last session's final state until the next starts; then OpenF1 (now with laps and stints); races and sprints keep Jolpica's official order and points, filled in from these | OpenF1 is closed while any session is live, which left only ESPN's top three |
+| Source text | Removed from the session screens and Standings | User request |

@@ -20,7 +20,7 @@ import java.net.URL
  * formula1.com's Live Timing, which FastF1 and OpenF1 also read). It is not a published API:
  * F1 could change or close it at any time, and then the race card simply keeps showing what
  * ESPN gives. No account is used; the cars' exact positions need one, so each car is placed by
- * the last mini-sector it crossed (about 24 a lap).
+ * the last mini-sector it crossed (about 22 a lap) and moved on from there at its lap pace.
  *
  * The feed speaks SignalR Core; this uses its long-polling transport (plain HTTP requests),
  * subscribes to the topics the card needs, keeps the full state from the first answer and merges
@@ -31,9 +31,12 @@ object LiveTiming {
     private const val TAG = "LiveTiming"
     private const val BASE = "https://livetiming.formula1.com/signalrcore"
     private const val RS = '\u001e'
-    private val TOPICS = listOf("SessionInfo", "SessionStatus", "TrackStatus", "LapCount", "TimingData", "TimingAppData", "DriverList", "ExtrapolatedClock")
+    private val TOPICS = listOf("TimingStats", "SessionInfo", "SessionStatus", "TrackStatus", "LapCount", "TimingData", "TimingAppData", "DriverList", "ExtrapolatedClock")
 
-    /** One car on the card. [lapFraction] is how far round the lap it is (0 to 1), by mini-sector. */
+    /**
+     * One car. [segment] is the last mini-sector it crossed (counted through the lap from 0, of
+     * [segments]), at [segmentAt]; [lapMs] is its usual lap time, to move it on between crossings.
+     */
     data class Car(
         val number: String,
         val code: String,
@@ -41,7 +44,10 @@ object LiveTiming {
         val position: Int,
         /** Practice and qualifying: the best lap (leader) or the gap to it; the race: the gap to the leader. */
         val figure: String,
-        val lapFraction: Float,
+        val segment: Int?,
+        val segmentAt: Long,
+        val segments: Int,
+        val lapMs: Long?,
         val inPit: Boolean,
         val out: Boolean,
         val name: String = "",
@@ -54,7 +60,18 @@ object LiveTiming {
         /** The current tyre ("SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET") and its age in laps. */
         val tyre: String = "",
         val tyreAge: Int = 0,
-    )
+    ) {
+        /**
+         * How far round the lap the car is at [now] (0 to 1): just past its last mini-sector, moved
+         * on at its lap pace but never past the next one (the feed then says it crossed it).
+         */
+        fun fractionAt(now: Long): Float {
+            val at = segment ?: return 0f
+            val each = lapMs?.let { it / segments.toFloat() }
+            val ahead = if (each == null || inPit || out) 0f else ((now - segmentAt) / each).coerceIn(0f, 0.95f)
+            return ((at + 1 + ahead) / segments) % 1f
+        }
+    }
 
     data class State(
         val meeting: String,
@@ -76,8 +93,9 @@ object LiveTiming {
 
     private var job: Job? = null
     private var data = JSONObject()
-    /** Each car's last mini-sector, counted through the lap from 0. */
+    /** Each car's last mini-sector, counted through the lap from 0, and when it crossed it. */
     private val lastSegment = HashMap<String, Int>()
+    private val lastSegmentAt = HashMap<String, Long>()
 
     /** Connects while [wanted] is true and stays connected; disconnects (and forgets the state) when it turns false. */
     @Synchronized
@@ -109,6 +127,15 @@ object LiveTiming {
     /** One connection, until the feed closes it or it fails. */
     private suspend fun kotlinx.coroutines.CoroutineScope.connect() {
         val cookies = mutableMapOf<String, String>()
+        val url = open(cookies)
+        while (isActive) {
+            val body = http(url, "GET", null, cookies)
+            body.split(RS).filter { it.isNotBlank() }.forEach { handle(JSONObject(it)) }
+        }
+    }
+
+    /** Negotiates, shakes hands and subscribes; returns the connection's URL. */
+    private fun open(cookies: MutableMap<String, String>): String {
         val negotiate = JSONObject(http("$BASE/negotiate?negotiateVersion=1", "POST", "", cookies))
         val url = "$BASE?id=" + java.net.URLEncoder.encode(negotiate.getString("connectionToken"), "UTF-8")
         http(url, "POST", """{"protocol":"json","version":1}$RS""", cookies)
@@ -116,11 +143,24 @@ object LiveTiming {
         val subscribe = JSONObject().put("type", 1).put("target", "Subscribe").put("invocationId", "0")
             .put("arguments", JSONArray().put(JSONArray(TOPICS)))
         http(url, "POST", subscribe.toString() + RS, cookies)
-        while (isActive) {
-            val body = http(url, "GET", null, cookies)
-            body.split(RS).filter { it.isNotBlank() }.forEach { handle(JSONObject(it)) }
-        }
+        return url
     }
+
+    /**
+     * The feed's full state once (it keeps the last session's until the next one starts), or
+     * null if it did not answer. Used to keep a finished session's classification.
+     */
+    fun snapshot(): JSONObject? = runCatching {
+        val cookies = mutableMapOf<String, String>()
+        val url = open(cookies)
+        repeat(4) {
+            http(url, "GET", null, cookies).split(RS).filter { it.isNotBlank() }.forEach { m ->
+                val message = JSONObject(m)
+                if (message.optInt("type") == 3) return@runCatching message.optJSONObject("result")
+            }
+        }
+        null
+    }.onFailure { Log.w(TAG, "snapshot failed: ${it.message}") }.getOrNull()
 
     private fun handle(message: JSONObject) {
         when (message.optInt("type")) {
@@ -129,6 +169,9 @@ object LiveTiming {
                 data = result
                 lastSegment.clear()
                 lastSegment.putAll(segmentsFrom(result.optJSONObject("TimingData")))
+                lastSegmentAt.clear()
+                val now = System.currentTimeMillis()
+                lastSegment.keys.forEach { lastSegmentAt[it] = now }
                 publish()
             }
             // A change: ["topic", change, time].
@@ -150,15 +193,15 @@ object LiveTiming {
     private fun noteSegments(change: JSONObject) {
         val lines = change.optJSONObject("Lines") ?: return
         val counts = segmentCounts()
+        val now = System.currentTimeMillis()
         lines.keys().forEach { number ->
-            val sectors = lines.optJSONObject(number)?.optJSONObject("Sectors") ?: return@forEach
-            sectors.keys().forEach { s ->
-                val segments = sectors.optJSONObject(s)?.optJSONObject("Segments") ?: return@forEach
-                segments.keys().forEach { g ->
-                    val status = segments.optJSONObject(g)?.optInt("Status") ?: 0
-                    val sector = s.toIntOrNull() ?: return@forEach
-                    val index = counts.take(sector).sum() + (g.toIntOrNull() ?: 0)
-                    if (crossed(status)) lastSegment[number] = index
+            lines.optJSONObject(number)?.opt("Sectors").indexed().forEach { (sector, s) ->
+                (s as? JSONObject)?.opt("Segments").indexed().forEach { (g, segment) ->
+                    val status = (segment as? JSONObject)?.optInt("Status") ?: 0
+                    if (crossed(status)) {
+                        lastSegment[number] = counts.take(sector).sum() + g
+                        lastSegmentAt[number] = now
+                    }
                 }
             }
         }
@@ -182,11 +225,11 @@ object LiveTiming {
     }
 
     /**
-     * Whether a mini-sector's status says the car has crossed it this lap: 0 is no data and 2048
-     * is not yet crossed; 2049 (done), 2051 (personal best), 2052 (fastest) and 2064 (pit lane)
-     * mean it has.
+     * Whether a mini-sector's status says the car has crossed it this lap: 0 is not yet (each
+     * lap starts with them all at 0); 2048 (a normal, "yellow" time), 2049 (personal best), 2051
+     * (fastest) and 2064 (pit lane) mean it has.
      */
-    private fun crossed(status: Int) = status != 0 && status != 2048
+    private fun crossed(status: Int) = status != 0
 
     /** How many mini-sectors each of the three sectors has, from the first car that says. */
     private fun segmentCounts(): List<Int> {
@@ -197,6 +240,13 @@ object LiveTiming {
             if (counts.size == 3 && counts.all { it > 0 }) return counts
         }
         return listOf(8, 8, 8)
+    }
+
+    /** A JSON array, or an object keyed "0", "1", … (as changes send them), as index and value pairs. */
+    private fun Any?.indexed(): List<Pair<Int, Any?>> = when (this) {
+        is JSONArray -> (0 until length()).map { it to opt(it) }
+        is JSONObject -> keys().asSequence().mapNotNull { k -> k.toIntOrNull()?.let { it to opt(k) } }.sortedBy { it.first }.toList()
+        else -> emptyList()
     }
 
     /** A JSON array, or an object keyed "0", "1", … (as changes send them), as a list. */
@@ -253,7 +303,10 @@ object LiveTiming {
                     position == 1 && race -> line.optJSONObject("IntervalToPositionAhead")?.optString("Value").orEmpty().ifEmpty { "Leader" }
                     else -> gap
                 },
-                lapFraction = lastSegment[number]?.let { (it + 1f) / total } ?: 0f,
+                segment = lastSegment[number],
+                segmentAt = lastSegmentAt[number] ?: 0L,
+                segments = total,
+                lapMs = lapMs(line.optJSONObject("LastLapTime")?.optString("Value"), best),
                 inPit = line.optBoolean("InPit") || line.optBoolean("PitOut"),
                 out = line.optBoolean("Retired") || line.optBoolean("Stopped") || line.optBoolean("KnockedOut"),
                 name = driver?.optString("FullName")?.ifEmpty { null } ?: driver?.optString("BroadcastName").orEmpty(),
@@ -290,6 +343,25 @@ object LiveTiming {
     /** A car's current tyre stint (its last), from TimingAppData. */
     private fun stint(number: String): JSONObject? =
         data.optJSONObject("TimingAppData")?.optJSONObject("Lines")?.optJSONObject(number)?.opt("Stints").asList().lastOrNull() as? JSONObject
+
+    /** The car's usual lap: its last if it was close to its best (not an out lap or a slow one), else its best. */
+    private fun lapMs(last: String?, best: String?): Long? {
+        val b = parseLap(best)
+        val l = parseLap(last)
+        return when {
+            l != null && b != null -> if (l < b * 1.15) l else b
+            else -> l ?: b
+        }
+    }
+
+    /** "1:17.930" (or "57.3") as milliseconds. */
+    fun parseLap(text: String?): Long? {
+        if (text.isNullOrBlank()) return null
+        val parts = text.split(":")
+        val seconds = parts.last().toDoubleOrNull() ?: return null
+        val minutes = if (parts.size > 1) parts[parts.size - 2].toLongOrNull() ?: return null else 0L
+        return minutes * 60_000 + (seconds * 1000).toLong()
+    }
 
     /** "00:31:39" as milliseconds. */
     private fun parseClock(text: String): Long? {

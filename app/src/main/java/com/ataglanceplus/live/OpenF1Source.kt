@@ -9,7 +9,8 @@ import java.util.Locale
 
 /**
  * Full classifications of finished Formula 1 sessions, practice included, from OpenF1
- * (api.openf1.org, open source): position, best lap or race time, gap, laps and team colour. Its
+ * (api.openf1.org, open source): position, best lap or race time, gap, laps, team colour, best
+ * sectors, speed trap and tyres. Its
  * API is free between sessions; while any session is live it answers only to paid keys, and then
  * this returns nothing and the dashboard falls back to Jolpica or ESPN.
  */
@@ -66,6 +67,12 @@ object OpenF1Source {
         val drivers = get("drivers?session_key=$key")?.let { d -> (0 until d.length()).associate { d.getJSONObject(it).let { o -> o.optInt("driver_number") to o } } }.orEmpty()
         val race = type.equals("Race", ignoreCase = true)
         val qualifying = type.equals("Qualifying", ignoreCase = true)
+        // Every lap (sectors, speed trap) and stint, for the detail; the table stands without them.
+        val laps = get("laps?session_key=$key")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.orEmpty().groupBy { it.optInt("driver_number") }
+        val stints = get("stints?session_key=$key")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.orEmpty()
+            .groupBy { it.optInt("driver_number") }.mapValues { (_, list) -> list.sortedBy { it.optInt("stint_number") } }
+        fun best(number: Int, field: String): Double? = laps[number].orEmpty().mapNotNull { l -> l.optDouble(field).takeIf { !it.isNaN() && it > 0 } }.minOrNull()
+        val fastestSectors = (1..3).map { i -> laps.values.flatten().mapNotNull { l -> l.optDouble("duration_sector_$i").takeIf { !it.isNaN() && it > 0 } }.minOrNull() }
         val out = (0 until rows.length()).map { rows.getJSONObject(it) }.sortedBy { if (it.isNull("position")) 99 else it.optInt("position") }.map { r ->
             val driver = drivers[r.optInt("driver_number")]
             val status = when {
@@ -75,13 +82,16 @@ object OpenF1Source {
                 else -> null
             }
             val leader = r.optInt("position") == 1
+            val number = r.optInt("driver_number")
+            val bestLap = best(number, "lap_duration")
             val figure = status ?: when {
                 // Qualifying: the best time in the last part reached (Q3, Q2 or Q1).
                 qualifying -> lastOf(r.opt("duration"))?.let { lap(it) } ?: "No time"
                 race && leader -> r.optDouble("duration").takeIf { !it.isNaN() }?.let { raceTime(it) } ?: "Leader"
-                leader -> r.optDouble("duration").takeIf { !it.isNaN() }?.let { lap(it) } ?: "No time"
-                else -> gap(lastOf(r.opt("gap_to_leader")) ?: r.opt("gap_to_leader"))
+                race -> gap(lastOf(r.opt("gap_to_leader")) ?: r.opt("gap_to_leader"))
+                else -> (r.optDouble("duration").takeIf { !it.isNaN() } ?: bestLap)?.let { lap(it) } ?: "No time"
             }
+            val sectors = (1..3).map { best(number, "duration_sector_$it") }
             val partReached = if (qualifying) (r.opt("duration") as? JSONArray)?.let { a -> (0 until a.length()).lastOrNull { !a.isNull(it) }?.let { "Q${it + 1}" } } else null
             JolpicaSource.ResultRow(
                 position = if (r.isNull("position")) "–" else r.optInt("position").toString(),
@@ -89,9 +99,19 @@ object OpenF1Source {
                 name = driver?.optString("full_name")?.let { name(it) }.orEmpty(),
                 teamId = "",
                 time = figure,
-                points = partReached ?: r.optInt("number_of_laps").takeIf { it > 0 && !race }?.let { "$it laps" },
+                points = partReached,
                 fastestLap = false,
                 colour = driver?.optString("team_colour")?.toLongOrNull(16)?.let { (0xFF000000 or it).toInt() },
+                gap = if (race || leader || status != null) "" else gap(lastOf(r.opt("gap_to_leader")) ?: r.opt("gap_to_leader")),
+                laps = r.optInt("number_of_laps").takeIf { it > 0 },
+                bestLap = bestLap?.let { lap(it) },
+                sectors = if (sectors.all { it != null }) sectors.map { String.format(Locale.ROOT, "%.3f", it) } else emptyList(),
+                sectorFastest = sectors.mapIndexed { i, v -> v != null && v == fastestSectors[i] },
+                topSpeed = laps[number].orEmpty().maxOfOrNull { it.optInt("st_speed") }?.takeIf { it > 0 },
+                stints = stints[number].orEmpty().map { it.optString("compound").uppercase(Locale.ROOT) to (it.optInt("lap_end") - it.optInt("lap_start") + 1).coerceAtLeast(0) },
+                pitStops = if (race) stints[number]?.size?.minus(1)?.coerceAtLeast(0) else null,
+                status = status,
+                qualifying = if (qualifying) (r.opt("duration") as? JSONArray)?.let { a -> (0 until 3).map { if (it < a.length() && !a.isNull(it)) lap(a.get(it)) else "" } }.orEmpty() else emptyList(),
             )
         }
         return JolpicaSource.SessionResult(title, out).also { results[key] = it }

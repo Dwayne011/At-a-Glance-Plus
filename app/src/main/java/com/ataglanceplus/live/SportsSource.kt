@@ -180,6 +180,9 @@ object SportsSource {
                 Prefs.sportsFollowed(context).firstOrNull { it.key == key }?.let { f ->
                     raceSessions(f)?.let { fresh ->
                         fresh.filter { it.state == "post" }.forEach { finishedAt.putIfAbsent(it.eventId + it.session, now) }
+                        // A session that just ended: keep its classification while F1's feed still has it.
+                        fresh.filter { s -> s.state == "post" && sessions.any { it.eventId == s.eventId && it.session == s.session && it.state == "in" } }
+                            .forEach { F1Results.capture(context, it) }
                         _races.update { it + (key to fresh) }
                     }
                 }
