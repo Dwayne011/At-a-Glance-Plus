@@ -12,4 +12,12 @@
                 android:startColor="#80FFD54F" android:endColor="#00FFD54F" />
         </aapt:attr>
     </path>
+    <group android:name="rays" android:pivotX="300" android:pivotY="6">
+        <path android:name="ray_paths" android:fillAlpha="0.6" android:pathData="M300,6 L411.7,44.0 L406.8,56.2 Z M300,6 L380.4,59.8 L373.9,68.5 Z M300,6 L377.7,94.8 L367.3,102.9 Z M300,6 L342.7,92.8 L332.8,97.0 Z M300,6 L322.9,121.8 L309.9,123.6 Z M300,6 L293.6,102.5 L282.9,101.2 Z M300,6 L262.0,117.7 L249.8,112.8 Z M300,6 L246.2,86.4 L237.5,79.9 Z M300,6 L211.2,83.7 L203.1,73.3 Z M300,6 L213.2,48.7 L209.0,38.8 Z ">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="300" android:centerY="6" android:gradientRadius="118"
+                android:startColor="#40FFE082" android:endColor="#00FFE082" />
+        </aapt:attr>
+        </path>
+    </group>
 </vector>

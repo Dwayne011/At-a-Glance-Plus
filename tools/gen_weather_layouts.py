@@ -29,7 +29,7 @@ def auto(id_, max_sp, min_sp, height, colour, medium=False, width="match_parent"
                 android:textColor="{colour}"{extra} />'''
 
 
-ANIMATED_LAYERS = ["sun", "stars", "clouds_light", "clouds_light_night", "clouds_heavy", "clouds_heavy_night", "fog", "rain", "snow", "bolt"]
+ANIMATED_LAYERS = ["sun", "stars", "wisps", "clouds_light", "clouds_light_night", "clouds_heavy", "clouds_heavy_night", "fog", "rain", "snow", "bolt"]
 SCENE = '''
     <FrameLayout
         android:id="@+id/weather_scene"

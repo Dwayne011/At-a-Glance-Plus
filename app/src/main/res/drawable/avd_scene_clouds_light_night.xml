@@ -8,23 +8,42 @@
             android:height="104dp"
             android:viewportWidth="420"
             android:viewportHeight="104">
-    <group android:name="drift">
-        <path android:fillColor="#FFB7C0CC" android:fillAlpha="0.16" android:pathData="M240.1,26.0 a9.9,9.9 0 1,0 19.8,0 a9.9,9.9 0 1,0 -19.8,0 ZM248.9,20.5 a12.1,12.1 0 1,0 24.2,0 a12.1,12.1 0 1,0 -24.2,0 ZM264.3,23.8 a9.9,9.9 0 1,0 19.8,0 a9.9,9.9 0 1,0 -19.8,0 ZM276.4,28.2 a7.7,7.7 0 1,0 15.4,0 a7.7,7.7 0 1,0 -15.4,0 ZM234.6,29.3 a6.6,6.6 0 1,0 13.2,0 a6.6,6.6 0 1,0 -13.2,0 ZM241.2,29.3 V35.9 H284.1 V29.3 ZM362.4,42.0 a7.6,7.6 0 1,0 15.3,0 a7.6,7.6 0 1,0 -15.3,0 ZM369.1,37.8 a9.3,9.3 0 1,0 18.7,0 a9.3,9.3 0 1,0 -18.7,0 ZM381.1,40.3 a7.6,7.6 0 1,0 15.3,0 a7.6,7.6 0 1,0 -15.3,0 ZM390.4,43.7 a6.0,6.0 0 1,0 11.9,0 a6.0,6.0 0 1,0 -11.9,0 ZM358.1,44.5 a5.1,5.1 0 1,0 10.2,0 a5.1,5.1 0 1,0 -10.2,0 ZM363.2,44.5 V49.6 H396.4 V44.5 Z" />
-        <path android:fillColor="#FFD5DCE6" android:fillAlpha="0.10" android:pathData="M240.1,23.5 a9.9,9.9 0 1,0 19.8,0 a9.9,9.9 0 1,0 -19.8,0 ZM248.9,18.0 a12.1,12.1 0 1,0 24.2,0 a12.1,12.1 0 1,0 -24.2,0 ZM264.3,21.3 a9.9,9.9 0 1,0 19.8,0 a9.9,9.9 0 1,0 -19.8,0 ZM276.4,25.7 a7.7,7.7 0 1,0 15.4,0 a7.7,7.7 0 1,0 -15.4,0 ZM234.6,26.8 a6.6,6.6 0 1,0 13.2,0 a6.6,6.6 0 1,0 -13.2,0 ZM241.2,26.8 V33.4 H284.1 V26.8 ZM362.4,39.5 a7.6,7.6 0 1,0 15.3,0 a7.6,7.6 0 1,0 -15.3,0 ZM369.1,35.2 a9.3,9.3 0 1,0 18.7,0 a9.3,9.3 0 1,0 -18.7,0 ZM381.1,37.8 a7.6,7.6 0 1,0 15.3,0 a7.6,7.6 0 1,0 -15.3,0 ZM390.4,41.2 a6.0,6.0 0 1,0 11.9,0 a6.0,6.0 0 1,0 -11.9,0 ZM358.1,42.0 a5.1,5.1 0 1,0 10.2,0 a5.1,5.1 0 1,0 -10.2,0 ZM363.2,42.0 V47.1 H396.4 V42.0 Z" />
+    <group android:name="c0">
+        <path android:fillColor="#FFB7C0CC" android:fillAlpha="0.16" android:pathData="M240.1,26.0 a9.9,9.9 0 1,0 19.8,0 a9.9,9.9 0 1,0 -19.8,0 ZM248.9,20.5 a12.1,12.1 0 1,0 24.2,0 a12.1,12.1 0 1,0 -24.2,0 ZM264.3,23.8 a9.9,9.9 0 1,0 19.8,0 a9.9,9.9 0 1,0 -19.8,0 ZM276.4,28.2 a7.7,7.7 0 1,0 15.4,0 a7.7,7.7 0 1,0 -15.4,0 ZM234.6,29.3 a6.6,6.6 0 1,0 13.2,0 a6.6,6.6 0 1,0 -13.2,0 ZM241.2,29.3 V35.9 H284.1 V29.3 Z" />
+        <path android:fillColor="#FFD5DCE6" android:fillAlpha="0.10" android:pathData="M240.1,23.5 a9.9,9.9 0 1,0 19.8,0 a9.9,9.9 0 1,0 -19.8,0 ZM248.9,18.0 a12.1,12.1 0 1,0 24.2,0 a12.1,12.1 0 1,0 -24.2,0 ZM264.3,21.3 a9.9,9.9 0 1,0 19.8,0 a9.9,9.9 0 1,0 -19.8,0 ZM276.4,25.7 a7.7,7.7 0 1,0 15.4,0 a7.7,7.7 0 1,0 -15.4,0 ZM234.6,26.8 a6.6,6.6 0 1,0 13.2,0 a6.6,6.6 0 1,0 -13.2,0 ZM241.2,26.8 V33.4 H284.1 V26.8 Z" />
+    </group>
+    <group android:name="c1">
+        <path android:fillColor="#FFB7C0CC" android:fillAlpha="0.16" android:pathData="M362.4,42.0 a7.6,7.6 0 1,0 15.3,0 a7.6,7.6 0 1,0 -15.3,0 ZM369.1,37.8 a9.3,9.3 0 1,0 18.7,0 a9.3,9.3 0 1,0 -18.7,0 ZM381.1,40.3 a7.6,7.6 0 1,0 15.3,0 a7.6,7.6 0 1,0 -15.3,0 ZM390.4,43.7 a6.0,6.0 0 1,0 11.9,0 a6.0,6.0 0 1,0 -11.9,0 ZM358.1,44.5 a5.1,5.1 0 1,0 10.2,0 a5.1,5.1 0 1,0 -10.2,0 ZM363.2,44.5 V49.6 H396.4 V44.5 Z" />
+        <path android:fillColor="#FFD5DCE6" android:fillAlpha="0.10" android:pathData="M362.4,39.5 a7.6,7.6 0 1,0 15.3,0 a7.6,7.6 0 1,0 -15.3,0 ZM369.1,35.2 a9.3,9.3 0 1,0 18.7,0 a9.3,9.3 0 1,0 -18.7,0 ZM381.1,37.8 a7.6,7.6 0 1,0 15.3,0 a7.6,7.6 0 1,0 -15.3,0 ZM390.4,41.2 a6.0,6.0 0 1,0 11.9,0 a6.0,6.0 0 1,0 -11.9,0 ZM358.1,42.0 a5.1,5.1 0 1,0 10.2,0 a5.1,5.1 0 1,0 -10.2,0 ZM363.2,42.0 V47.1 H396.4 V42.0 Z" />
     </group>
         </vector>
     </aapt:attr>
-    <target android:name="drift">
+    <target android:name="c0">
         <aapt:attr name="android:animation">
             <set>
             <objectAnimator
-                android:duration="7000"
+                android:duration="10000"
                 android:interpolator="@android:interpolator/accelerate_decelerate"
                 android:propertyName="translateX"
                 android:repeatCount="infinite"
                 android:repeatMode="reverse"
-                android:valueFrom="-14"
-                android:valueTo="14"
+                android:valueFrom="-22"
+                android:valueTo="22"
+                android:valueType="floatType" />
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="c1">
+        <aapt:attr name="android:animation">
+            <set>
+            <objectAnimator
+                android:duration="7500"
+                android:interpolator="@android:interpolator/accelerate_decelerate"
+                android:propertyName="translateX"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:valueFrom="16"
+                android:valueTo="-16"
                 android:valueType="floatType" />
             </set>
         </aapt:attr>

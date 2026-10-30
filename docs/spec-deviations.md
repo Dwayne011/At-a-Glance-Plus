@@ -156,3 +156,13 @@ where real data exists).
 | Spec | As built | Why |
 |---|---|---|
 | Right column 72dp tall, in the main row | The card's full height (94dp inside the 104dp card), beside the main row and the summary line. Two pills: 26dp in 38dp zones, centred on the card, 12dp apart, as on the other cards. A stacked chip fills the column (card height − 14dp) with larger text (15sp value, 11.5sp lines, 14sp eToro value) | The pills sat high, and the space under a stacked chip went unused |
+
+## Animated scenes (0.22.0)
+
+| Scene | Moves | Why |
+|---|---|---|
+| Sunny | Soft rays fan down from the sun, turning slowly (±6° over 11 s) and brightening and dimming out of step with its glow | Chosen: subtle sun rays |
+| Clear night | The stars twinkle under thin wisps of cloud drifting both ways (new layer, also in the still Scenes look) | Chosen: subtly moving clouds |
+| Cloud (light) | Each cloud drifts on its own (±22dp / 10 s and ±16dp / 7.5 s) | Clouds seemed still at ±14dp |
+| Cloud (heavy), rain, snow, thunder | The back and front rows drift at different speeds and opposite ways (±12dp / 13 s, ±22dp / 9 s) | Depth |
+| Snow | Flakes in front 4.4dp across (were 2.6dp), drawn heavier, with smaller flakes among the round ones behind | Chosen: bigger flakes |

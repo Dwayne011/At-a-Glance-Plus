@@ -41,7 +41,7 @@ enum class WeatherCondition(val label: String, @DrawableRes val dayIcon: Int, @D
 
     /** The weather drawn over the sky, back to front (Scenes looks). */
     fun sceneLayers(isDay: Boolean): List<SceneLayer> = when (this) {
-        CLEAR -> listOf(if (isDay) SceneLayer.SUN else SceneLayer.STARS)
+        CLEAR -> if (isDay) listOf(SceneLayer.SUN) else listOf(SceneLayer.STARS, SceneLayer.WISPS)
         PARTLY_CLOUDY -> listOf(if (isDay) SceneLayer.SUN else SceneLayer.STARS, if (isDay) SceneLayer.CLOUDS_LIGHT else SceneLayer.CLOUDS_LIGHT_NIGHT)
         CLOUDY -> listOf(if (isDay) SceneLayer.CLOUDS_HEAVY else SceneLayer.CLOUDS_HEAVY_NIGHT)
         FOG -> listOf(SceneLayer.FOG)
@@ -72,6 +72,7 @@ enum class WeatherCondition(val label: String, @DrawableRes val dayIcon: Int, @D
 enum class SceneLayer(@DrawableRes val still: Int?, @IdRes val animated: Int) {
     SUN(R.drawable.scene_sun, R.id.scene_anim_sun),
     STARS(R.drawable.scene_stars, R.id.scene_anim_stars),
+    WISPS(R.drawable.scene_wisps, R.id.scene_anim_wisps),
     CLOUDS_LIGHT(R.drawable.scene_clouds_light, R.id.scene_anim_clouds_light),
     CLOUDS_LIGHT_NIGHT(R.drawable.scene_clouds_light_night, R.id.scene_anim_clouds_light_night),
     CLOUDS_HEAVY(R.drawable.scene_clouds_heavy, R.id.scene_anim_clouds_heavy),
