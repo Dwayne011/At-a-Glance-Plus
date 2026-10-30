@@ -342,9 +342,7 @@ object Chips {
         specs: List<ChipSpec>,
         aod: Boolean,
         container: Int = R.id.complications,
-    ) {
-        addStyled(context, views, specs, MAX_RIGHT, DEFAULT_RIGHT, aod, container)
-    }
+    ): Int = addStyled(context, views, specs, MAX_RIGHT, DEFAULT_RIGHT, aod, container)
 
     /** How many of [specs] a card's chip spot takes (see [add]); 2-slot chips count once. */
     fun taken(context: Context, specs: List<ChipSpec>): Int = plan(context, specs, MAX_RIGHT, DEFAULT_RIGHT).size

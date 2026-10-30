@@ -149,6 +149,10 @@ class AtAGlanceService : SmartspaceService() {
         scope.launch { NotificationHub.live.drop(1).distinctUntilChanged().collect { pushAll() } }
         scope.launch { NotificationHub.nav.drop(1).distinctUntilChanged().collect { pushAll() } }
         scope.launch { NotificationHub.messages.collect { showMessage(it) } }
+        // The message was read or cleared (its notification is gone): the pop-up goes too.
+        scope.launch {
+            NotificationHub.activeKeys.collect { keys -> message?.let { if (it.key !in keys) endMessage() } }
+        }
         scope.launch { FinanceSource.quotes.drop(1).collect { pushAll() } }
         restartFinance()
         scope.launch { SportsSource.games.drop(1).collect { pushAll() } }
@@ -166,6 +170,14 @@ class AtAGlanceService : SmartspaceService() {
             while (true) {
                 delay(TRACK_BAR_MS)
                 if (MediaSource.now.value?.playing == true && !Prefs.mediaWave(this@AtAGlanceService)) pushAll()
+            }
+        }
+        // The trip bar moves on between the maps app's updates: redraw it every 15 s while
+        // navigating with the screen on.
+        scope.launch {
+            while (true) {
+                delay(NAV_TRIP_MS)
+                if (!screenOff && NotificationHub.nav.value?.progress != null) pushAll()
             }
         }
         // A chip value changed: redraw.
@@ -439,7 +451,8 @@ class AtAGlanceService : SmartspaceService() {
 
     /**
      * A new message: show the toast in first place, drawn once, until it is swiped past, tapped,
-     * dismissed or replaced by a newer message, and at most [MESSAGE_MAX_MS].
+     * dismissed, read or cleared (its notification goes), or replaced by a newer message, and at
+     * most [MESSAGE_MAX_MS].
      */
     private fun showMessage(incoming: IncomingMessage) {
         if (!Prefs.cardEnabled(this, CardType.MESSAGES) || screenOff) return
@@ -475,5 +488,6 @@ class AtAGlanceService : SmartspaceService() {
         private const val SPORTS_STALE_MS = 60_000L
         private const val WALLET_SYNC_MS = 6 * 60 * 60_000L
         private const val TRACK_BAR_MS = 30_000L
+        private const val NAV_TRIP_MS = 15_000L
     }
 }

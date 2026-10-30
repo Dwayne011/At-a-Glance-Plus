@@ -43,6 +43,22 @@ data class LiveNow(
 /** How the directions are travelling, when their wording says so. */
 enum class TravelMode { TRANSIT, BUS, WALK, BIKE, CAR }
 
+/** The manoeuvre the directions describe, for the navigation card's arrow. */
+enum class NavDirection(@androidx.annotation.DrawableRes val icon: Int) {
+    STRAIGHT(com.ataglanceplus.R.drawable.ic_nav_dir_straight),
+    TURN_LEFT(com.ataglanceplus.R.drawable.ic_nav_dir_turn_left), TURN_RIGHT(com.ataglanceplus.R.drawable.ic_nav_dir_turn_right),
+    SLIGHT_LEFT(com.ataglanceplus.R.drawable.ic_nav_dir_slight_left), SLIGHT_RIGHT(com.ataglanceplus.R.drawable.ic_nav_dir_slight_right),
+    SHARP_LEFT(com.ataglanceplus.R.drawable.ic_nav_dir_sharp_left), SHARP_RIGHT(com.ataglanceplus.R.drawable.ic_nav_dir_sharp_right),
+    UTURN_LEFT(com.ataglanceplus.R.drawable.ic_nav_dir_uturn_left), UTURN_RIGHT(com.ataglanceplus.R.drawable.ic_nav_dir_uturn_right),
+    KEEP_LEFT(com.ataglanceplus.R.drawable.ic_nav_dir_keep_left), KEEP_RIGHT(com.ataglanceplus.R.drawable.ic_nav_dir_keep_right),
+    MERGE_LEFT(com.ataglanceplus.R.drawable.ic_nav_dir_merge_left), MERGE_RIGHT(com.ataglanceplus.R.drawable.ic_nav_dir_merge_right),
+    ROUNDABOUT(com.ataglanceplus.R.drawable.ic_nav_dir_roundabout),
+    ARRIVE(com.ataglanceplus.R.drawable.ic_nav_flag),
+}
+
+/** One section of the trip (a public-transport leg, a walk), as a share of the whole and its colour. */
+data class NavLeg(val share: Float, val colour: Int?)
+
 /** Turn-by-turn navigation from a maps app's notification. */
 data class NavNow(
     val key: String,
@@ -51,6 +67,8 @@ data class NavNow(
     val detail: String,
     /** The maps app's own picture (turn arrow, or the line's roundel on public transport). */
     val icon: Icon?,
+    /** The manoeuvre from the instruction's wording, or null when it names none (a bus or train leg, say). */
+    val direction: NavDirection?,
     val open: PendingIntent?,
     /** Trip progress out of 1000, from the app's Live Update progress, or null. */
     val progress: Int?,
@@ -59,6 +77,14 @@ data class NavNow(
     val mode: TravelMode?,
     /** The platform, track or stand to go to ("Platform 3"), when the directions mention one. */
     val platform: String?,
+    /** The trip's sections from the app's progress style, in order; empty when it gives none. */
+    val legs: List<NavLeg> = emptyList(),
+    /** Time left in minutes, and the distance left and arrival time as the app words them, when it says. */
+    val minutesLeft: Int? = null,
+    val distanceLeft: String? = null,
+    val arrival: String? = null,
+    /** When the app last updated its notification, so the trip bar can move on between updates. */
+    val seenAt: Long = System.currentTimeMillis(),
 )
 
 /** A message that just arrived, for the message toast. */
@@ -88,6 +114,10 @@ object NotificationHub {
     val nav: StateFlow<NavNow?> = _nav.asStateFlow()
 
     private val _messages = MutableSharedFlow<IncomingMessage>(extraBufferCapacity = 4)
+
+    /** Keys of the notifications on screen now, so a message pop-up can end when its notification goes (read or cleared). */
+    private val _activeKeys = MutableStateFlow<Set<String>>(emptySet())
+    val activeKeys: StateFlow<Set<String>> = _activeKeys.asStateFlow()
     val messages: SharedFlow<IncomingMessage> = _messages.asSharedFlow()
 
     /** Latest message time seen per notification, so an update without a new message is not a new message. */
@@ -115,6 +145,7 @@ object NotificationHub {
         _timer.value = timer
         _nav.value = nav
         _live.value = live
+        _activeKeys.value = active.map { it.key }.toSet()
 
         // Notifications already on screen when we start are not new messages.
         active.forEach { if (it.key != posted?.key) lastMessageAt.putIfAbsent(it.key, it.notification.`when`) }
@@ -219,13 +250,82 @@ object NotificationHub {
             instruction = instruction.ifEmpty { title },
             detail = detail.filter { it.isNotEmpty() }.joinToString(" · "),
             icon = shrink(context, n.getLargeIcon()),
+            direction = direction(listOf(instruction.ifEmpty { title }, title)),
             open = n.contentIntent,
             progress = if (max > 0 && !n.extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE)) (1000L * progress / max).toInt() else null,
             progressColour = segmentColour(context, n, progress),
             mode = travelMode(words),
             platform = platform(words),
+            legs = legs(context, n),
+            minutesLeft = minutesLeft(listOf(text, sub)),
+            distanceLeft = listOf(text, sub).firstNotNullOfOrNull { DISTANCE_LEFT.find(it)?.groupValues?.get(1) },
+            arrival = listOf(text, sub).firstNotNullOfOrNull { CLOCK.find(it)?.groupValues?.get(1) },
+            seenAt = sbn.postTime,
         )
     }
+
+    private val MINUTES = Regex("""\b(?:(\d+)\s?(?:h|hr|hrs|hour|hours))?\s?(?:(\d+)\s?min(?:s|utes)?)?\b""", RegexOption.IGNORE_CASE)
+    private val DISTANCE_LEFT = Regex("""\b(\d+(?:[.,]\d+)?\s?(?:mi|km|ft|yd|m))\b""")
+    private val CLOCK = Regex("""\b(\d{1,2}:\d{2}(?:\s?[ap]m)?)\b""", RegexOption.IGNORE_CASE)
+
+    /** "12 min", "1 hr 5 min" or "2 h" in the app's lines, as minutes. */
+    private fun minutesLeft(texts: List<String>): Int? = texts.firstNotNullOfOrNull { text ->
+        MINUTES.findAll(text).firstNotNullOfOrNull { m ->
+            val hours = m.groupValues[1].toIntOrNull()
+            val minutes = m.groupValues[2].toIntOrNull()
+            if (hours == null && minutes == null) null else (hours ?: 0) * 60 + (minutes ?: 0)
+        }
+    }
+
+    /** The trip's sections from a progress-style notification: each one's share and colour. */
+    private fun legs(context: Context, n: Notification): List<NavLeg> = runCatching {
+        val style = Notification.Builder.recoverBuilder(context, n).style as? Notification.ProgressStyle ?: return emptyList()
+        val total = style.progressSegments.sumOf { it.length }.takeIf { it > 0 } ?: return emptyList()
+        style.progressSegments.map { NavLeg(it.length.toFloat() / total, it.color.takeIf { c -> c != 0 }?.let { c -> c or 0xFF000000.toInt() }) }
+    }.getOrDefault(emptyList())
+
+    /**
+     * The manoeuvre from the instruction's own wording ("Turn left onto…", "Slight right",
+     * "At the roundabout, take the 2nd exit", "Make a U-turn", "Keep right", "Destination will be
+     * on the left"). The first of the texts that names one wins; null when none does.
+     */
+    private fun direction(texts: List<String>): NavDirection? = texts.firstNotNullOfOrNull { raw ->
+        val t = raw.lowercase()
+        if (t.isBlank()) return@firstNotNullOfOrNull null
+        val left = Regex("""\bleft\b""").find(t)?.range?.first
+        val right = Regex("""\bright\b""").find(t)?.range?.first
+        // The side named first, so "turn left, then right" is a left.
+        val side = when {
+            left != null && (right == null || left < right) -> "L"
+            right != null -> "R"
+            else -> null
+        }
+        fun pick(l: NavDirection, r: NavDirection) = if (side == "R") r else l
+        when {
+            Regex("""\b(arrive|arrived|destination)\b""").containsMatchIn(t) -> NavDirection.ARRIVE
+            "roundabout" in t || Regex("""\b(\d+(st|nd|rd|th)|first|second|third|fourth|fifth) exit\b""").containsMatchIn(t) -> NavDirection.ROUNDABOUT
+            Regex("""\bu[- ]?turn\b""").containsMatchIn(t) -> when {
+                side != null -> pick(NavDirection.UTURN_LEFT, NavDirection.UTURN_RIGHT)
+                // Unsaid: round to the right where traffic keeps left (the UK), else to the left.
+                java.util.Locale.getDefault().country in KEEP_LEFT_COUNTRIES -> NavDirection.UTURN_RIGHT
+                else -> NavDirection.UTURN_LEFT
+            }
+            side != null && "sharp" in t -> pick(NavDirection.SHARP_LEFT, NavDirection.SHARP_RIGHT)
+            side != null && Regex("""\b(slight|slightly|bear)\b""").containsMatchIn(t) -> pick(NavDirection.SLIGHT_LEFT, NavDirection.SLIGHT_RIGHT)
+            side != null && Regex("""\b(keep|stay|fork)\b""").containsMatchIn(t) -> pick(NavDirection.KEEP_LEFT, NavDirection.KEEP_RIGHT)
+            "merge" in t -> pick(NavDirection.MERGE_LEFT, NavDirection.MERGE_RIGHT)
+            side != null && Regex("""\b(exit|ramp|slip road)\b""").containsMatchIn(t) -> pick(NavDirection.SLIGHT_LEFT, NavDirection.SLIGHT_RIGHT)
+            side != null -> pick(NavDirection.TURN_LEFT, NavDirection.TURN_RIGHT)
+            Regex("""\b(continue|head|straight|follow|go)\b""").containsMatchIn(t) -> NavDirection.STRAIGHT
+            else -> null
+        }
+    }
+
+    /** Countries where traffic keeps left. */
+    private val KEEP_LEFT_COUNTRIES = setOf(
+        "GB", "IE", "IM", "JE", "GG", "MT", "CY", "AU", "NZ", "IN", "PK", "BD", "LK", "NP", "JP", "TH", "MY", "SG", "ID",
+        "HK", "MO", "ZA", "KE", "UG", "TZ", "ZM", "ZW", "BW", "NA", "MZ", "MW", "JM", "TT", "BB", "BS", "GY", "SR", "MU", "FJ",
+    )
 
     private val PLATFORM = Regex("""\b(platform|plat\.?|track|stand|bay)\s*([A-Za-z]?\d{1,3}[A-Za-z]?|[A-Z])\b""", RegexOption.IGNORE_CASE)
 

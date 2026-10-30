@@ -212,3 +212,12 @@ where real data exists).
 | Step | As built | Why |
 |---|---|---|
 | Finding the token | The "oauth_token" cookie is looked for on the page's own address and accounts.google.com as well as google.com, at each page start, finish and history change, and every second | Google sets it host-only on accounts.google.com, where google.com cannot see it, so sign-in stopped at the "Welcome" terms page |
+
+## Navigation card and message pop-up (0.25.0)
+
+| Area | As built | Why |
+|---|---|---|
+| Turn arrow | Chosen from the instruction's wording: turn, slight, sharp, U-turn (to the right where traffic keeps left, unless the text says), keep, merge, roundabout, straight on, arrival flag (tools/gen_nav_arrows.py). With no manoeuvre named (a bus or train leg), the maps app's own picture; otherwise straight on | Maps' notification gave no turn picture, so the card always showed its default left arrow |
+| Trip bar | Drawn in code, 6dp: each public-transport leg in its line's colour (one leg: the card's green), grey legs dotted as walks, the part to go faded, a ring at each change, a white dot where you are, a flag at the end; under it the distance and time left and the arrival time, when the maps app's text gives them | Was a 3dp single-colour bar |
+| Trip bar movement | Redrawn every 15 s while navigating with the screen on; between the maps app's updates the dot moves on at the pace the time left implies (at most 15% past the app's figure), and never steps back unless the app's figure drops by more than 10% (a reroute) | It only moved when the maps app updated its notification |
+| Message pop-up | Ends as soon as its notification goes (read or cleared), as well as on swipe, tap, dismiss, a newer message or 10 minutes; the Reply button's space grows with its text | It stayed after the message had been read; "Reply" was cut off at larger font sizes |

@@ -78,15 +78,47 @@
                 android:layout_height="wrap_content"
                 android:textColor="#FFA7F3D0" />
 
-            <ProgressBar
-                android:id="@+id/nav_progress"
-                style="@android:style/Widget.Material.ProgressBar.Horizontal"
+            <!-- The trip bar, drawn in code: each leg in its colour, a ring at each change, a dot
+                 where you are and a flag at the end. Kept to its shape (fitStart), never stretched. -->
+            <ImageView
+                android:id="@+id/nav_trip"
                 android:layout_width="match_parent"
-                android:layout_height="3dp"
-                android:layout_marginTop="5dp"
-                android:max="1000"
-                android:progressDrawable="@drawable/nav_progress"
+                android:layout_height="14dp"
+                android:layout_marginTop="6dp"
+                android:contentDescription="@null"
+                android:scaleType="fitStart"
                 android:visibility="gone" />
+
+            <!-- Under it: distance and time left, and the arrival time, when the maps app says. -->
+            <LinearLayout
+                android:id="@+id/nav_trip_labels"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/nav_trip_left"
+                    style="@style/AagText.Label"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="#FFA7F3D0"
+                    android:textSize="11.5sp" />
+
+                <TextView
+                    android:id="@+id/nav_trip_arrival"
+                    style="@style/AagText.Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:singleLine="true"
+                    android:textColor="#FFE2E8F0"
+                    android:textSize="11.5sp" />
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout

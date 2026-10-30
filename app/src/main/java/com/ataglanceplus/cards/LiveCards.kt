@@ -20,6 +20,8 @@ import com.ataglanceplus.live.CalendarNow
 import com.ataglanceplus.live.IncomingMessage
 import com.ataglanceplus.live.LiveNow
 import com.ataglanceplus.live.MediaNow
+import com.ataglanceplus.live.NavDirection
+import com.ataglanceplus.live.NavLeg
 import com.ataglanceplus.live.NavNow
 import com.ataglanceplus.live.TimerNow
 import com.ataglanceplus.live.TravelMode
@@ -356,36 +358,160 @@ object LiveCards {
         if (lead != null) views.setTextViewText(R.id.nav_distance, lead) else views.setViewVisibility(R.id.nav_distance, View.GONE)
         views.setTextViewText(R.id.nav_instruction, nav.instruction)
         views.setTextViewText(R.id.nav_detail, detail)
-        // The maps app's own picture (turn arrow, or a line's roundel) in its own colours;
-        // otherwise the design's arrow in the card's green.
-        if (nav.icon != null) {
-            views.setImageViewIcon(R.id.nav_icon, nav.icon)
+        // The arrow for the manoeuvre the instruction names, in the card's green; with none named
+        // (a bus or train leg), the maps app's own picture (a line's roundel); otherwise straight on.
+        val arrow = nav.direction ?: if (nav.icon == null) NavDirection.STRAIGHT else null
+        if (arrow != null) {
+            views.setImageViewResource(R.id.nav_icon, arrow.icon)
+            views.setInt(R.id.nav_icon, "setColorFilter", if (aod) Style.AOD_TEXT else NAV_GREEN)
         } else {
-            views.setInt(R.id.nav_icon, "setColorFilter", NAV_GREEN)
+            views.setImageViewIcon(R.id.nav_icon, nav.icon)
+            if (aod) views.setInt(R.id.nav_icon, "setColorFilter", Style.AOD_TEXT)
         }
         nav.mode?.let { mode ->
             views.setViewVisibility(R.id.nav_mode, View.VISIBLE)
             views.setImageViewResource(R.id.nav_mode, modeIcon(mode, aod))
             views.setInt(R.id.nav_mode, "setColorFilter", if (aod) Style.AOD_TEXT else NAV_GREEN)
         }
-        nav.progress?.let { progress ->
-            views.setViewVisibility(R.id.nav_progress, View.VISIBLE)
-            views.setProgressBar(R.id.nav_progress, 1000, progress.coerceIn(0, 1000), false)
-            val colour = if (aod) Style.AOD_TEXT else nav.progressColour ?: NAV_GREEN
-            views.setColorStateList(R.id.nav_progress, "setProgressTintList", ColorStateList.valueOf(colour))
-        }
         if (aod) {
-            Style.aodBody(views, R.id.nav_distance, R.id.nav_instruction, R.id.nav_detail)
+            Style.aodBody(views, R.id.nav_distance, R.id.nav_instruction, R.id.nav_detail, R.id.nav_trip_left, R.id.nav_trip_arrival)
             views.setInt(R.id.nav_box, "setBackgroundResource", R.drawable.aod_outline_r12)
-            if (nav.icon == null) views.setImageViewResource(R.id.nav_icon, R.drawable.ic_nav_turn_left_aod)
-            views.setInt(R.id.nav_icon, "setColorFilter", Style.AOD_TEXT)
         }
-        Chips.add(context, views, given ?: listOf(ChipSpec(Complication.BATTERY)), aod)
+        val chips = Chips.add(context, views, given ?: listOf(ChipSpec(Complication.BATTERY)), aod)
+        tripFraction(nav)?.let { fraction ->
+            // The text column's width in the card's dp: the card less its padding, the arrow box
+            // and its gap, and the chip column when it has chips.
+            val width = WeatherCard.cardWidthDp(context) - 34f - 48f - 11f - if (chips > 0) 92f else 0f
+            views.setViewVisibility(R.id.nav_trip, View.VISIBLE)
+            views.setImageViewBitmap(R.id.nav_trip, tripBar(context, width, nav, fraction, aod))
+            val left = listOfNotNull(nav.distanceLeft, nav.minutesLeft?.let { minutesText(it) + " left" }).joinToString(" · ")
+            val arrival = nav.arrival?.let { "Arrive $it" }
+            if (left.isNotEmpty() || arrival != null) {
+                views.setViewVisibility(R.id.nav_trip_labels, View.VISIBLE)
+                views.setTextViewText(R.id.nav_trip_left, left)
+                views.setTextViewText(R.id.nav_trip_arrival, arrival.orEmpty())
+            }
+        }
         val tap = gate(context, nav.open, "com.google.android.apps.maps", key)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         val title = listOfNotNull(lead, nav.instruction).joinToString(" · ")
         return Style.target(context, targetId(key), views, title, detail, R.drawable.ic_nav_turn_left, tap, 1.8f)
+    }
+
+    /** "12 min", or "1 h 5 min". */
+    private fun minutesText(minutes: Int) = if (minutes >= 60) "${minutes / 60} h ${minutes % 60} min" else "$minutes min"
+
+    /** The fraction of the trip shown last, per navigation, so the dot never steps back on its own. */
+    private val tripShown = java.util.concurrent.ConcurrentHashMap<String, Float>()
+
+    /**
+     * How far through the trip to draw the dot (0 to 1), or null with no progress from the maps
+     * app. Between the app's updates it moves on at the pace the time left implies (at most 15%
+     * past the app's figure); it never goes back unless the app's figure drops by more than 10%,
+     * which is a reroute.
+     */
+    private fun tripFraction(nav: NavNow): Float? {
+        val reported = (nav.progress ?: return null) / 1000f
+        var fraction = reported
+        val minutes = nav.minutesLeft
+        if (minutes != null && minutes > 0) {
+            val perMs = (1f - reported) / (minutes * 60_000f)
+            val since = (System.currentTimeMillis() - nav.seenAt).coerceAtLeast(0L)
+            fraction = (reported + perMs * since).coerceAtMost(minOf(1f, reported + 0.15f))
+        }
+        val shown = tripShown[nav.key]
+        if (shown != null && fraction < shown && shown - fraction < 0.1f) fraction = shown
+        if (tripShown.size > 8) tripShown.clear()
+        tripShown[nav.key] = fraction
+        return fraction.coerceIn(0f, 1f)
+    }
+
+    /**
+     * The trip bar, [widthDp] wide and 14dp tall: a 6dp bar of the trip's legs, each in its line's
+     * colour (one leg, or none given: the card's green), done in full and the rest faded; walks
+     * (grey legs) dotted; a ring at each change; a white dot with a ring where you are; a flag at
+     * the end. On the always-on display, all in grey.
+     */
+    private fun tripBar(context: Context, widthDp: Float, nav: NavNow, fraction: Float, aod: Boolean): android.graphics.Bitmap {
+        val d = context.resources.displayMetrics.density
+        val w = (widthDp * d).toInt().coerceAtLeast(1)
+        val h = (14 * d).toInt()
+        val bitmap = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        val flagSpace = 16 * d
+        val start = 5 * d
+        val end = w - flagSpace
+        val span = end - start
+        val cy = h / 2f
+        val thick = 6 * d
+        val legs = nav.legs.takeIf { it.size > 1 } ?: listOf(NavLeg(1f, null))
+        fun colourOf(leg: NavLeg) = when {
+            aod -> Style.AOD_TEXT
+            legs.size == 1 || leg.colour == null -> NAV_GREEN
+            else -> leg.colour
+        }
+        fun grey(colour: Int): Boolean {
+            val hsv = FloatArray(3)
+            android.graphics.Color.colorToHSV(colour, hsv)
+            return hsv[1] < 0.2f
+        }
+        val at = start + span * fraction
+        var x = start
+        legs.forEachIndexed { i, leg ->
+            val legEnd = if (i == legs.lastIndex) end else x + span * leg.share
+            val gap = if (i < legs.lastIndex) 2 * d else 0f
+            val colour = colourOf(leg)
+            val dotted = !aod && legs.size > 1 && leg.colour != null && grey(leg.colour)
+            fun draw(from: Float, to: Float, alpha: Int) {
+                if (to <= from) return
+                paint.color = colour
+                paint.alpha = alpha
+                if (dotted) {
+                    var dx = from
+                    while (dx < to) {
+                        canvas.drawRect(dx, cy - 2 * d, minOf(dx + 4 * d, to), cy + 2 * d, paint)
+                        dx += 7 * d
+                    }
+                } else {
+                    canvas.drawRoundRect(from, cy - thick / 2, to, cy + thick / 2, thick / 2, thick / 2, paint)
+                }
+            }
+            draw(x, legEnd - gap, 90)
+            draw(x, minOf(at, legEnd - gap), 255)
+            x = legEnd
+        }
+        // A ring at each change.
+        paint.style = android.graphics.Paint.Style.FILL
+        x = start
+        legs.dropLast(1).forEach { leg ->
+            x += span * leg.share
+            paint.color = 0xFF0B1E1A.toInt(); paint.alpha = 255
+            canvas.drawCircle(x - d, cy, 3.5f * d, paint)
+            paint.style = android.graphics.Paint.Style.STROKE; paint.strokeWidth = 2 * d
+            paint.color = if (aod) Style.AOD_TEXT else 0xFFE2E8F0.toInt()
+            canvas.drawCircle(x - d, cy, 3f * d, paint)
+            paint.style = android.graphics.Paint.Style.FILL
+        }
+        // Where you are: white, ringed in the current leg's colour.
+        var reach = 0f
+        val current = legs.firstOrNull { reach += it.share; fraction <= reach + 0.0001f } ?: legs.last()
+        paint.color = 0x59000000
+        canvas.drawCircle(at, cy, 7 * d, paint)
+        paint.color = colourOf(current)
+        canvas.drawCircle(at, cy, 6 * d, paint)
+        paint.color = if (aod) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+        canvas.drawCircle(at, cy, 4 * d, paint)
+        // The flag at the end.
+        context.getDrawable(R.drawable.ic_nav_flag)?.mutate()?.let { flag ->
+            flag.setTint(if (aod) Style.AOD_TEXT else 0xFFE2E8F0.toInt())
+            val size = (12 * d).toInt()
+            val left = (w - size - d).toInt()
+            flag.setBounds(left, ((h - size) / 2f).toInt(), left + size, ((h + size) / 2f).toInt())
+            flag.draw(canvas)
+        }
+        return bitmap
     }
 
     private fun modeIcon(mode: TravelMode, aod: Boolean): Int = when (mode) {
