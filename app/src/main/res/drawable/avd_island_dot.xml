@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 6.1 New-message dot beside the time (tinted per app): fades gently between full and 25%. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="6dp"
+            android:height="6dp"
+            android:viewportWidth="6"
+            android:viewportHeight="6">
+            <path
+                android:name="dot"
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M3,0a3,3 0 1 1 0,6a3,3 0 1 1 0,-6z" />
+        </vector>
+    </aapt:attr>
+    <target android:name="dot">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="fillAlpha"
+                android:valueFrom="1"
+                android:valueTo="0.25"
+                android:duration="800"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>

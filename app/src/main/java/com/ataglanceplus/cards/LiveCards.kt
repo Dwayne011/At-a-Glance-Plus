@@ -809,6 +809,7 @@ object LiveCards {
         val tint = android.content.res.ColorStateList.valueOf(message.colour)
         views.setColorStateList(R.id.island_fx_enter, "setIndeterminateTintList", tint)
         views.setColorStateList(R.id.island_fx_pulse, "setIndeterminateTintList", tint)
+        views.setColorStateList(R.id.island_dot, "setIndeterminateTintList", tint)
         views.setViewVisibility(R.id.island_fx_enter, if (!aod && entering) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.island_fx_pulse, if (!aod && !entering) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.island_avatar, if (aod) View.VISIBLE else View.INVISIBLE)
@@ -823,7 +824,7 @@ object LiveCards {
             Style.aodBody(views, R.id.island_app, R.id.island_sender, R.id.island_time, R.id.island_message, R.id.island_initial)
             views.setImageViewResource(R.id.island_avatar, R.drawable.aod_outline_oval)
             views.setImageViewResource(R.id.island_badge_icon, R.drawable.ic_chat_badge_aod)
-            views.setViewVisibility(R.id.island_eq, View.GONE)
+            views.setViewVisibility(R.id.island_dot, View.GONE)
             views.setViewVisibility(R.id.island_reply, View.GONE)
         } else {
             views.setOnClickPendingIntent(R.id.island_reply, open)

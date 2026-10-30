@@ -135,14 +135,19 @@
                         android:text="· Just now"
                         android:textColor="#FF94A3B8" />
 
+                    <!-- A subtle fading dot in the app's colour: the message is new. -->
                     <ProgressBar
-                        android:id="@+id/island_eq"
-                        android:layout_width="21dp"
-                        android:layout_height="14dp"
-                        android:layout_marginStart="6dp"
+                        android:id="@+id/island_dot"
+                        android:layout_width="6dp"
+                        android:layout_height="6dp"
+                        android:layout_marginStart="7dp"
                         android:indeterminate="true"
-                        android:indeterminateDrawable="@drawable/avd_island_equalizer"
-                        android:indeterminateOnly="true" />
+                        android:indeterminateDrawable="@drawable/avd_island_dot"
+                        android:indeterminateOnly="true"
+                        android:maxHeight="6dp"
+                        android:maxWidth="6dp"
+                        android:minHeight="6dp"
+                        android:minWidth="6dp" />
                 </LinearLayout>
 
                 <TextView
