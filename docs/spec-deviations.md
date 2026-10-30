@@ -282,3 +282,9 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | Area | Now | Why |
 |---|---|---|
 | F1 tables | The last column (Laps, Points, Out in, Tyre · laps) is 64dp wide and centred, title and figures alike; a tyre's age has a set width so the rings line up whether it has one digit or two | User: Laps not in line with its heading |
+
+## 0.28.3 — Dashboards open the one tapped
+
+| Area | Now | Why |
+|---|---|---|
+| Dashboards | Each dashboard's intent carries its kind in the data, and opening one clears any dashboard left open (FLAG_ACTIVITY_CLEAR_TASK). Before, Android matched the open dashboard's task (it ignores extras) and brought the old dashboard back | User report: tapping another card's dashboard showed the previous one |

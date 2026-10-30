@@ -206,8 +206,15 @@ class DashboardActivity : ComponentActivity() {
         const val KIND_GAME_PREFIX = "game:"
         const val KIND_RACE_PREFIX = "race:"
 
+        /**
+         * Opens [kind]'s dashboard fresh. Android matches a running task by its intent without the
+         * extras, so the kind also goes in the data (each dashboard's intent differs), and any
+         * dashboard left open is cleared rather than brought back in place of the one tapped.
+         */
         fun intent(context: Context, kind: String): Intent =
-            Intent(context, DashboardActivity::class.java).putExtra(EXTRA_KIND, kind).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Intent(context, DashboardActivity::class.java).putExtra(EXTRA_KIND, kind)
+                .setData(android.net.Uri.fromParts("dashboard", kind, null))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
     }
 }
 
