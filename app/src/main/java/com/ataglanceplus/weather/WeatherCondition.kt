@@ -1,6 +1,7 @@
 package com.ataglanceplus.weather
 
 import androidx.annotation.DrawableRes
+import androidx.annotation.IdRes
 import com.ataglanceplus.R
 
 /** WMO weather interpretation codes, as returned by Open-Meteo, grouped into what we draw. */
@@ -78,17 +79,17 @@ enum class WeatherCondition(val label: String, @DrawableRes val dayIcon: Int, @D
  * A layer of weather over a scene's sky: a still image (Scenes) and its animated form
  * (Animated scenes), added to the card only when needed. Lightning has no still form.
  */
-enum class SceneLayer(@DrawableRes val still: Int?, val animated: Int) {
-    SUN(R.drawable.scene_sun, R.layout.include_scene_sun),
-    STARS(R.drawable.scene_stars, R.layout.include_scene_stars),
-    CLOUDS_LIGHT(R.drawable.scene_clouds_light, R.layout.include_scene_clouds_light),
-    CLOUDS_LIGHT_NIGHT(R.drawable.scene_clouds_light_night, R.layout.include_scene_clouds_light_night),
-    CLOUDS_HEAVY(R.drawable.scene_clouds_heavy, R.layout.include_scene_clouds_heavy),
-    CLOUDS_HEAVY_NIGHT(R.drawable.scene_clouds_heavy_night, R.layout.include_scene_clouds_heavy_night),
-    FOG(R.drawable.scene_fog, R.layout.include_scene_fog),
-    RAIN(R.drawable.scene_rain, R.layout.include_scene_rain),
-    SNOW(R.drawable.scene_snow, R.layout.include_scene_snow),
-    BOLT(null, R.layout.include_scene_bolt),
+enum class SceneLayer(@DrawableRes val still: Int?, @IdRes val animated: Int) {
+    SUN(R.drawable.scene_sun, R.id.scene_anim_sun),
+    STARS(R.drawable.scene_stars, R.id.scene_anim_stars),
+    CLOUDS_LIGHT(R.drawable.scene_clouds_light, R.id.scene_anim_clouds_light),
+    CLOUDS_LIGHT_NIGHT(R.drawable.scene_clouds_light_night, R.id.scene_anim_clouds_light_night),
+    CLOUDS_HEAVY(R.drawable.scene_clouds_heavy, R.id.scene_anim_clouds_heavy),
+    CLOUDS_HEAVY_NIGHT(R.drawable.scene_clouds_heavy_night, R.id.scene_anim_clouds_heavy_night),
+    FOG(R.drawable.scene_fog, R.id.scene_anim_fog),
+    RAIN(R.drawable.scene_rain, R.id.scene_anim_rain),
+    SNOW(R.drawable.scene_snow, R.id.scene_anim_snow),
+    BOLT(null, R.id.scene_anim_bolt),
 }
 
 /** The weather card's look: the plain gradient, a still scene, or a moving one. */

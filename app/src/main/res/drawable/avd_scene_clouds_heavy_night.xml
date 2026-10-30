@@ -18,7 +18,7 @@
         <aapt:attr name="android:animation">
             <set>
             <objectAnimator
-                android:duration="20000"
+                android:duration="8000"
                 android:interpolator="@android:interpolator/accelerate_decelerate"
                 android:propertyName="translateX"
                 android:repeatCount="infinite"

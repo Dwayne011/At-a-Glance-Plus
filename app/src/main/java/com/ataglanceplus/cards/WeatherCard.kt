@@ -120,7 +120,7 @@ object WeatherCard {
 
     /**
      * A scene behind the card: the sky for the conditions and time of day, and the weather over
-     * it, still or moving. Moving layers are added only when used, so a still card loads none.
+     * it, still or moving. The moving layers are in the layout, hidden; those needed are shown.
      */
     private fun scene(context: Context, views: RemoteViews, reading: Reading, animated: Boolean) {
         views.setViewVisibility(R.id.weather_scene, View.VISIBLE)
@@ -128,7 +128,7 @@ object WeatherCard {
         views.setImageViewResource(R.id.scene_sky, reading.conditions.sceneSky(reading.isDay))
         val layers = reading.conditions.sceneLayers(reading.isDay)
         if (animated) {
-            layers.forEach { views.addView(R.id.scene_anim, RemoteViews(context.packageName, it.animated)) }
+            layers.forEach { views.setViewVisibility(it.animated, View.VISIBLE) }
         } else {
             val stills = layers.mapNotNull { it.still }
             listOf(R.id.scene_a, R.id.scene_b, R.id.scene_c).forEachIndexed { i, id ->

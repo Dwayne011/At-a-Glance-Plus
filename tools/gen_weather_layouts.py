@@ -85,7 +85,11 @@ LEFT = f'''        <!-- Shared left block: icon, temperature, date and high/low/
 '''
 
 # Scenes look: a sky and weather layers behind the content, clipped to the card's corners. The
-# still layers are images; animated ones are added to scene_anim in code, only those needed.
+# still layers are images. The animated ones are all here, hidden, and code shows those needed:
+# each is an indeterminate ProgressBar, which starts its animated drawable by itself (a plain
+# ImageView in RemoteViews never does), with its size limits lifted so it fills the card. They
+# are part of the layout rather than added as nested views, as the launcher animated only those.
+ANIMATED_LAYERS = ["sun", "stars", "clouds_light", "clouds_light_night", "clouds_heavy", "clouds_heavy_night", "fog", "rain", "snow", "bolt"]
 SCENE = '''
     <FrameLayout
         android:id="@+id/weather_scene"
@@ -127,11 +131,19 @@ SCENE = '''
             android:scaleType="fitXY"
             android:visibility="gone" />
 
-        <FrameLayout
-            android:id="@+id/scene_anim"
+''' + "\n".join(f'''        <ProgressBar
+            android:id="@+id/scene_anim_{name}"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-    </FrameLayout>
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_{name}"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
+''' for name in ANIMATED_LAYERS) + '''    </FrameLayout>
 '''
 
 RING = '''

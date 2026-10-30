@@ -48,10 +48,135 @@
             android:scaleType="fitXY"
             android:visibility="gone" />
 
-        <FrameLayout
-            android:id="@+id/scene_anim"
+        <ProgressBar
+            android:id="@+id/scene_anim_sun"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_sun"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/scene_anim_stars"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_stars"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/scene_anim_clouds_light"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_clouds_light"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/scene_anim_clouds_light_night"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_clouds_light_night"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/scene_anim_clouds_heavy"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_clouds_heavy"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/scene_anim_clouds_heavy_night"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_clouds_heavy_night"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/scene_anim_fog"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_fog"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/scene_anim_rain"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_rain"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/scene_anim_snow"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_snow"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/scene_anim_bolt"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/avd_scene_bolt"
+            android:indeterminateOnly="true"
+            android:maxHeight="400dp"
+            android:maxWidth="2000dp"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:visibility="gone" />
     </FrameLayout>
 
     <LinearLayout
