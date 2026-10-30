@@ -91,10 +91,10 @@ segmented-pill tab pager, instead of one long vertical scroll.
 | Quarter splits in the NBA hero | Left out | The scoreboard feed doesn't carry period splits for every sport |
 | F1 Circuit Info and championship Standings tabs (circuit length, altitude, DRS zones, lap record, points) | Left out; the F1 hub shows the circuit, an up-next countdown, the weekend's sessions and results | The public feed doesn't provide circuit telemetry or championship points, and the app doesn't invent data |
 
-## Deck size and card height (0.16.0)
+## Deck size and card height (0.16.0, 0.16.1)
 
 | Spec | As built | Why |
 |---|---|---|
 | As many cards as the launcher asks for (5) | Every card with something to show; "Show all cards" (Cards tab, on by default) turns the limit back on | Chosen; Smartspacer's default ("Force unlimited pages") does the same |
 | At most two live updates, two Wallet passes | No cap on either | Chosen |
-| 76dp card body in the 88dp slot | 84dp (`@dimen/card_body_height`), 2dp clear above and below | Chosen, to try taller cards. The hold ring and weather scenes are drawn for 76dp and are stretched for now |
+| 76dp card body in the 88dp slot | 88dp (`@dimen/card_body_height`): the card fills the slot | Chosen (tried 84dp first). The hold ring and weather scenes are drawn for 76dp and are stretched for now |
