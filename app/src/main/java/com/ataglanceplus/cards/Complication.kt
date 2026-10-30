@@ -247,10 +247,10 @@ object Chips {
         R.layout.include_chip_bottom, 12.5f, 15, 8, null, 64,
         zoneHDp = 29, pillHDp = 27, wideCapDp = 136,
     )
-    /** Its right column (weather spec 1.4): 2 pills, or one stacked over both (78 x 64dp at the 104dp card height). */
+    /** Its right column (weather spec 1.4): 2 pills the same width, or one stacked over both (78 x 72dp at the 104dp card height). */
     val RIGHT_COLUMN = ChipStyle(
-        R.layout.include_chip_rightcol, 13f, 15, 8, 78, 50,
-        gapDp = 0, stack = true, zoneWDp = 78, zoneHDp = 36, pillHDp = 29, stackPillHDp = 64,
+        R.layout.include_chip_rightcol, 12.5f, 15, 8, 78, 42,
+        gapDp = 0, stack = true, zoneWDp = 78, zoneHDp = 36, pillHDp = 26, stackPillHDp = 72,
     )
 
     /** Room kept spare when choosing text for the extra chips card, whose real width is estimated. */
@@ -496,6 +496,8 @@ object Chips {
                 if (spec.kind == Complication.ETORO) line(context, child, R.id.chip_detail2, it, 12f, primary, inner)
                 else line(context, child, R.id.chip_detail2, it, STACK_LINE_SP, secondary, inner)
             }
+            // A fourth line (eToro's move today) only where the stack is tall enough for it.
+            lines.getOrNull(3)?.takeIf { style.bigPillHDp >= FOUR_LINES_DP }?.let { line(context, child, R.id.chip_detail3, it, STACK_LINE_SP, secondary, inner) }
         }
         child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + lines.joinToString(", "))
         return child
@@ -735,5 +737,7 @@ object Chips {
     private const val STACK_ICON_DP = 14
     private const val STACK_TEXT_SP = 13f
     private const val STACK_LINE_SP = 10f
+    /** The shortest stacked pill that fits a fourth line. */
+    private const val FOUR_LINES_DP = 70
     private const val SUN_SP = 11f
 }

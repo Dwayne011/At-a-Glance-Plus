@@ -26,7 +26,7 @@ class CardActionReceiver : BroadcastReceiver() {
             ACTION_TORCH_OFF -> TorchSource.turnOff(context)
             ACTION_TORCH_STEP -> TorchSource.setStep(context, intent.getIntExtra(EXTRA_VALUE, 1))
             ACTION_TORCH_NUDGE -> TorchSource.nudge(context, intent.getIntExtra(EXTRA_VALUE, 0))
-            ACTION_SPORTS_STEP -> intent.getStringExtra(EXTRA_EVENT)?.let { Prefs.stepSportsRace(context, it, SportsRules.STEP_LASTS) }
+            ACTION_SPORTS_STEP -> intent.getStringExtra(EXTRA_EVENT)?.let { Prefs.stepSportsRace(context, it, SportsRules.STEP_LASTS, intent.getIntExtra(EXTRA_VALUE, 1)) }
         }
     }
 
@@ -72,12 +72,13 @@ class CardActionReceiver : BroadcastReceiver() {
             return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
 
-        /** Next on a race card: shows the weekend's following session. */
-        fun sportsStep(context: Context, eventId: String): PendingIntent {
+        /** Next ([by] 1) or Back ([by] -1) on a race card: shows the weekend's following or previous session. */
+        fun sportsStep(context: Context, eventId: String, by: Int = 1): PendingIntent {
             val intent = Intent(context, CardActionReceiver::class.java)
                 .setAction(ACTION_SPORTS_STEP)
-                .setData(Uri.Builder().scheme("aagp").authority("sports-step").appendPath(eventId).build())
+                .setData(Uri.Builder().scheme("aagp").authority("sports-step").appendPath(eventId).appendPath(by.toString()).build())
                 .putExtra(EXTRA_EVENT, eventId)
+                .putExtra(EXTRA_VALUE, by)
             return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
     }

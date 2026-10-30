@@ -348,11 +348,14 @@ object Prefs {
         return Triple(parts.getOrElse(0) { "" }, parts.getOrNull(1)?.toIntOrNull() ?: 0, parts.getOrNull(2)?.toLongOrNull() ?: 0L)
     }
 
-    /** One more Next on [eventId]'s card; a new weekend, or a step that has run out, starts again. */
-    fun stepSportsRace(context: Context, eventId: String, lasts: Long) {
+    /**
+     * One more Next ([by] 1) or Back ([by] -1) on [eventId]'s card; a new weekend, or a step that
+     * has run out, starts again from the session the rules chose.
+     */
+    fun stepSportsRace(context: Context, eventId: String, lasts: Long, by: Int = 1) {
         val now = System.currentTimeMillis()
         val (id, steps, at) = sportsRaceStep(context)
-        val next = if (id == eventId && now - at < lasts) steps + 1 else 1
+        val next = ((if (id == eventId && now - at < lasts) steps else 0) + by).coerceAtLeast(0)
         get(context).edit().putString(KEY_SPORTS_STEP, "$eventId|$next|$now").apply()
     }
 

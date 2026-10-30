@@ -221,6 +221,19 @@ object EtoroSource {
 
     // --- History, recorded here ---
 
+    /**
+     * How much the portfolio's value has moved today: from the last value recorded before
+     * midnight (or, without one, the first recorded today) to [p]. Null until there are two
+     * readings to compare. Recorded values include deposits and withdrawals, which count as moves.
+     */
+    fun todayChange(context: Context, p: Portfolio): Double? {
+        val zone = java.time.ZoneId.systemDefault()
+        val midnight = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+        val history = history(context)
+        val base = history.lastOrNull { it.at < midnight } ?: history.firstOrNull { it.at >= midnight && it.at < p.at } ?: return null
+        return p.equity - base.equity
+    }
+
     fun history(context: Context): List<Snapshot> = runCatching {
         val array = JSONArray(File(context.filesDir, HISTORY_FILE).readText())
         (0 until array.length()).map { array.getJSONArray(it) }.map { Snapshot(it.getLong(0), it.getDouble(1), it.getDouble(2)) }

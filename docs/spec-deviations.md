@@ -130,3 +130,15 @@ where real data exists).
 | App tab | A status line ("Showing on the home screen and lock screen") with Activate / Back to Google; Problems and failed device checks only when there are any; weather location only while it is missing; Backup. Connection details, wireless-debugging checks, the command and crash logs, chip fitting numbers and the adb commands are in a collapsed Advanced section | Less to read day to day |
 | Cards tab | One row per card; tapping a card with options (Weather's look, Calendar, Media, Finance, Sports, Wallet) opens them, one at a time | The inline panels made the tab very long |
 | Chips tab | Only the chips; the weather layout picker is gone and its look moved to Cards › Weather | Material You only |
+
+## Card fixes (0.19.0)
+
+| Card | As built | Why |
+|---|---|---|
+| Weather, right column | Two pills the column's full width (78dp), 26dp tall, 10dp apart, like the other cards' right column; a stacked chip fills the column (78 x 72dp) | Aligned pills; no unused space |
+| Weather, under the temperature | Up to 3 chips where they fit | There was room for a third |
+| eToro chip, stacked | A fourth line: "Today +$38", the value's move since the last reading before midnight (or the first today). Deposits and withdrawals count as moves | eToro's API keeps no history; the app records its own |
+| Sports HOME / AWAY tags | 15dp tall with the text 2dp lower | Capitals sat high in the 14dp tag |
+| F1 | After the first Next, Back (one session back) sits over Next; on the weekend's last session only Back | Chosen |
+| Message pop-up | Up to 3 lines of the message, then "…" | Uses the card's height |
+| Wallet barcode | 156 x 52dp in a 176 x 80dp box (QR codes 70dp in 80dp) | Easier to scan |

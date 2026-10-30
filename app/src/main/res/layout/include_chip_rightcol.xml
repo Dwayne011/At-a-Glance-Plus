@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Material You weather card (weather spec 1.4): a 26dp tonal pill (68 to 74dp wide) in the right
-    column, in a 78 x 32dp tap zone, so two stacked pills sit 6dp apart. Added into a card with
+    Material You weather card (weather spec 1.4): a 26dp tonal pill the column's full 78dp wide, in a
+    78 x 36dp tap zone, so two stacked pills are the same width and sit 10dp apart, as on the
+    other cards' right column. Added into a card with
     RemoteViews.addView, so ids are local to each chip.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -11,12 +12,11 @@
 
     <LinearLayout
         android:id="@+id/chip_pill"
-        android:layout_width="wrap_content"
-        android:layout_height="29dp"
-        android:layout_gravity="end|center_vertical"
+        android:layout_width="match_parent"
+        android:layout_height="26dp"
+        android:layout_gravity="center_vertical"
         android:duplicateParentState="true"
         android:gravity="center"
-        android:minWidth="68dp"
         android:orientation="horizontal"
         android:paddingStart="8dp"
         android:paddingEnd="8dp">
@@ -33,7 +33,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="5dp"
-            android:maxWidth="50dp"
-            android:textSize="13sp" />
+            android:maxWidth="42dp"
+            android:textSize="12.5sp" />
     </LinearLayout>
 </FrameLayout>

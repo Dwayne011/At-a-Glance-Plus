@@ -23,7 +23,7 @@ import kotlin.math.roundToInt
 /**
  * The weather card (spec 8.1): the pinned base card that replaces Google's date and weather line.
  *
- * Laid out per the Material You weather spec (section 1): current weather with 1 or 2 chips
+ * Laid out per the Material You weather spec (section 1): current weather with 1 to 3 chips
  * under it, the next 3 hours (4 when there is no right column), and a right column of chips only
  * when they do not all fit under the temperature. The date shows on the home screen only; the lock screen already shows it beside the clock. With no weather yet, the card says
  * why instead of staying blank.
@@ -223,7 +223,7 @@ object WeatherCard {
     }
 
     /**
-     * The Material You card's chips (weather spec 1.2 to 1.4): up to 2 under the temperature (an
+     * The Material You card's chips (weather spec 1.2 to 1.4): up to 3 under the temperature (an
      * extended one across 2 slots), then the right column for the rest: 2 pills, or one stacked
      * over both. The column shows with 3 or more chips, or when 2 do not fit; without it the
      * forecast takes a 4th hour and the row under the temperature has that much less room.
@@ -231,7 +231,7 @@ object WeatherCard {
     fun materialPlan(context: Context, specs: List<ChipSpec>): Pair<List<Chips.Placed>, List<Chips.Placed>> {
         val all = Chips.withValues(specs).map { it.first }
         fun bottom(rightShown: Boolean): List<Chips.Placed> {
-            return rowPlan(context, all, anchorRowDp(context, rightShown), Chips.BOTTOM, slots = 3, chips = 2)
+            return rowPlan(context, all, anchorRowDp(context, rightShown), Chips.BOTTOM, slots = 3, chips = 3)
         }
         var under = bottom(rightShown = all.size >= 3)
         var rest = all.filter { spec -> under.none { it.spec == spec } }

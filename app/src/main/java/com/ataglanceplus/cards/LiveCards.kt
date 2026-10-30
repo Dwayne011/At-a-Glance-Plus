@@ -249,13 +249,13 @@ object LiveCards {
                 views.setViewVisibility(R.id.wallet_barcode_box, View.GONE)
                 views.setViewVisibility(R.id.wallet_qr_box, View.VISIBLE)
                 views.setViewVisibility(R.id.wallet_open, View.GONE)
-                com.ataglanceplus.wallet.WalletBarcode.render(barcode, 180)?.let { views.setImageViewBitmap(R.id.wallet_qr, it) }
+                com.ataglanceplus.wallet.WalletBarcode.render(barcode, 240)?.let { views.setImageViewBitmap(R.id.wallet_qr, it) }
             }
             else -> {
                 views.setViewVisibility(R.id.wallet_barcode_box, View.VISIBLE)
                 views.setViewVisibility(R.id.wallet_qr_box, View.GONE)
                 views.setViewVisibility(R.id.wallet_open, View.GONE)
-                com.ataglanceplus.wallet.WalletBarcode.render(barcode, 320)?.let { views.setImageViewBitmap(R.id.wallet_barcode, it) }
+                com.ataglanceplus.wallet.WalletBarcode.render(barcode, 440)?.let { views.setImageViewBitmap(R.id.wallet_barcode, it) }
                 views.setTextViewText(R.id.wallet_barcode_digits, barcode.displayText ?: barcode.value)
             }
         }
@@ -534,15 +534,31 @@ object LiveCards {
             }
         }
         if (showing.sessions.size > 1) {
-            views.setTextViewText(R.id.race_badge_text, if (showing.lastStep) "‹ Back" else "Next ›")
-            views.setOnClickPendingIntent(R.id.race_next, CardActionReceiver.sportsStep(context, session.eventId))
+            // Next steps on through the weekend; after the first step, Back steps back one. On the
+            // last session only Back is left.
+            val next = CardActionReceiver.sportsStep(context, session.eventId)
+            val back = CardActionReceiver.sportsStep(context, session.eventId, by = -1)
+            if (showing.step == 0) {
+                views.setTextViewText(R.id.race_badge_text, "Next ›")
+                views.setOnClickPendingIntent(R.id.race_next, next)
+            } else if (showing.lastStep) {
+                views.setTextViewText(R.id.race_badge_text, "‹ Back")
+                views.setOnClickPendingIntent(R.id.race_next, back)
+            } else {
+                views.setTextViewText(R.id.race_badge_text, "Next ›")
+                views.setViewVisibility(R.id.race_back, View.VISIBLE)
+                views.setViewLayoutHeight(R.id.race_badge_text, RACE_PAIR_DP, android.util.TypedValue.COMPLEX_UNIT_DIP)
+                views.setOnClickPendingIntent(R.id.race_badge_text, next)
+                views.setOnClickPendingIntent(R.id.race_back, back)
+            }
         } else {
             views.setViewVisibility(R.id.race_next, View.GONE)
         }
         if (aod) {
-            Style.aodBody(views, R.id.race_title, R.id.race_session, R.id.race_detail, R.id.race_badge_text, R.id.race_countdown)
+            Style.aodBody(views, R.id.race_title, R.id.race_session, R.id.race_detail, R.id.race_badge_text, R.id.race_back, R.id.race_countdown)
             views.setInt(R.id.race_badge, "setBackgroundResource", R.drawable.aod_outline_r12)
             views.setInt(R.id.race_badge_text, "setBackgroundResource", R.drawable.aod_outline_r14)
+            views.setInt(R.id.race_back, "setBackgroundResource", R.drawable.aod_outline_r14)
             views.setInt(R.id.race_countdown, "setBackgroundResource", R.drawable.aod_outline_r12)
             views.setViewVisibility(R.id.race_mark_top, View.GONE)
             views.setViewVisibility(R.id.race_mark_bottom, View.GONE)
@@ -853,6 +869,9 @@ object LiveCards {
     private const val NAV_GREEN = 0xFF6EE7B7.toInt()
     private const val UP = 0xFF34D399.toInt()
     private const val LIVE_RED = 0xFFF87171.toInt()
+
+    /** Next and Back stacked on the race card: each button 32dp tall. */
+    private const val RACE_PAIR_DP = 32f
     private const val DOWN = 0xFFF87171.toInt()
     // Sports spec 3.1 and 3.2.
     private const val TEAM_CIRCLE_SHADE = 0.6f

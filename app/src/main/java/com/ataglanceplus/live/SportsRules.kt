@@ -23,7 +23,9 @@ sealed class SportsShowing(val phase: SportsPhase) {
         val session: RaceSession,
         phase: SportsPhase,
         val sessions: List<RaceSession>,
-        /** Whether the next Next goes back to the session the rules chose. */
+        /** How many sessions on from the one the rules chose (0 for that one). */
+        val step: Int,
+        /** Whether this is the weekend's last session, counting on from the chosen one. */
         val lastStep: Boolean,
         private val chosen: RaceSession,
         private val chosenPhase: SportsPhase,
@@ -96,7 +98,7 @@ object SportsRules {
             session.start - now in 0..before -> SportsPhase.BEFORE
             else -> SportsPhase.NEXT
         }
-        return SportsShowing.Race(session, shownPhase, sessions, step == sessions.size - 1, chosen, phase)
+        return SportsShowing.Race(session, shownPhase, sessions, step, step == sessions.size - 1, chosen, phase)
     }
 
     /** When a game ended: when it was first seen finished, else its start plus a typical length. */

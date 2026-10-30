@@ -77,6 +77,20 @@
             android:textSize="10sp"
             android:visibility="gone" />
 
+        <!-- Stacked: a fourth line (eToro's move today), where the pill is tall enough. -->
+        <TextView
+            android:id="@+id/chip_detail3"
+            style="@style/AagText.Chip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:lineHeight="13sp"
+            android:ellipsize="end"
+            android:maxWidth="400dp"
+            android:singleLine="true"
+            android:textSize="10sp"
+            android:visibility="gone" />
+
         <!-- Stacked Bluetooth chip: the level, or the second device. -->
         <LinearLayout
             android:id="@+id/chip_row2"
