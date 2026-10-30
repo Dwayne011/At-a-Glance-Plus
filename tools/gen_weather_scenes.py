@@ -126,9 +126,9 @@ def sun():
         </path>
     </group>'''
     anim = [
-        ("glow", "fillAlpha", 1.0, 0.55, 4000, "reverse"),
-        ("rays", "rotation", -6, 6, 11000, "reverse"),
-        ("ray_paths", "fillAlpha", 0.6, 0.25, 3300, "reverse"),
+        ("glow", "fillAlpha", 1.0, 0.7, 6000, "reverse"),
+        ("rays", "rotation", -3, 3, 16000, "reverse"),
+        ("ray_paths", "fillAlpha", 0.6, 0.35, 5000, "reverse"),
     ]
     return glow + "\n" + rays, anim
 
@@ -185,7 +185,7 @@ def clouds(heavy, night):
         <path android:fillColor="{top}" android:fillAlpha="0.10" android:pathData="{shapes(front, -3)}" />
     </group>'''
         # The rows drift at different speeds and out of step, so the sky seems to have depth.
-        anim = [("back", "translateX", 12, -12, 13000, "reverse"), ("front", "translateX", -22, 22, 9000, "reverse")]
+        anim = [("back", "translateX", 7, -7, 22000, "reverse"), ("front", "translateX", -12, 12, 16000, "reverse")]
     else:
         spots = [(LEFT_CLEAR + 60, 26, 1.1), (LEFT_CLEAR + 180, 42, 0.85)]
         path = "".join(f'''    <group android:name="c{i}">
@@ -193,7 +193,7 @@ def clouds(heavy, night):
         <path android:fillColor="{top}" android:fillAlpha="0.10" android:pathData="{cloud(x, y - 2.5, sc)}" />
     </group>
 ''' for i, (x, y, sc) in enumerate(spots)).rstrip("\n")
-        anim = [("c0", "translateX", -22, 22, 10000, "reverse"), ("c1", "translateX", 16, -16, 7500, "reverse")]
+        anim = [("c0", "translateX", -12, 12, 18000, "reverse"), ("c1", "translateX", 9, -9, 14000, "reverse")]
     return path, anim
 
 
@@ -215,7 +215,7 @@ def wisps():
     upper = [(LEFT_CLEAR + 40, 22, 90, 4), (LEFT_CLEAR + 150, 31, 60, 3)]
     lower = [(LEFT_CLEAR + 80, 57, 110, 5), (LEFT_CLEAR + 10, 71, 70, 3)]
     path = group("upper", upper) + "\n" + group("lower", lower)
-    anim = [("upper", "translateX", -24, 24, 16000, "reverse"), ("lower", "translateX", 18, -18, 12000, "reverse")]
+    anim = [("upper", "translateX", -14, 14, 24000, "reverse"), ("lower", "translateX", 10, -10, 20000, "reverse")]
     return path, anim
 
 
@@ -227,7 +227,7 @@ def fog():
     path = f'''    <group android:name="drift">
         <path android:fillColor="#FFCFD8DC" android:fillAlpha="0.14" android:pathData="{bands}" />
     </group>'''
-    anim = [("drift", "translateX", -25, 25, 9000, "reverse")]
+    anim = [("drift", "translateX", -14, 14, 16000, "reverse")]
     return path, anim
 
 
@@ -245,9 +245,9 @@ def rain():
             sy = y + RAIN_STEP_Y * row
             streaks += f"M{sx:.1f},{sy:.1f} l-1.5,6 "
     path = f'''    <group android:name="fall">
-        <path android:strokeColor="#FFA8C7FA" android:strokeAlpha="0.4" android:strokeWidth="1.2" android:strokeLineCap="round" android:pathData="{streaks}" />
+        <path android:strokeColor="#FFA8C7FA" android:strokeAlpha="0.3" android:strokeWidth="1.2" android:strokeLineCap="round" android:pathData="{streaks}" />
     </group>'''
-    anim = [("fall", "translateY", 0, RAIN_STEP_Y, 520, "restart"), ("fall", "translateX", 0, RAIN_STEP_X, 520, "restart")]
+    anim = [("fall", "translateY", 0, RAIN_STEP_Y, 1100, "restart"), ("fall", "translateX", 0, RAIN_STEP_X, 1100, "restart")]
     return path, anim
 
 
@@ -286,11 +286,11 @@ def snow():
         <path android:strokeColor="#FFFFFFFF" android:strokeAlpha="0.8" android:strokeWidth="1.2" android:strokeLineCap="round" android:pathData="{near}" />
     </group>'''
     anim = [
-        ("far", "translateY", 0, SNOW_FAR, 6000, "restart"),
-        ("mid", "translateY", 0, SNOW_MID, 4200, "restart"),
-        ("near", "translateY", 0, SNOW_NEAR, 3400, "restart"),
-        ("near", "translateX", -4, 4, 1700, "reverse"),
-        ("mid", "translateX", -2, 2, 2100, "reverse"),
+        ("far", "translateY", 0, SNOW_FAR, 12000, "restart"),
+        ("mid", "translateY", 0, SNOW_MID, 9000, "restart"),
+        ("near", "translateY", 0, SNOW_NEAR, 7000, "restart"),
+        ("near", "translateX", -2.5, 2.5, 3200, "reverse"),
+        ("mid", "translateX", -1.5, 1.5, 4200, "reverse"),
     ]
     return path, anim
 

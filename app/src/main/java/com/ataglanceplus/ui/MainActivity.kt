@@ -188,8 +188,8 @@ private fun AppTab() {
         Text(
             when {
                 home && lock -> "Showing on the home screen and lock screen."
-                home -> "Showing on the home screen. The lock screen has not connected yet."
-                lock -> "Showing on the lock screen. The home screen has not connected yet."
+                home -> "Showing on the home screen, not the lock screen. Tap Activate to connect it."
+                lock -> "Showing on the lock screen, not the home screen. Tap Activate to connect it."
                 paired -> "Not showing yet. Tap Activate."
                 else -> "Not set up yet. Pair once with this phone's wireless debugging; no computer needed."
             },
@@ -211,8 +211,9 @@ private fun AppTab() {
             }) { Text("Pair with this phone") }
         } else {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                // Greyed out while the home or lock screen is already connected to this app.
-                Button(enabled = !busy && !home && !lock, onClick = {
+                // Greyed out only while both the home and lock screens are connected to this app;
+                // with one missing (after an update, say), Activate reconnects it.
+                Button(enabled = !busy && !(home && lock), onClick = {
                     scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) }
                 }) { Text("Activate") }
                 OutlinedButton(enabled = !busy && Commands.defaultProvider(context) != null, onClick = {

@@ -25,7 +25,7 @@
         <aapt:attr name="android:animation">
             <set>
             <objectAnimator
-                android:duration="6000"
+                android:duration="12000"
                 android:interpolator="@android:interpolator/linear"
                 android:propertyName="translateY"
                 android:repeatCount="infinite"
@@ -40,7 +40,7 @@
         <aapt:attr name="android:animation">
             <set>
             <objectAnimator
-                android:duration="4200"
+                android:duration="9000"
                 android:interpolator="@android:interpolator/linear"
                 android:propertyName="translateY"
                 android:repeatCount="infinite"
@@ -49,13 +49,13 @@
                 android:valueTo="24"
                 android:valueType="floatType" />
             <objectAnimator
-                android:duration="2100"
+                android:duration="4200"
                 android:interpolator="@android:interpolator/accelerate_decelerate"
                 android:propertyName="translateX"
                 android:repeatCount="infinite"
                 android:repeatMode="reverse"
-                android:valueFrom="-2"
-                android:valueTo="2"
+                android:valueFrom="-1.5"
+                android:valueTo="1.5"
                 android:valueType="floatType" />
             </set>
         </aapt:attr>
@@ -64,7 +64,7 @@
         <aapt:attr name="android:animation">
             <set>
             <objectAnimator
-                android:duration="3400"
+                android:duration="7000"
                 android:interpolator="@android:interpolator/linear"
                 android:propertyName="translateY"
                 android:repeatCount="infinite"
@@ -73,13 +73,13 @@
                 android:valueTo="30"
                 android:valueType="floatType" />
             <objectAnimator
-                android:duration="1700"
+                android:duration="3200"
                 android:interpolator="@android:interpolator/accelerate_decelerate"
                 android:propertyName="translateX"
                 android:repeatCount="infinite"
                 android:repeatMode="reverse"
-                android:valueFrom="-4"
-                android:valueTo="4"
+                android:valueFrom="-2.5"
+                android:valueTo="2.5"
                 android:valueType="floatType" />
             </set>
         </aapt:attr>

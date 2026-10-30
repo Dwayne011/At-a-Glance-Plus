@@ -127,7 +127,7 @@ where real data exists).
 | Area | As built | Why |
 |---|---|---|
 | Tabs | App, Cards and Chips follow a swipe as well as a tap | Chosen |
-| App tab | A status line ("Showing on the home screen and lock screen") with Activate / Back to Google (Activate greyed out while the home or lock screen is connected, since 0.21.1); Problems and failed device checks only when there are any; weather location only while it is missing; Backup. Connection details, wireless-debugging checks, the command and crash logs, chip fitting numbers and the adb commands are in a collapsed Advanced section | Less to read day to day |
+| App tab | A status line ("Showing on the home screen and lock screen") with Activate / Back to Google (Activate greyed out only while both the home and lock screens are connected, since 0.22.1); Problems and failed device checks only when there are any; weather location only while it is missing; Backup. Connection details, wireless-debugging checks, the command and crash logs, chip fitting numbers and the adb commands are in a collapsed Advanced section | Less to read day to day |
 | Cards tab | One row per card; tapping a card with options (Weather's look, Calendar, Media, Finance, Sports, Wallet) opens them, one at a time | The inline panels made the tab very long |
 | Chips tab | Only the chips; the weather layout picker is gone and its look moved to Cards › Weather | Material You only |
 
@@ -138,7 +138,7 @@ where real data exists).
 | Weather, right column | Two pills the column's full width (78dp), 26dp tall, 10dp apart, like the other cards' right column; a stacked chip fills the column (78 x 72dp) | Aligned pills; no unused space |
 | Weather, under the temperature | Up to 3 chips where they fit | There was room for a third |
 | eToro chip, stacked | A fourth line: "Today +$38", the value's move since the last reading before midnight (or the first today). Deposits and withdrawals count as moves | eToro's API keeps no history; the app records its own |
-| Sports HOME / AWAY tags | 15dp tall with the text 2dp lower | Capitals sat high in the 14dp tag |
+| Sports HOME / AWAY tags | 15dp tall, text centred by the font (0.22.1: the 2dp nudge down from 0.19.0 removed; it only applied to the browser preview and put the text low on the phone) | A little more room around the text |
 | F1 | After the first Next, Back (one session back) sits over Next; on the weekend's last session only Back | Chosen |
 | Message pop-up | Up to 3 lines of the message, then "…" | Uses the card's height |
 | Wallet barcode | 156 x 52dp in a 176 x 80dp box (QR codes 70dp in 80dp) | Easier to scan |
@@ -166,3 +166,10 @@ where real data exists).
 | Cloud (light) | Each cloud drifts on its own (±22dp / 10 s and ±16dp / 7.5 s) | Clouds seemed still at ±14dp |
 | Cloud (heavy), rain, snow, thunder | The back and front rows drift at different speeds and opposite ways (±12dp / 13 s, ±22dp / 9 s) | Depth |
 | Snow | Flakes in front 4.4dp across (were 2.6dp), drawn heavier, with smaller flakes among the round ones behind | Chosen: bigger flakes |
+
+## Calmer animations and team colours (0.22.1)
+
+| Area | As built | Why |
+|---|---|---|
+| Animated scenes | Everything slower and smaller: rain falls at half the speed (1.1 s per step) and fainter; snow at about half speed with a gentler sway; clouds drift ±7 to ±12dp over 14 to 22 s; wisps ±10 to ±14dp over 20 to 24 s; fog ±14dp over 16 s; the sun's rays turn ±3° over 16 s and pulse over 5 s | 0.22.0 moved too much; it should be barely noticeable |
+| Sports dashboard colours | The hero and Team Stats bars use each team's ESPN colour, looked up for teams the game gave none (as on the card). A colour too dark for the dark screen becomes the team's strong second colour (Cavaliers' gold) or is lifted towards white (Bucks' green); if the teams still look alike, the away team takes its second colour | Bars showed a fixed red and gold |

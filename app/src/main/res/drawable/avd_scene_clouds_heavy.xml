@@ -22,13 +22,13 @@
         <aapt:attr name="android:animation">
             <set>
             <objectAnimator
-                android:duration="13000"
+                android:duration="22000"
                 android:interpolator="@android:interpolator/accelerate_decelerate"
                 android:propertyName="translateX"
                 android:repeatCount="infinite"
                 android:repeatMode="reverse"
-                android:valueFrom="12"
-                android:valueTo="-12"
+                android:valueFrom="7"
+                android:valueTo="-7"
                 android:valueType="floatType" />
             </set>
         </aapt:attr>
@@ -37,13 +37,13 @@
         <aapt:attr name="android:animation">
             <set>
             <objectAnimator
-                android:duration="9000"
+                android:duration="16000"
                 android:interpolator="@android:interpolator/accelerate_decelerate"
                 android:propertyName="translateX"
                 android:repeatCount="infinite"
                 android:repeatMode="reverse"
-                android:valueFrom="-22"
-                android:valueTo="22"
+                android:valueFrom="-12"
+                android:valueTo="12"
                 android:valueType="floatType" />
             </set>
         </aapt:attr>

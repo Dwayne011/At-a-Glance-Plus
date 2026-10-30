@@ -69,6 +69,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
@@ -1324,7 +1325,40 @@ private val SportAccent = Color(0xFFA8C7FA)
 private val F1Emerald = Color(0xFF1A5C48)
 private val F1Mint = Color(0xFF6DD58C)
 
-private fun Int?.teamColour(fallback: Color): Color = this?.let { Color(it) } ?: fallback
+/**
+ * Each team's own colour for the hero and the stat bars: ESPN's main colour (from the game, or
+ * looked up for teams the feed gave none). A main colour too dark to see on the dark screen is
+ * swapped for the team's second colour when that is a strong one (Cavaliers' gold), else lifted
+ * towards white (Bucks' green). If the two teams still look alike, the away team takes its
+ * second colour. Without any, the app's accent and gold.
+ */
+private fun teamColours(game: com.ataglanceplus.live.Game): Pair<Color, Color> {
+    fun pick(side: com.ataglanceplus.live.Side, fallback: Color): Pair<Color, Color?> {
+        val (main, alt) = com.ataglanceplus.live.SportsSource.colours(game, side) ?: (null to null)
+        val second = alt?.let { Color(it) }?.takeIf { it.luminance() > 0.12f && it.saturation() > 0.35f }
+        val first = main?.let { Color(it) } ?: return fallback to second
+        return when {
+            first.luminance() >= 0.06f -> first
+            second != null -> second
+            else -> first.lift(0.4f)
+        } to second
+    }
+    val (home, _) = pick(game.home, SportAccent)
+    val (away, awayAlt) = pick(game.away, Color(0xFFFFB81C))
+    val alike = kotlin.math.abs(home.red - away.red) + kotlin.math.abs(home.green - away.green) + kotlin.math.abs(home.blue - away.blue) < 0.3f
+    return home to if (alike && awayAlt != null) awayAlt else away
+}
+
+private fun Color.saturation(): Float {
+    val max = maxOf(red, green, blue)
+    val min = minOf(red, green, blue)
+    return if (max == 0f) 0f else (max - min) / max
+}
+
+/** Mixes a colour toward white. */
+private fun Color.lift(fraction: Float): Color = Color(
+    red = red + (1 - red) * fraction, green = green + (1 - green) * fraction, blue = blue + (1 - blue) * fraction, alpha = 1f,
+)
 
 /** Mixes a colour toward black, for the hero's tonal wash. */
 private fun Color.dim(fraction: Float): Color = Color(
@@ -1457,8 +1491,7 @@ private fun GameMatchDashboard(eventId: String) {
 @Composable
 private fun MatchHero(game: com.ataglanceplus.live.Game, hidden: Boolean) {
     val context = LocalContext.current
-    val homeColour = game.home.colour.teamColour(SportAccent)
-    val awayColour = game.away.colour.teamColour(Color(0xFFFFB81C))
+    val (homeColour, awayColour) = teamColours(game)
     val scored = game.state != "pre" && !hidden
     Row(
         modifier = Modifier
@@ -1556,8 +1589,7 @@ private fun statValue(s: String): Float {
 
 @Composable
 private fun TeamStatsTab(d: com.ataglanceplus.live.GameDetail, game: com.ataglanceplus.live.Game) {
-    val homeColour = game.home.colour.teamColour(Color(0xFFE03A3E))
-    val awayColour = game.away.colour.teamColour(Color(0xFFFFB81C))
+    val (homeColour, awayColour) = teamColours(game)
     d.teamStats.forEach { (label, homeText, awayText) ->
         val h = statValue(homeText)
         val a = statValue(awayText)
