@@ -211,7 +211,8 @@ private fun AppTab() {
             }) { Text("Pair with this phone") }
         } else {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Button(enabled = !busy, onClick = {
+                // Greyed out while the home or lock screen is already connected to this app.
+                Button(enabled = !busy && !home && !lock, onClick = {
                     scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) }
                 }) { Text("Activate") }
                 OutlinedButton(enabled = !busy && Commands.defaultProvider(context) != null, onClick = {

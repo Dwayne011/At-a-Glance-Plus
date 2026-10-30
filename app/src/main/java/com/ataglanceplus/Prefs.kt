@@ -381,7 +381,7 @@ object Prefs {
     }
 
     /** Tapping a stock opens this app's dashboard (else its Google Finance page). */
-    /** The stock dashboard's VWAP: eToro's defaults, (H + L + C)/3 starting each session, regular hours only. */
+    /** The stock dashboard's VWAP: eToro's defaults, (H + L + C)/3 starting each session, with pre-market and after-hours candles. */
     fun financeVwap(context: Context): com.ataglanceplus.live.FinanceSource.VwapSettings {
         val prefs = get(context)
         return com.ataglanceplus.live.FinanceSource.VwapSettings(
@@ -389,7 +389,7 @@ object Prefs {
                 .getOrDefault(com.ataglanceplus.live.FinanceSource.VwapSource.HLC3),
             anchor = runCatching { com.ataglanceplus.live.FinanceSource.VwapAnchor.valueOf(prefs.getString(KEY_FIN_VWAP_ANCHOR, null)!!) }
                 .getOrDefault(com.ataglanceplus.live.FinanceSource.VwapAnchor.SESSION),
-            extendedHours = prefs.getBoolean(KEY_FIN_EXTENDED_HOURS, false),
+            extendedHours = prefs.getBoolean(KEY_FIN_EXTENDED_HOURS, true),
         )
     }
 

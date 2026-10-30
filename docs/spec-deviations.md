@@ -127,7 +127,7 @@ where real data exists).
 | Area | As built | Why |
 |---|---|---|
 | Tabs | App, Cards and Chips follow a swipe as well as a tap | Chosen |
-| App tab | A status line ("Showing on the home screen and lock screen") with Activate / Back to Google; Problems and failed device checks only when there are any; weather location only while it is missing; Backup. Connection details, wireless-debugging checks, the command and crash logs, chip fitting numbers and the adb commands are in a collapsed Advanced section | Less to read day to day |
+| App tab | A status line ("Showing on the home screen and lock screen") with Activate / Back to Google (Activate greyed out while the home or lock screen is connected, since 0.21.1); Problems and failed device checks only when there are any; weather location only while it is missing; Backup. Connection details, wireless-debugging checks, the command and crash logs, chip fitting numbers and the adb commands are in a collapsed Advanced section | Less to read day to day |
 | Cards tab | One row per card; tapping a card with options (Weather's look, Calendar, Media, Finance, Sports, Wallet) opens them, one at a time | The inline panels made the tab very long |
 | Chips tab | Only the chips; the weather layout picker is gone and its look moved to Cards › Weather | Material You only |
 
@@ -148,7 +148,7 @@ where real data exists).
 | Area | As built | Why |
 |---|---|---|
 | Pre-market, after hours, overnight | For listings with extended trading (US ones), Yahoo's full-day price while it differs from the close, labelled Pre-market, After hours or Overnight (20:00 to 04:00 New York time, Sunday night to Friday morning). Its change is from the regular close, as eToro shows it. The finance card, the dashboard headline and the Cards tab show it; a big move outside regular hours counts towards "big moves" | ONDS and NOK fell overnight without the app showing it |
-| Dashboard chart outside regular hours | The 1D and 5D charts can include pre-market and after-hours candles (VWAP › Extended hours, off by default); Yahoo has no candles for the overnight session, so the chart ends at 20:00 New York time | The feed's limit |
+| Dashboard chart outside regular hours | The 1D and 5D charts can include pre-market and after-hours candles (VWAP › Extended hours, on by default since 0.21.1); Yahoo has no candles for the overnight session, so the chart ends at 20:00 New York time | The feed's limit |
 | VWAP | eToro's inputs: Source (Open, High, Low, Close, (H + L)/2, (H + L + C)/3, (O + H + L + C)/4) and Anchor period (Session, Week, Month, Quarter, Year, or the start of the range), in the exchange's own time. Defaults (H + L + C)/3 and Session, as in eToro. Before, ranges of a month or more were anchored to the start of the range | To match eToro's chart |
 
 ## Weather right column (0.21.0)
