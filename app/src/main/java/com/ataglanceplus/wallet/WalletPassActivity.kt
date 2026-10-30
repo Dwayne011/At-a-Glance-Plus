@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -86,6 +87,7 @@ class WalletPassActivity : ComponentActivity() {
                 } else {
                     CodeCard(barcode)
                 }
+                if (pass.details.isNotEmpty()) Details(pass.details)
 
                 Text("Tap anywhere to close", color = Color(0xFF5A606C), fontSize = 12.sp)
             }
@@ -120,14 +122,37 @@ class WalletPassActivity : ComponentActivity() {
                         },
                     )
                 }
-                val text = barcode.displayText ?: barcode.value
-                Text(
+                // Only text meant to be read: a 2-D code's raw payload (a boarding pass's BCBP string)
+                // is shown only when it couldn't be drawn.
+                val text = barcode.displayText
+                    ?: barcode.value.takeIf { bm == null || !WalletBarcode.isTwoDimensional(barcode.format) }
+                if (text != null) Text(
                     text,
                     color = Color(0xFF111111),
                     fontSize = 16.sp,
                     fontFamily = FontFamily.Monospace,
                     textAlign = TextAlign.Center,
                 )
+            }
+        }
+    }
+
+    /** The pass's own details (flight, gate, seat, confirmation…), as Wallet shows them. */
+    @Composable
+    private fun Details(details: List<Pair<String, String>>) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF151922))
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            details.forEach { (label, value) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, color = Color(0xFF9AA0A6), fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Text(value, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End)
+                }
             }
         }
     }

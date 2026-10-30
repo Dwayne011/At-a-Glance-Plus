@@ -16,6 +16,10 @@ object WalletBarcode {
         else -> false
     }
 
+    /** Codes whose payload isn't meant to be read by people (shown as the code only). */
+    fun isTwoDimensional(format: WalletPass.Format): Boolean =
+        isSquare(format) || format == WalletPass.Format.PDF_417
+
     /** Null for text-only or unknown codes (the pop-up shows the value as text instead). */
     fun render(barcode: WalletPass.Barcode, size: Int): Bitmap? {
         val format = zxing(barcode.format) ?: return null

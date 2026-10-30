@@ -1463,15 +1463,17 @@ private fun LeadersTab(d: com.ataglanceplus.live.GameDetail, game: com.ataglance
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(SportHigh).padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(h?.second ?: "–", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Each value sits beside its player; a long name shortens before it pushes the value away.
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text(h?.second ?: "–", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(h?.third ?: "–", color = SportAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
-                Text(category, color = SportSub, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Text("${h?.third ?: "–"}   ${a?.third ?: "–"}", color = SportAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            }
-            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
-                Text(a?.second ?: "–", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(category, color = SportSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
+            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                Text(a?.third ?: "–", color = SportAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
+                Text(a?.second ?: "–", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             }
         }
     }
