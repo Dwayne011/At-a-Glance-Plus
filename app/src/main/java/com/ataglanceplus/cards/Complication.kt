@@ -178,31 +178,6 @@ fun gmailAccount(context: Context, account: String): Intent? {
     return link.takeIf { it.resolveActivity(context.packageManager) != null }
 }
 
-/** Where a card's complications sit (spec 7.1). */
-enum class ComplicationLayout { RIGHT, BOTTOM, NONE }
-
-/**
- * The weather card's arrangement: Material You (weather spec 1, the default: chips under the
- * temperature, 3 or 4 hours, and a right column only when needed), or one of the A+C hybrid
- * spec's: 3-hour columns + 2 stacked chips, a compact 3-hour row over 2 wide chips, a 2-hour box +
- * 2 x 2 chip grid, or no chips (forecast only).
- */
-enum class WeatherLayout(val label: String) {
-    MATERIAL("Material You"),
-    COLUMNS("Columns"),
-    SPLIT("Split"),
-    GRID("Grid"),
-    NONE("No chips");
-
-    /** The matching chip arrangement for the other cards. */
-    val others: ComplicationLayout
-        get() = when (this) {
-            SPLIT -> ComplicationLayout.BOTTOM
-            NONE -> ComplicationLayout.NONE
-            else -> ComplicationLayout.RIGHT
-        }
-}
-
 /** Adds complication chips to a card's `complications` container. */
 object Chips {
 
@@ -267,10 +242,6 @@ object Chips {
         R.layout.include_complication_chip_strip, 12.5f, 15, 9, 84, 44,
         zoneHDp = 34, pillHDp = 26, wideCapDp = 176,
     )
-    val ANCHOR = ChipStyle(
-        R.layout.include_chip_anchor, 11.5f, 13, 8, null, 56,
-        zoneHDp = 22, pillHDp = 22, wideCapDp = 200,
-    )
     /** The Material You weather card's strip under the temperature (weather spec 1.2). */
     val BOTTOM = ChipStyle(
         R.layout.include_chip_bottom, 12.5f, 15, 8, null, 64,
@@ -281,9 +252,6 @@ object Chips {
         R.layout.include_chip_rightcol, 13f, 15, 8, 78, 50,
         gapDp = 0, stack = true, zoneWDp = 78, zoneHDp = 36, pillHDp = 29, stackPillHDp = 64,
     )
-    val COLUMN = ChipStyle(R.layout.include_chip_column, 12f, 14, 6, 72, 56, gapDp = 0, stack = true, zoneWDp = 72, zoneHDp = 30)
-    val WIDE = ChipStyle(R.layout.include_chip_wide, 12f, 14, 6, 84, 56, zoneWDp = 84)
-    val GRID = ChipStyle(R.layout.include_chip_grid, 11f, 13, 5, 48, 56, gapDp = 0, zoneWDp = 48, zoneHDp = 27)
 
     /** Room kept spare when choosing text for the extra chips card, whose real width is estimated. */
     private const val TEXT_SPARE_DP = 12
@@ -354,7 +322,7 @@ object Chips {
         plan(context, specs, 2 * MAX_BOTTOM, DEFAULT_STRIP, always = true).size
 
     /**
-     * Adds the chips that have something to show, up to the layout's maximum. A chip with no
+     * Adds the chips that have something to show, up to 2 on the right of the card. A chip with no
      * value (nothing to report, no permission yet, or not set up) is left out rather than drawn
      * as "0" (spec 7.2). With none left, the container is hidden so the card's text gets the
      * whole width (spec 7.1 collapse rule).
@@ -363,24 +331,14 @@ object Chips {
         context: Context,
         views: RemoteViews,
         specs: List<ChipSpec>,
-        layout: ComplicationLayout,
         aod: Boolean,
         container: Int = R.id.complications,
     ) {
-        if (layout == ComplicationLayout.NONE) {
-            views.setViewVisibility(container, View.GONE)
-            return
-        }
-        val bottom = layout == ComplicationLayout.BOTTOM
-        addStyled(context, views, specs, if (bottom) MAX_BOTTOM else MAX_RIGHT, if (bottom) DEFAULT_STRIP else DEFAULT_RIGHT, aod, container)
+        addStyled(context, views, specs, MAX_RIGHT, DEFAULT_RIGHT, aod, container)
     }
 
     /** How many of [specs] a card's chip spot takes (see [add]); 2-slot chips count once. */
-    fun taken(context: Context, specs: List<ChipSpec>, layout: ComplicationLayout): Int = when (layout) {
-        ComplicationLayout.NONE -> 0
-        ComplicationLayout.BOTTOM -> plan(context, specs, MAX_BOTTOM, DEFAULT_STRIP).size
-        ComplicationLayout.RIGHT -> plan(context, specs, MAX_RIGHT, DEFAULT_RIGHT).size
-    }
+    fun taken(context: Context, specs: List<ChipSpec>): Int = plan(context, specs, MAX_RIGHT, DEFAULT_RIGHT).size
 
     /**
      * Adds chips with something to show into [container], in [style], filling [slots] slots

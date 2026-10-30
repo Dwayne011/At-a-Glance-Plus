@@ -5,6 +5,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.rotate
+import com.ataglanceplus.weather.WeatherLook
 import android.Manifest
 import android.content.Intent
 import android.provider.Settings
@@ -61,7 +68,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun CardPreviewSection(sessions: Collection<com.ataglanceplus.service.SessionInfo>) {
+internal fun CardPreviewSection() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val busy by Wadb.busy.collectAsStateWithLifecycle()
@@ -83,14 +90,17 @@ internal fun CardPreviewSection(sessions: Collection<com.ataglanceplus.service.S
     val calendarAccess = CalendarSource.hasPermission(context)
     val dismissed = Prefs.dismissed(context)
 
+    // The card whose options are open, one at a time ("weather" for the weather card).
+    var open by rememberSaveable { mutableStateOf<String?>(null) }
+
     Section("Cards") {
         Text(
-            "The weather card is always there. Every other card appears only while it has something real to show, most time-sensitive first, and goes away by itself.",
+            "Weather is always there; the others appear while they have something to show. Tap a card for its options.",
             style = MaterialTheme.typography.bodySmall
         )
         SwitchRow(
             "Show all cards",
-            "Every card that has something to show. Off: only as many as the launcher asks for.",
+            "Off: only as many as the launcher asks for.",
             Prefs.showAllCards(context),
         ) { Prefs.setShowAllCards(context, it) }
         // Card height: saved when the slider is let go, so the cards redraw once, not on every step.
@@ -115,20 +125,6 @@ internal fun CardPreviewSection(sessions: Collection<com.ataglanceplus.service.S
             valueRange = 76f..140f,
             steps = 15,
         )
-        // What each surface was last sent, so a card that should be there but is not can be told
-        // apart from one the launcher did not draw.
-        sessions.filter { it.lastPushAt > 0 }.sortedBy { it.surface }.forEach { session ->
-            val where = when (session.surface) {
-                com.ataglanceplus.service.AtAGlanceService.SURFACE_HOME -> "Home screen"
-                com.ataglanceplus.service.AtAGlanceService.SURFACE_LOCKSCREEN -> "Lock screen"
-                else -> session.surface
-            }
-            Text(
-                "$where now: ${session.showing.joinToString(" · ").ifEmpty { "nothing" }}",
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-
         if (!notificationAccess) {
             HorizontalDivider()
             Text("Notification access needed", style = MaterialTheme.typography.labelLarge)
@@ -161,46 +157,51 @@ internal fun CardPreviewSection(sessions: Collection<com.ataglanceplus.service.S
             Text(grantMessage, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
 
+        HorizontalDivider()
+        CardRow("Weather", "Always shown: the forecast, your chips and a summary line", expanded = open == "weather", onToggle = {
+            open = if (open == "weather") null else "weather"
+        })
+        if (open == "weather") WeatherLookSettings(version)
+
         CardType.entries.forEach { type ->
             HorizontalDivider()
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(type.label, style = MaterialTheme.typography.labelLarge)
-                    Text(type.detail, style = MaterialTheme.typography.bodySmall)
-                }
-                Switch(checked = Prefs.cardEnabled(context, type), onCheckedChange = { Prefs.setCardEnabled(context, type, it) })
+            val enabled = Prefs.cardEnabled(context, type)
+            val options = enabled && type in WITH_OPTIONS
+            CardRow(
+                type.label,
+                type.detail,
+                expanded = if (options) open == type.id else null,
+                onToggle = { open = if (open == type.id) null else type.id },
+                checked = enabled,
+                onCheckedChange = { Prefs.setCardEnabled(context, type, it) },
+            )
+            // Needed for the card to work at all, so shown without opening it.
+            if (type == CardType.CALENDAR && enabled && !calendarAccess) {
+                OutlinedButton(onClick = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) }) { Text("Allow calendar access") }
             }
-            if (type == CardType.CALENDAR && Prefs.cardEnabled(context, type)) {
-                if (!calendarAccess) {
-                    OutlinedButton(onClick = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) }) { Text("Allow calendar access") }
-                }
-                Text("Show this long before an event starts", style = MaterialTheme.typography.bodySmall)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val lead = Prefs.calendarLeadMinutes(context)
-                    listOf(15, 30, 60, 120).forEach { minutes ->
-                        FilterChip(
-                            selected = lead == minutes,
-                            onClick = { Prefs.setCalendarLeadMinutes(context, minutes) },
-                            label = { Text(if (minutes < 60) "$minutes min" else "${minutes / 60} h") }
-                        )
+            if (!options || open != type.id) return@forEach
+            when (type) {
+                CardType.CALENDAR -> {
+                    Text("Show this long before an event starts", style = MaterialTheme.typography.bodySmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val lead = Prefs.calendarLeadMinutes(context)
+                        listOf(15, 30, 60, 120).forEach { minutes ->
+                            FilterChip(
+                                selected = lead == minutes,
+                                onClick = { Prefs.setCalendarLeadMinutes(context, minutes) },
+                                label = { Text(if (minutes < 60) "$minutes min" else "${minutes / 60} h") }
+                            )
+                        }
+                    }
+                    SwitchRow("All-day events", "Show today's all-day event when nothing else is on.", Prefs.calendarAllDay(context)) {
+                        Prefs.setCalendarAllDay(context, it)
                     }
                 }
-                SwitchRow("All-day events", "Show today's all-day event when nothing else is on.", Prefs.calendarAllDay(context)) {
-                    Prefs.setCalendarAllDay(context, it)
-                }
-            }
-            if (type == CardType.SPORTS && Prefs.cardEnabled(context, type)) {
-                SportsSettings(version)
-            }
-            if (type == CardType.FINANCE && Prefs.cardEnabled(context, type)) {
+                CardType.SPORTS -> SportsSettings(version)
                 // Passing the settings version makes it redraw when any option changes.
-                FinanceSettings(version)
-            }
-            if (type == CardType.WALLET && Prefs.cardEnabled(context, type)) {
-                WalletSettings(version)
-            }
-            if (type == CardType.MEDIA && Prefs.cardEnabled(context, type)) {
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                CardType.FINANCE -> FinanceSettings(version)
+                CardType.WALLET -> WalletSettings(version)
+                CardType.MEDIA -> SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     val wave = Prefs.mediaWave(context)
                     listOf(true, false).forEachIndexed { index, option ->
                         SegmentedButton(
@@ -210,6 +211,7 @@ internal fun CardPreviewSection(sessions: Collection<com.ataglanceplus.service.S
                         ) { Text(if (option) "Equaliser" else "Progress bar") }
                     }
                 }
+                else -> Unit
             }
         }
 
@@ -221,6 +223,68 @@ internal fun CardPreviewSection(sessions: Collection<com.ataglanceplus.service.S
             OutlinedButton(onClick = { Prefs.restoreDismissed(context) }) { Text("Bring back dismissed cards (${dismissed.size})") }
         }
     }
+}
+
+/** The cards with options, opened by tapping their row. */
+private val WITH_OPTIONS = setOf(CardType.CALENDAR, CardType.SPORTS, CardType.FINANCE, CardType.WALLET, CardType.MEDIA)
+
+/**
+ * A card in the list: its name and what it shows, a switch when it can be turned off, and an
+ * arrow when it has options ([expanded] null when it has none); tapping the row opens them.
+ */
+@Composable
+private fun CardRow(
+    title: String,
+    detail: String,
+    expanded: Boolean?,
+    onToggle: () -> Unit,
+    checked: Boolean? = null,
+    onCheckedChange: (Boolean) -> Unit = {},
+) {
+    val arrow by animateFloatAsState(if (expanded == true) 180f else 0f, label = "arrow")
+    Row(
+        modifier = Modifier.fillMaxWidth().then(if (expanded != null) Modifier.clickable(onClick = onToggle) else Modifier),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.labelLarge)
+            Text(detail, style = MaterialTheme.typography.bodySmall)
+        }
+        if (expanded != null) {
+            Icon(
+                Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (expanded) "Hide options" else "Show options",
+                modifier = Modifier.rotate(arrow),
+            )
+        }
+        if (checked != null) Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/** The weather card's look: Standard, Scenes or Animated scenes. */
+@Composable
+private fun WeatherLookSettings(settingsVersion: Int) {
+    val context = LocalContext.current
+    val look = remember(settingsVersion) { Prefs.weatherLook(context) }
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        WeatherLook.entries.forEachIndexed { index, option ->
+            SegmentedButton(
+                selected = look == option,
+                onClick = { Prefs.setWeatherLook(context, option) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = WeatherLook.entries.size),
+                // No tick: with three options it squeezes the labels; the fill shows the choice.
+                icon = {}
+            ) { Text(if (option == WeatherLook.ANIMATED) "Animated" else option.label, maxLines = 1) }
+        }
+    }
+    Text(
+        when (look) {
+            WeatherLook.STANDARD -> "A slate-navy gradient with a soft blue wave."
+            WeatherLook.SCENES -> "Tinted for the weather and time of day, with the sun, stars, clouds, fog, rain or snow drawn in."
+            WeatherLook.ANIMATED -> "The scenes, moving. Uses more battery while the card is on screen."
+        },
+        style = MaterialTheme.typography.bodySmall
+    )
 }
 
 @Composable

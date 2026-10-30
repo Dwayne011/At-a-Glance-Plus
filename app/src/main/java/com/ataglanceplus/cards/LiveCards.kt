@@ -43,7 +43,7 @@ enum class CardType(val id: String, val label: String, val detail: String) {
     MEDIA("media", "Media", "Whatever is playing, with controls; stays 5 minutes after pausing"),
     CALENDAR("calendar", "Calendar", "Your next event, shortly before it starts and while it is on"),
     MESSAGES("messages", "Message pop-up", "New messages show for 4.5 seconds in place of the first card"),
-    FINANCE("finance", "Finance", "Your stocks, when the rules below say so; one page each, taking turns"),
+    FINANCE("finance", "Finance", "Your stocks, when their rules say so; one page each, taking turns"),
     SPORTS("sports", "Sports", "Your teams' games: live scores, results, kick-off times and the next fixture"),
     TORCH("torch", "Torch", "While the torch is on: tap to turn it off, and set its brightness"),
     WALLET("wallet", "Wallet passes", "Your Google Wallet passes, near the places and times you set; tap to show the code"),
@@ -206,10 +206,8 @@ object LiveCards {
             },
             event.location.ifEmpty { null },
         ).joinToString(" · ")
-        val layout = Prefs.complicationLayout(context)
-        val chips = if (layout == ComplicationLayout.NONE) emptyList() else given ?: listOf(ChipSpec(Complication.STEPS), ChipSpec(Complication.BATTERY))
-        val bottom = layout == ComplicationLayout.BOTTOM && Chips.withValues(chips).isNotEmpty()
-        val views = RemoteViews(context.packageName, if (bottom) R.layout.card_calendar_bottom else R.layout.card_calendar)
+        val chips = given ?: listOf(ChipSpec(Complication.STEPS), ChipSpec(Complication.BATTERY))
+        val views = RemoteViews(context.packageName, R.layout.card_calendar)
         views.setTextViewText(R.id.calendar_title, event.title)
         views.setTextViewText(R.id.calendar_detail, detail)
         views.setInt(R.id.calendar_bar, "setColorFilter", if (aod) Style.AOD_TEXT else event.colour)
@@ -219,7 +217,7 @@ object LiveCards {
         then?.let { views.setTextViewText(R.id.calendar_next_text, it) }
         views.setInt(R.id.calendar_next_icon, "setColorFilter", if (aod) Style.AOD_TEXT else CALENDAR_NEXT)
         if (aod) Style.aodBody(views, R.id.calendar_title, R.id.calendar_detail, R.id.calendar_next_text)
-        Chips.add(context, views, chips, if (bottom) ComplicationLayout.BOTTOM else ComplicationLayout.RIGHT, aod)
+        Chips.add(context, views, chips, aod)
 
         val intent = Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, event.eventId))
             .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, event.begin)
@@ -337,8 +335,7 @@ object LiveCards {
     }
 
     private fun timerChips(context: Context, views: RemoteViews, aod: Boolean, given: List<ChipSpec>?) {
-        val chips = if (Prefs.complicationLayout(context) == ComplicationLayout.RIGHT) given ?: listOf(ChipSpec(Complication.ALARM), ChipSpec(Complication.SLEEP)) else emptyList()
-        Chips.add(context, views, chips, ComplicationLayout.RIGHT, aod)
+        Chips.add(context, views, given ?: listOf(ChipSpec(Complication.ALARM), ChipSpec(Complication.SLEEP)), aod)
     }
 
     private fun showFixed(views: RemoteViews, text: String) {
@@ -383,8 +380,7 @@ object LiveCards {
             if (nav.icon == null) views.setImageViewResource(R.id.nav_icon, R.drawable.ic_nav_turn_left_aod)
             views.setInt(R.id.nav_icon, "setColorFilter", Style.AOD_TEXT)
         }
-        val chips = if (Prefs.complicationLayout(context) == ComplicationLayout.NONE) emptyList() else given ?: listOf(ChipSpec(Complication.BATTERY))
-        Chips.add(context, views, chips, ComplicationLayout.RIGHT, aod)
+        Chips.add(context, views, given ?: listOf(ChipSpec(Complication.BATTERY)), aod)
         val tap = gate(context, nav.open, "com.google.android.apps.maps", key)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)

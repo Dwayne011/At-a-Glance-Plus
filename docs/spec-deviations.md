@@ -11,7 +11,7 @@ or the way At a Glance is hosted, does not allow the spec exactly, and what was 
 | Equaliser as an `AnimatedVectorDrawable` in an `ImageView` | The animated drawable is hosted in an indeterminate `ProgressBar`. | An animated vector in a plain `ImageView` does not start inside RemoteViews; a `ProgressBar` starts it by itself. |
 | 500 ms long-press to dismiss, with progress bar, scale and shake | A ring traces the card's edge while it is held (red, amber on weather), closing just before the launcher's menu opens (Pixel Launcher opens it at 3/4 of the touch-and-hold delay, so 0.3 s by default; the ring is visible for about 0.2 s) with Dismiss, which removes the card like the ✕. No scale, shake or exit animation. The ring is drawn for a 380 × 76 dp card; on other widths its corners stretch slightly. | RemoteViews has no long-press, and the app is not told about a press. The ring is the card's own pressed-state animation, which Android plays without the app. |
 | Bottom-strip text (28sp temperature, 15sp and 12sp lines, 36dp strip), calendar card | 24sp, 14sp and 11sp, a 34dp strip and 2dp clear above the text. | At full size the text touched the card's top edge on the phone. |
-| Weather card (A+C hybrid spec): fixed slate background, date on line 1 | The background still follows the weather, as chosen: a plain colour (Standard), or a picture of the weather and time of day (Scenes, the default), still or moving (Animated scenes, which uses more battery). On the lock screen line 1 is the condition, since the date is beside the clock. The left pill is the first chip in the user's list. All three variants are offered, plus "No chips". | User choices. |
+| Weather card (A+C hybrid spec): fixed slate background, date on line 1 | The background still follows the weather, as chosen: a plain colour (Standard), or a picture of the weather and time of day (Scenes, the default), still or moving (Animated scenes, which uses more battery). On the lock screen line 1 is the condition, since the date is beside the clock. The left pill is the first chip in the user's list. Since 0.18.0 only the Material You layout is offered; the three hybrid variants and "No chips" were removed. | User choices. |
 | Timer reads "6:42" | Reads "06:42". | The live countdown is the system Chronometer, which always pads minutes; the paused value matches it. |
 | Message toast with 340 ms morph in, 280 ms out, in a `ViewFlipper` inside every card | The toast is pushed as its own card in first place and stays until it is swiped past (the launcher reports another page shown), tapped, dismissed or replaced by a newer message, for at most 10 minutes. No countdown bar. The avatar animates instead: it pops in with a ring bursting out until the card has been seen on that surface, and a halo pulses in the app's colour while it stays (not on the always-on display). | The launcher draws the change between cards, including the swipe away; the app cannot set the curve or animate the card as it is dragged. Re-pushing to step a countdown made the card flash. |
 | Toast countdown bar animates smoothly | Steps every 0.5 s. | Each step is a new push; the app cannot animate a bar inside the card. |
@@ -108,7 +108,7 @@ where real data exists).
 |---|---|---|
 | All cards | Text, icons, badges, buttons and chips about 10 to 15% larger | Chosen (option C) |
 | Material You weather | A summary line under the main row: when the weather changes, rain on the way and the wind (mph in the UK and US, km/h elsewhere), beside the icon of the weather coming next; hidden when there is nothing to say | Uses the extra height with real forecast data |
-| Hybrid weather variants (Columns, Split, Grid, No chips) | Unchanged | Only the default layout was redesigned |
+| Hybrid weather variants (Columns, Split, Grid, No chips) | Removed in 0.18.0; Material You is the only layout, and the other cards always keep their chips on the right | Chosen |
 | Calendar | "Then HH:MM · title" for the next timed event later today; the colour bar spans the text exactly | Real data from the same calendars |
 | Media | The album, when the app reports one and it differs from the title | Real data from the media session |
 | Sports | Larger, but no extra line | The scoreboard feed has nothing more without fetching each game's details |
@@ -121,3 +121,12 @@ where real data exists).
 | Google account backup | Android Auto Backup with a backup agent that saves an allowlisted settings snapshot only | The preferences file also holds secrets |
 | Export / import | App tab: a JSON file of the same settings; importing replaces them after a confirmation | Moving settings by hand |
 | Never included | The wireless-debugging key and pairing, eToro keys, Wallet sign-in, caches, the last location | Secrets and phone-specific state; Wallet and wireless debugging are set up again on a new phone |
+
+## Settings (0.18.0)
+
+| Area | As built | Why |
+|---|---|---|
+| Tabs | App, Cards and Chips follow a swipe as well as a tap | Chosen |
+| App tab | A status line ("Showing on the home screen and lock screen") with Activate / Back to Google; Problems and failed device checks only when there are any; weather location only while it is missing; Backup. Connection details, wireless-debugging checks, the command and crash logs, chip fitting numbers and the adb commands are in a collapsed Advanced section | Less to read day to day |
+| Cards tab | One row per card; tapping a card with options (Weather's look, Calendar, Media, Finance, Sports, Wallet) opens them, one at a time | The inline panels made the tab very long |
+| Chips tab | Only the chips; the weather layout picker is gone and its look moved to Cards › Weather | Material You only |

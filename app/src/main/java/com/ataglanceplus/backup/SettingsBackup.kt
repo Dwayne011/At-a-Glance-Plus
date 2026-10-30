@@ -24,12 +24,11 @@ object SettingsBackup {
 
     private val KEYS = setOf(
         "activate_on_boot", "aod_preview", "calendar_all_day", "calendar_lead_minutes", "card_height_dp", "chips",
-        "comp_layout", "countdown_day", "countdown_name", "disabled_cards", "finance_open", "finance_show_moves",
+        "countdown_day", "countdown_name", "disabled_cards", "finance_open", "finance_show_moves",
         "finance_show_periodic", "finance_period_hours", "finance_refresh_minutes", "finance_move_threshold",
-        "finance_tickers", "finance_windows", "finance_show_windows", "weather_layout_material_moved", "media_wave",
+        "finance_tickers", "finance_windows", "finance_show_windows", "media_wave",
         "wallet_rules", "show_all_cards", "sports_after_hours", "sports_before_hours", "sports_followed",
-        "sports_hidden", "sports_next_always", "sports_open", "sports_race_step", "step_goal", "weather_layout",
-        "weather_look",
+        "sports_hidden", "sports_next_always", "sports_open", "sports_race_step", "step_goal", "weather_look",
     )
     private val PREFIXES = listOf("chip_app_", "chip_size_", "gmail_labels_")
 

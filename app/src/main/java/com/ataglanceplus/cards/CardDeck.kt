@@ -74,18 +74,16 @@ object CardDeck {
         val wallet = if (on(CardType.WALLET)) data.wallet.filter { "wallet:${it.id}" !in dismissed } else emptyList()
 
         // Share out the user's chips. Before the user picks any, each card keeps the spec's own.
-        val layout = Prefs.complicationLayout(context)
-        val pool = Prefs.chips(context)?.takeIf { layout != ComplicationLayout.NONE }
+        val pool = Prefs.chips(context)
             ?.let { chosen -> Chips.withValues(chosen).map { it.first }.toMutableList() }
         fun take(count: Int): List<ChipSpec>? = pool?.let { p -> List(minOf(count, p.size)) { p.removeAt(0) } }
         // A chip taking 2 slots counts once, so each card takes as many as it really shows.
-        fun takeFor(chipLayout: ComplicationLayout): List<ChipSpec>? = take(Chips.taken(context, pool.orEmpty(), chipLayout))
-        val bottom = layout == ComplicationLayout.BOTTOM
+        fun takeForCard(): List<ChipSpec>? = take(Chips.taken(context, pool.orEmpty()))
         // The weather card fits what it can, not only the first in line, so it picks its own.
-        val weatherChips = pool?.let { p -> WeatherCard.chipsTaken(context, Prefs.weatherLayout(context), p).also { p.removeAll(it) } }
-        val navChips = if (nav != null) takeFor(ComplicationLayout.RIGHT) else null
-        val timerChips = if ((timer != null || alarm != null) && layout == ComplicationLayout.RIGHT) takeFor(ComplicationLayout.RIGHT) else null
-        val calendarChips = if (calendar != null) takeFor(if (bottom) ComplicationLayout.BOTTOM else ComplicationLayout.RIGHT) else null
+        val weatherChips = pool?.let { p -> WeatherCard.chipsTaken(context, p).also { p.removeAll(it) } }
+        val navChips = if (nav != null) takeForCard() else null
+        val timerChips = if (timer != null || alarm != null) takeForCard() else null
+        val calendarChips = if (calendar != null) takeForCard() else null
         // The rest on extra chips cards, two rows each.
         val extraChips = buildList {
             while (!pool.isNullOrEmpty()) {

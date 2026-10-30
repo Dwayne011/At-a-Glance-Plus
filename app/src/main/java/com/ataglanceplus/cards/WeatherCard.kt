@@ -23,11 +23,9 @@ import kotlin.math.roundToInt
 /**
  * The weather card (spec 8.1): the pinned base card that replaces Google's date and weather line.
  *
- * By default laid out per the Material You weather spec (section 1): current weather with 1 or 2
- * chips under it, the next 3 hours (4 when there is no right column), and a right column of chips
- * only when they do not all fit under the temperature. The A+C hybrid spec's three arrangements
- * remain as options. The date shows on the home screen
- * only; the lock screen already shows it beside the clock. With no weather yet, the card says
+ * Laid out per the Material You weather spec (section 1): current weather with 1 or 2 chips
+ * under it, the next 3 hours (4 when there is no right column), and a right column of chips only
+ * when they do not all fit under the temperature. The date shows on the home screen only; the lock screen already shows it beside the clock. With no weather yet, the card says
  * why instead of staying blank.
  */
 object WeatherCard {
@@ -37,13 +35,8 @@ object WeatherCard {
     private const val REQUEST_SETUP = 202
     private const val PIXEL_WEATHER = "com.google.android.apps.weather"
 
-    /** The hybrid spec's example chips for each variant, used until the user picks their own. */
-    private val DEFAULTS = mapOf(
-        WeatherLayout.MATERIAL to listOf(Complication.STEPS, Complication.GMAIL, Complication.BATTERY),
-        WeatherLayout.COLUMNS to listOf(Complication.STEPS, Complication.BATTERY, Complication.ALARM),
-        WeatherLayout.SPLIT to listOf(Complication.STEPS, Complication.SCREEN_TIME, Complication.ALARM),
-        WeatherLayout.GRID to listOf(Complication.STEPS, Complication.MISSED_CALLS, Complication.BATTERY, Complication.SCREEN_TIME, Complication.ALARM),
-    ).mapValues { (_, kinds) -> kinds.map { ChipSpec(it) } }
+    /** The spec's example chips, used until the user picks their own. */
+    private val DEFAULTS = listOf(Complication.STEPS, Complication.GMAIL, Complication.BATTERY).map { ChipSpec(it) }
 
     private class Reading(
         val temp: String,
@@ -67,16 +60,7 @@ object WeatherCard {
         // Line 1 is the date on the home screen; the lock screen shows the date beside the clock,
         // so there it is the condition instead.
         val title = if (surface == AtAGlanceService.SURFACE_HOME) dateText() else reading.condition
-        val layout = Prefs.weatherLayout(context)
-        val views = RemoteViews(
-            context.packageName,
-            when (layout) {
-                WeatherLayout.MATERIAL -> R.layout.card_weather_material
-                WeatherLayout.SPLIT -> R.layout.card_weather_split
-                WeatherLayout.GRID -> R.layout.card_weather_grid
-                else -> R.layout.card_weather_columns
-            }
-        )
+        val views = RemoteViews(context.packageName, R.layout.card_weather_material)
         views.setTextViewText(R.id.weather_temp, reading.temp)
         views.setTextViewText(R.id.weather_title, title)
         // Compact high/low/feels so it fits beside the temperature.
@@ -91,35 +75,14 @@ object WeatherCard {
             surface(views, reading, Prefs.weatherLook(context))
         }
 
-        val shown = if (layout == WeatherLayout.NONE) emptyList()
-        else Chips.withValues(chips ?: Prefs.chips(context) ?: DEFAULTS.getValue(layout)).map { it.first }
-        if (layout == WeatherLayout.MATERIAL) {
-            // Weather spec 1.2 to 1.4: chips under the temperature first; the right column only
-            // for those that do not fit, and 4 hours of forecast without it.
-            val (bottom, right) = materialPlan(context, shown)
-            Chips.addPlaced(context, views, bottom, Chips.BOTTOM, aod, R.id.complications_anchor)
-            Chips.addPlaced(context, views, right, Chips.RIGHT_COLUMN, aod, R.id.complications)
-            forecast(context, views, weather, if (right.isEmpty()) 4 else 3, aod, layout)
-            summary(context, views, weather, aod)
-            return finish(context, views, reading, aod)
-        }
-        forecast(context, views, weather, if (layout == WeatherLayout.GRID) 2 else 3, aod, layout)
-
-        // Chips: as many as fit sit under the temperature (up to 3 slots); the others fill the
-        // right side in the variant's arrangement.
-        val anchors = anchorPlan(context, layout, shown)
-        Chips.addPlaced(context, views, anchors, Chips.ANCHOR, aod, R.id.complications_anchor)
-        val placedUnder = anchors.map { it.spec }.toSet()
-        val right = rightPlan(context, layout, shown.filter { it !in placedUnder })
-        when (layout) {
-            WeatherLayout.COLUMNS -> Chips.addPlaced(context, views, right[0], Chips.COLUMN, aod, R.id.complications)
-            WeatherLayout.SPLIT -> Chips.addPlaced(context, views, right[0], Chips.WIDE, aod, R.id.complications)
-            WeatherLayout.GRID -> {
-                Chips.addPlaced(context, views, right[0], Chips.GRID, aod, R.id.complications)
-                Chips.addPlaced(context, views, right[1], Chips.GRID, aod, R.id.complications_2)
-            }
-            WeatherLayout.NONE, WeatherLayout.MATERIAL -> views.setViewVisibility(R.id.complications, View.GONE)
-        }
+        // Weather spec 1.2 to 1.4: chips under the temperature first; the right column only for
+        // those that do not fit, and 4 hours of forecast without it.
+        val shown = Chips.withValues(chips ?: Prefs.chips(context) ?: DEFAULTS).map { it.first }
+        val (bottom, right) = materialPlan(context, shown)
+        Chips.addPlaced(context, views, bottom, Chips.BOTTOM, aod, R.id.complications_anchor)
+        Chips.addPlaced(context, views, right, Chips.RIGHT_COLUMN, aod, R.id.complications)
+        forecast(context, views, weather, if (right.isEmpty()) 4 else 3, aod)
+        summary(context, views, weather, aod)
         return finish(context, views, reading, aod)
     }
 
@@ -176,18 +139,11 @@ object WeatherCard {
         }
     }
 
-    /** Most chips under the temperature. */
-    private const val MAX_ANCHORS = 3
-
-    /** Width of each variant's right side, including its margins (see tools/gen_weather_layouts.py). */
-    private fun rightWidthDp(layout: WeatherLayout): Int = when (layout) {
-        // Material You: 3 hours (35dp each, 6dp each side) and the 78dp right column.
-        WeatherLayout.MATERIAL -> 6 + 3 * 35 + 6 + 78
-        WeatherLayout.COLUMNS -> 6 + 102 + 4 + 72
-        WeatherLayout.SPLIT -> 6 + 174
-        WeatherLayout.GRID -> 6 + 82 + 6 + 96
-        WeatherLayout.NONE -> 6 + 102 + 4
-    }
+    /**
+     * Width of the right side, including its margins (see tools/gen_weather_layouts.py): the
+     * forecast's [hours] at 35dp with 6dp each side, and the 78dp right column when shown.
+     */
+    private fun rightWidthDp(hours: Int, column: Boolean): Int = 6 + hours * 35 + 6 + if (column) 78 else 0
 
     /** The screen's width in dp, from the display's own pixels. */
     private fun screenDp(context: Context): Float {
@@ -204,8 +160,8 @@ object WeatherCard {
      * units it is wider than it looks: the visible width divided by 78/88. From that come the
      * card's padding (16 + 14) and the right side. The launcher does not report the real width.
      */
-    private fun anchorRowDp(context: Context, layout: WeatherLayout): Float =
-        cardWidthDp(context) - 30f - rightWidthDp(layout)
+    private fun anchorRowDp(context: Context, column: Boolean): Float =
+        cardWidthDp(context) - 30f - rightWidthDp(if (column) 3 else 4, column)
 
     /** The card's width in its own dp (see [anchorRowDp]). */
     fun cardWidthDp(context: Context): Float = (screenDp(context) - LAUNCHER_MARGINS_DP) / LAUNCHER_SCALE
@@ -213,33 +169,26 @@ object WeatherCard {
     private const val LAUNCHER_MARGINS_DP = 38f
     private const val LAUNCHER_SCALE = 78f / 88f
 
-    /** The numbers behind the fitting, for the Chips tab, so a wrong guess can be seen and fixed. */
+    /** The numbers behind the fitting, for the app's Advanced section, so a wrong guess can be seen and fixed. */
     fun fitReport(context: Context): String {
-        val layout = Prefs.weatherLayout(context)
-        val pills = Chips.withValues(Prefs.chips(context).orEmpty()).joinToString(", ") { (spec, value) ->
+        val chosen = Prefs.chips(context).orEmpty()
+        val pills = Chips.withValues(chosen).joinToString(", ") { (spec, value) ->
             val text = value.parts.maxByOrNull { it.text.length }?.text ?: value.text
-            "${spec.kind.id} ${Chips.ANCHOR.widthDp(context, text).toInt()}"
+            "${spec.kind.id} ${Chips.BOTTOM.widthDp(context, text).toInt()}"
         }
+        val (under, right) = materialPlan(context, chosen)
         return "Fitting: screen ${screenDp(context).toInt()}dp, card ${cardWidthDp(context).toInt()}dp before the launcher shrinks it, " +
-            "room under the temperature ${anchorRowDp(context, layout).toInt()}dp " +
-            "(${layout.label}), fits ${anchorPlan(context, layout, Prefs.chips(context).orEmpty()).size}. Pill widths: ${pills.ifEmpty { "none" }}."
+            "room under the temperature ${anchorRowDp(context, right.isNotEmpty()).toInt()}dp, " +
+            "${under.size} under it and ${right.size} on the right. Pill widths: ${pills.ifEmpty { "none" }}."
     }
 
     /**
-     * Which of [specs] (those with something to show, in order) go under the temperature,
-     * measured at the phone's text size: up to 3 slots, at least 1 chip when there is any. An
-     * extended chip is wide (2 slots), and only goes here when its whole line fits; otherwise it
-     * waits for a spot where it can be extended (the right side, another card, or the extra chips
-     * card) rather than being shrunk. A chip that does not fit the space left is passed over for
-     * a later, smaller one, so no room is wasted; the ones passed over go to the right side.
+     * Which of the chips with something to show go in a row of [roomDp] in [style], measured at
+     * the phone's text size: up to [slots] slots and [chips] chips, at least 1 when there is any.
+     * An extended chip is wide (2 slots), and only goes here when its whole line fits; otherwise
+     * it waits for a spot where it can be extended rather than being shrunk. A chip that does not
+     * fit the space left is passed over for a later, smaller one.
      */
-    fun anchorPlan(context: Context, layout: WeatherLayout, specs: List<ChipSpec>): List<Chips.Placed> {
-        if (layout == WeatherLayout.NONE) return emptyList()
-        if (layout == WeatherLayout.MATERIAL) return materialPlan(context, specs).first
-        return rowPlan(context, specs, anchorRowDp(context, layout), Chips.ANCHOR, MAX_ANCHORS, MAX_ANCHORS)
-    }
-
-    /** [anchorPlan] for a row of [roomDp] in [style]: up to [slots] slots and [chips] chips. */
     private fun rowPlan(context: Context, specs: List<ChipSpec>, roomDp: Float, style: Chips.ChipStyle, slots: Int, chips: Int): List<Chips.Placed> {
         val room = roomDp
         val maxSlots = slots
@@ -282,8 +231,7 @@ object WeatherCard {
     fun materialPlan(context: Context, specs: List<ChipSpec>): Pair<List<Chips.Placed>, List<Chips.Placed>> {
         val all = Chips.withValues(specs).map { it.first }
         fun bottom(rightShown: Boolean): List<Chips.Placed> {
-            val room = cardWidthDp(context) - 30f - (6 + (if (rightShown) 3 else 4) * 35 + 6) - (if (rightShown) 78 else 0)
-            return rowPlan(context, all, room, Chips.BOTTOM, slots = 3, chips = 2)
+            return rowPlan(context, all, anchorRowDp(context, rightShown), Chips.BOTTOM, slots = 3, chips = 2)
         }
         var under = bottom(rightShown = all.size >= 3)
         var rest = all.filter { spec -> under.none { it.spec == spec } }
@@ -294,39 +242,20 @@ object WeatherCard {
         return under to Chips.plan(context, rest, 2, Chips.RIGHT_COLUMN)
     }
 
-    /** The right side's chips from [rest]: 2 slots, or 2 rows of 2 in the grid. */
-    private fun rightPlan(context: Context, layout: WeatherLayout, rest: List<ChipSpec>): List<List<Chips.Placed>> = when (layout) {
-        WeatherLayout.COLUMNS -> listOf(Chips.plan(context, rest, 2, Chips.COLUMN))
-        WeatherLayout.SPLIT -> listOf(Chips.plan(context, rest, 2, Chips.WIDE))
-        WeatherLayout.GRID -> {
-            // A wide chip fills a row.
-            val first = Chips.plan(context, rest, 2, Chips.GRID)
-            listOf(first, Chips.plan(context, rest.drop(first.size), 2, Chips.GRID))
-        }
-        WeatherLayout.NONE, WeatherLayout.MATERIAL -> emptyList()
-    }
-
     /** The chips of [specs] the weather card shows, in their order in [specs]. */
-    fun chipsTaken(context: Context, layout: WeatherLayout, specs: List<ChipSpec>): List<ChipSpec> {
-        if (layout == WeatherLayout.MATERIAL) {
-            val (under, right) = materialPlan(context, specs)
-            val taken = (under + right).map { it.spec }.toSet()
-            return specs.filter { it in taken }
-        }
-        val anchors = anchorPlan(context, layout, specs).map { it.spec }.toSet()
-        val rest = Chips.withValues(specs).map { it.first }.filter { it !in anchors }
-        val right = rightPlan(context, layout, rest).flatten().map { it.spec }.toSet()
-        return specs.filter { it in anchors || it in right }
+    fun chipsTaken(context: Context, specs: List<ChipSpec>): List<ChipSpec> {
+        val (under, right) = materialPlan(context, specs)
+        val taken = (under + right).map { it.spec }.toSet()
+        return specs.filter { it in taken }
     }
 
-    /** The next hours (3, 4 in Material You without its right column, or 2 in the grid); hidden until a reading with hourly data arrives. */
-    private fun forecast(context: Context, views: RemoteViews, weather: Weather, wanted: Int, aod: Boolean, layout: WeatherLayout) {
+    /** The next hours (3, or 4 without the right column); hidden until a reading with hourly data arrives. */
+    private fun forecast(context: Context, views: RemoteViews, weather: Weather, wanted: Int, aod: Boolean) {
         val count = if (wanted == 4 && weather.nextHours(4).size < 4) 3 else wanted
         val hours = weather.nextHours(count)
-        if (layout == WeatherLayout.MATERIAL) views.setViewVisibility(R.id.forecast_col_4, if (count == 4) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.forecast_col_4, if (count == 4) View.VISIBLE else View.GONE)
         if (hours.size < count) {
             views.setViewVisibility(R.id.forecast, View.GONE)
-            if (layout == WeatherLayout.SPLIT) views.setViewVisibility(R.id.forecast_rule, View.GONE)
             return
         }
         val ids = listOf(
@@ -345,10 +274,9 @@ object WeatherCard {
                 views.setTextColor(time, Style.AOD_TEXT)
                 views.setTextColor(temp, Style.AOD_TEXT)
                 // The always-on display shows the times without their pills.
-                if (layout == WeatherLayout.MATERIAL) views.setInt(time, "setBackgroundResource", 0)
+                views.setInt(time, "setBackgroundResource", 0)
             }
         }
-        if (aod && layout == WeatherLayout.GRID) views.setInt(R.id.forecast, "setBackgroundResource", R.drawable.aod_outline_r14)
     }
 
     private fun live(weather: Weather): Reading {

@@ -77,7 +77,6 @@ import com.ataglanceplus.cards.ChipSize
 import com.ataglanceplus.cards.ChipSpec
 import com.ataglanceplus.cards.Chips
 import com.ataglanceplus.cards.Complication
-import com.ataglanceplus.cards.WeatherLayout
 import com.ataglanceplus.complications.ChipValues
 import com.ataglanceplus.complications.GmailSource
 import com.ataglanceplus.complications.HealthMetric
@@ -88,7 +87,6 @@ import com.ataglanceplus.complications.SimpleSources
 import com.ataglanceplus.live.CalendarSource
 import com.ataglanceplus.wadb.Activator
 import com.ataglanceplus.wadb.Wadb
-import com.ataglanceplus.weather.WeatherLook
 import com.ataglanceplus.weather.WeatherRepository
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -201,7 +199,6 @@ internal fun ChipsSection() {
     var settingsFor by remember { mutableStateOf<ChipSpec?>(null) }
     var adding by remember { mutableStateOf(false) }
     var pickingMetric by remember { mutableStateOf(false) }
-    var showFitting by remember { mutableStateOf(false) }
     var grantMessage by remember { mutableStateOf("") }
 
     suspend fun grantOverAdb(notifications: Boolean, usage: Boolean, callLog: Boolean) {
@@ -209,13 +206,12 @@ internal fun ChipsSection() {
         val outcome = Activator.grant(context, Commands.chipGrantSteps(context, notifications, usage, callLog))
         grantMessage = when (outcome) {
             is Activator.Outcome.Failure -> outcome.reason
-            Activator.Outcome.Success -> "Done. If the chip still says it needs access, the command log is on the App tab."
+            Activator.Outcome.Success -> "Done. If the chip still says it needs access, the command log is in App › Advanced."
         }
         changed()
     }
 
     val chips = remember(version) { Prefs.chips(context) ?: emptyList() }
-    val layout = remember(version) { Prefs.weatherLayout(context) }
 
     fun add(spec: ChipSpec) {
         if (chips.none { it.key == spec.key } && chips.size < Chips.MAX_CHOSEN) Prefs.setChips(context, chips + spec)
@@ -254,55 +250,16 @@ internal fun ChipsSection() {
         }
     }
 
-    Section("Weather card") {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            WeatherLayout.entries.forEach { option ->
-                FilterChip(selected = layout == option, onClick = { Prefs.setWeatherLayout(context, option) }, label = { Text(option.label) })
-            }
-        }
-        Text(
-            when (layout) {
-                WeatherLayout.MATERIAL -> "1 or 2 chips under the temperature and the next 4 hours; with more chips, a column of 2 on the right and 3 hours."
-                WeatherLayout.COLUMNS -> "Next 3 hours as columns; chips under the temperature and 2 stacked on the right."
-                WeatherLayout.SPLIT -> "Next 3 hours in a row; chips under the temperature and 2 wide chips under the forecast."
-                WeatherLayout.GRID -> "Next 2 hours in a box; chips under the temperature and a 2 x 2 grid of chips."
-                WeatherLayout.NONE -> "Next 3 hours, and no chips anywhere."
-            },
-            style = MaterialTheme.typography.bodySmall
-        )
-        Text("Look", style = MaterialTheme.typography.labelLarge)
-        val look = remember(version) { Prefs.weatherLook(context) }
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            WeatherLook.entries.forEachIndexed { index, option ->
-                SegmentedButton(
-                    selected = look == option,
-                    onClick = { Prefs.setWeatherLook(context, option) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = WeatherLook.entries.size),
-                    // No tick: with three options it squeezes the labels; the fill shows the choice.
-                    icon = {}
-                ) { Text(if (option == WeatherLook.ANIMATED) "Animated" else option.label, maxLines = 1) }
-            }
-        }
-        Text(
-            when (look) {
-                WeatherLook.STANDARD -> "The Material You surface: a deep slate-navy gradient with a soft blue wave behind the chips."
-                WeatherLook.SCENES -> "The surface tinted for the weather and time of day, with the weather drawn clear of the temperature: sun, stars, clouds, fog, rain or snow."
-                WeatherLook.ANIMATED -> "The same scenes, moving: clouds drift, rain and snow fall, stars twinkle, lightning flashes. Uses more battery while the card is on screen."
-            },
-            style = MaterialTheme.typography.bodySmall
-        )
-    }
-
     Section("Your chips") {
         Text(
-            "Most important first: press and hold ≡, then drag to reorder. Chips with something to report fill the weather card, then other cards, then an extra chips card. Tap a chip for its settings.",
+            "Most important first: hold ≡ and drag to reorder. Tap a chip for its settings.",
             style = MaterialTheme.typography.bodySmall
         )
         if (grantMessage.isNotEmpty()) {
             Text(grantMessage, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
         if (chips.isEmpty()) {
-            Text("No chips chosen; the weather card uses the design's examples (Steps, Battery, Alarm and so on).", style = MaterialTheme.typography.bodySmall)
+            Text("No chips chosen: the cards use examples (Steps, Gmail, Battery).", style = MaterialTheme.typography.bodySmall)
         }
         ReorderableChips(
             chips = chips,
@@ -326,14 +283,6 @@ internal fun ChipsSection() {
             Button(onClick = { adding = true }) { Text("+ Add a chip") }
         } else {
             Text("Remove a chip to add another (${Chips.MAX_CHOSEN} at most).", style = MaterialTheme.typography.bodySmall)
-        }
-        TextButton(onClick = { showFitting = !showFitting }) { Text(if (showFitting) "Hide fitting details" else "Fitting details") }
-        if (showFitting) {
-            Text(
-                com.ataglanceplus.cards.WeatherCard.fitReport(context),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 
