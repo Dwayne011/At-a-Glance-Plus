@@ -41,8 +41,8 @@ object CardDeck {
 
     /**
      * Cards with something real to show, most time-sensitive first: a new message, the torch while it is on, navigation,
-     * live updates, live games, a timer or alarm, media, the next calendar event, other sports
-     * cards (before, after, next game), finance, then the weather
+     * live updates, live games, a timer or alarm, media, the next calendar event, Wallet passes,
+     * finance, other sports cards (before, after, next game), then the weather
      * card, which is always there and cannot be dismissed. Switched-off types and dismissed
      * instances are left out.
      *
@@ -116,8 +116,10 @@ object CardDeck {
             media?.let { card("media") { LiveCards.media(context, aod, it) } }
             calendar?.let { card("calendar") { LiveCards.calendar(context, aod, it, calendarChips) } }
             wallet.forEach { pass -> card("wallet") { LiveCards.wallet(context, aod, pass) } }
-            otherSports.forEach { card("sports") { sportsCard(context, aod, it) } }
+            // Finance before upcoming games: its showings are short (10 minutes on the periodic
+            // rule), while a game days away can wait a page.
             finance?.let { card("finance") { LiveCards.finance(context, aod, data.quotes, it) } }
+            otherSports.forEach { card("sports") { sportsCard(context, aod, it) } }
         }
         val weatherCard = WeatherCard.build(context, surface, aod, data.weather, data.weatherStatus, weatherChips)
         val extras = buildList { extraChips.forEachIndexed { i, chips -> card("extra chips") { LiveCards.chips(context, aod, chips, i) } } }

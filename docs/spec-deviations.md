@@ -188,3 +188,4 @@ where real data exists).
 | Big moves | Shows once a stock's move today (or outside regular hours since the close) reaches the threshold, and stays until the biggest move falls below three quarters of it | A stock hovering at the threshold made the card come and go with each price refresh |
 | Dismissing | Hides only that showing: a dismissed big-moves card no longer hides a window or periodic showing | Before, the first matching rule hid the others for the rest of the day |
 | Cards › Finance | A line saying why the card shows now, or that it is not, the next time by the clock, and the biggest move against the threshold | So the rules can be checked |
+| Card order (0.22.4) | The finance card comes before upcoming, finished and next-game sports cards (live games still come first) | With four upcoming games it was the fifth page, and a periodic showing lasts only 10 minutes |
