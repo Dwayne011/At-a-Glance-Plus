@@ -153,29 +153,50 @@ class WalletSignInActivity : ComponentActivity() {
                         "Mozilla/5.0 (Linux; Android 16; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) " +
                             "Chrome/140.0.0.0 Mobile Safari/537.36"
                     var handled = false
+                    fun check(url: String?) {
+                        if (handled) return
+                        val token = oauthToken(url) ?: return
+                        handled = true
+                        onToken(token)
+                    }
                     webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            if (handled) return
-                            val token = oauthToken() ?: return
-                            handled = true
-                            onToken(token)
+                        override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) = check(url)
+                        override fun onPageFinished(view: WebView?, url: String?) = check(url)
+                        override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) = check(url)
+                    }
+                    // Google's last screens ("Welcome", the terms) can set the cookie without loading
+                    // a new page, so look for it every second as well.
+                    var shown = false
+                    val poll = object : Runnable {
+                        override fun run() {
+                            // Stop once signed in, or once the page has been closed.
+                            if (handled || (shown && !isAttachedToWindow)) return
+                            shown = shown || isAttachedToWindow
+                            check(url)
+                            postDelayed(this, 1000)
                         }
                     }
+                    postDelayed(poll, 1000)
                     loadUrl(GoogleAccount.SIGN_IN_URL)
                 }
             },
         )
     }
 
-    /** The "oauth_token" cookie Google leaves once sign-in completes, if present. */
-    private fun oauthToken(): String? {
-        val cookies = CookieManager.getInstance().getCookie("https://google.com") ?: return null
-        return cookies.split(";")
-            .map { it.trim() }
-            .firstOrNull { it.startsWith("oauth_token=") }
-            ?.substringAfter("oauth_token=")
-            ?.takeIf { it.isNotEmpty() }
-    }
+    /**
+     * The "oauth_token" cookie Google leaves once sign-in completes, if present. It is set on
+     * accounts.google.com (a host-only cookie, invisible from google.com), so the page's own
+     * address and accounts.google.com are checked as well as google.com.
+     */
+    private fun oauthToken(url: String?): String? =
+        listOfNotNull(url, "https://accounts.google.com", "https://google.com").firstNotNullOfOrNull { site ->
+            CookieManager.getInstance().getCookie(site)
+                ?.split(";")
+                ?.map { it.trim() }
+                ?.firstOrNull { it.startsWith("oauth_token=") }
+                ?.substringAfter("oauth_token=")
+                ?.takeIf { it.isNotEmpty() }
+        }
 
     private fun clearCookies() {
         CookieManager.getInstance().removeAllCookies(null)

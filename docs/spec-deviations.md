@@ -206,3 +206,9 @@ where real data exists).
 | When a card goes | When its event ends, or earlier only if dismissed | Chosen |
 | Which calendars | Cards › Calendar lists the phone's calendars with a switch each; new calendars are shown. Not in the settings backup (calendar ids differ between phones) | Chosen |
 | Chips | On the first calendar card only | The rest stack without them |
+
+## Wallet sign-in (0.24.1)
+
+| Step | As built | Why |
+|---|---|---|
+| Finding the token | The "oauth_token" cookie is looked for on the page's own address and accounts.google.com as well as google.com, at each page start, finish and history change, and every second | Google sets it host-only on accounts.google.com, where google.com cannot see it, so sign-in stopped at the "Welcome" terms page |
