@@ -336,7 +336,8 @@ private fun FinanceSettings(settingsVersion: Int) {
                 Text(ticker + (quote?.let { " · ${it.name}" } ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 quote?.let {
                     Text(
-                        String.format(locale, "%.2f %s · %+.2f%% today", it.price, it.currency, it.changePercent),
+                        String.format(locale, "%.2f %s · %+.2f%% today", it.price, it.currency, it.changePercent) +
+                            (it.extended?.let { e -> String.format(locale, " · %s %.2f (%+.2f%%)", e.session.label.lowercase(locale), e.price, e.changePercent) } ?: ""),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }

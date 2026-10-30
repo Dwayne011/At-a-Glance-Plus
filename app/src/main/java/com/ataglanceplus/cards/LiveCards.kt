@@ -730,12 +730,20 @@ object LiveCards {
         val views = RemoteViews(context.packageName, R.layout.card_finance)
         if (aod) Style.aodBody(views)
         ordered.forEach { quote ->
-            val up = quote.change >= 0
+            // Outside regular hours: the latest price and its move from the close, named for its
+            // session ("Overnight 6.56 · −0.32"), as eToro shows it.
+            val extended = quote.extended
+            val change = extended?.change ?: quote.change
+            val up = change >= 0
             val colour = if (aod) Style.AOD_TEXT else if (up) UP else DOWN
             val page = RemoteViews(context.packageName, R.layout.include_finance_page)
             page.setTextViewText(R.id.finance_title, "${quote.symbol} · ${quote.name}")
-            page.setTextViewText(R.id.finance_detail, "${price(quote.price, quote.currency)} · ${signed(quote.change)}")
-            page.setTextViewText(R.id.finance_change, signed(quote.changePercent) + "%")
+            page.setTextViewText(
+                R.id.finance_detail,
+                if (extended != null) "${extended.session.label} ${price(extended.price, quote.currency)} · ${signed(extended.change)}"
+                else "${price(quote.price, quote.currency)} · ${signed(quote.change)}",
+            )
+            page.setTextViewText(R.id.finance_change, signed(extended?.changePercent ?: quote.changePercent) + "%")
             page.setTextColor(R.id.finance_change, colour)
             page.setImageViewResource(R.id.finance_trend, if (up) R.drawable.ic_trend_up else R.drawable.ic_trend_down)
             page.setInt(R.id.finance_trend, "setColorFilter", colour)
@@ -763,8 +771,8 @@ object LiveCards {
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(
-            context, targetId(key), views, "${first.symbol} ${price(first.price, first.currency)}",
-            signed(first.changePercent) + "%", R.drawable.ic_trend_up, tap, 1.1f
+            context, targetId(key), views, "${first.symbol} ${price(first.extended?.price ?: first.price, first.currency)}",
+            signed(first.extended?.changePercent ?: first.changePercent) + "%", R.drawable.ic_trend_up, tap, 1.1f
         )
     }
 
@@ -782,7 +790,8 @@ object LiveCards {
      * yesterday's close as a faint line for reference.
      */
     private fun chart(quote: Quote, colour: Int): android.graphics.Bitmap? {
-        val points = quote.points
+        // The line ends at the price outside regular hours, when there is one.
+        val points = quote.points + listOfNotNull(quote.extended?.price)
         if (points.size < 2) return null
         val w = 128f
         val h = 44f

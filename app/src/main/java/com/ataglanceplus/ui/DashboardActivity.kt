@@ -45,6 +45,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -717,12 +718,14 @@ private fun StockDashboard(initial: String) {
     var range by remember { mutableStateOf(com.ataglanceplus.live.FinanceSource.Range.DAY) }
     val refresh = LocalRefresh.current
     var shown by remember { mutableStateOf<Pair<String, Any>?>(null) }
-    val load by produceState<Load<com.ataglanceplus.live.FinanceSource.History>>(Load.Loading, symbol, range, refresh.generation) {
+    var vwapSettings by remember { mutableStateOf(Prefs.financeVwap(context)) }
+    var editingVwap by remember { mutableStateOf(false) }
+    val load by produceState<Load<com.ataglanceplus.live.FinanceSource.History>>(Load.Loading, symbol, range, vwapSettings, refresh.generation) {
         // A new stock or range starts from "Loading…"; a refresh keeps the chart until the new one is in.
         if (shown != (symbol to range)) value = Load.Loading
         shown = symbol to range
         value = withContext(Dispatchers.IO) {
-            com.ataglanceplus.live.FinanceSource.history(symbol, range)?.let { Load.Ready(it) }
+            com.ataglanceplus.live.FinanceSource.history(symbol, range, vwapSettings)?.let { Load.Ready(it) }
                 ?: Load.Missing("Yahoo Finance did not answer. Try again in a moment.")
         }
         refresh.loaded = refresh.generation
@@ -749,12 +752,24 @@ private fun StockDashboard(initial: String) {
             val change = h.rangeChange
             val base = q.price - change
             val percent = if (base != 0.0) 100 * change / base else 0.0
+            // Outside regular hours the latest price leads, with its move from the close (as eToro
+            // shows it); the regular session's figures follow.
+            val extended = q.extended
             Column {
-                Text("${money(q.price)} ${q.currency}", style = MaterialTheme.typography.displaySmall)
+                Text("${money(extended?.price ?: q.price)} ${q.currency}", style = MaterialTheme.typography.displaySmall)
+                if (extended != null) {
+                    Text(
+                        (if (extended.change >= 0) "▲ +" else "▼ −") + money(kotlin.math.abs(extended.change)) +
+                            String.format(locale, " (%+.2f%%) ", extended.changePercent) + extended.session.label.lowercase(locale),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (extended.change >= 0) UP else DOWN,
+                    )
+                }
                 Text(
-                    (if (change >= 0) "▲ +" else "▼ −") + money(kotlin.math.abs(change)) +
+                    (if (extended != null) "At the close ${money(q.price)}: " else "") +
+                        (if (change >= 0) "▲ +" else "▼ −") + money(kotlin.math.abs(change)) +
                         String.format(locale, " (%+.2f%%) ", percent) + if (range == com.ataglanceplus.live.FinanceSource.Range.DAY) "today" else "over ${range.label}",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = if (extended != null) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
                     color = if (change >= 0) UP else DOWN,
                 )
             }
@@ -796,12 +811,16 @@ private fun StockDashboard(initial: String) {
                         format = { money(it) },
                         axis = axis,
                     )
-                    Text(
-                        if (intraday) "VWAP, the volume-weighted average price, starts again each trading day."
-                        else "VWAP, the volume-weighted average price, is anchored to the start of the range.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "VWAP · ${vwapSettings.source.label} · ${vwapSettings.anchor.label}" +
+                                if (vwapSettings.extendedHours) " · extended hours" else "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { editingVwap = true }) { Text("Change") }
+                    }
                 } else {
                     Text("No prices for this range yet.", style = MaterialTheme.typography.bodyMedium)
                 }
@@ -815,7 +834,57 @@ private fun StockDashboard(initial: String) {
             OpenButton("Open in Google Finance", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(com.ataglanceplus.live.FinanceSource.googleFinanceUrl(q))))
         }
     }
+    if (editingVwap) {
+        VwapDialog(vwapSettings, onDone = { editingVwap = false }) {
+            vwapSettings = it
+            Prefs.setFinanceVwap(context, it)
+        }
+    }
     Text("Prices from Yahoo Finance's free feed; some exchanges are 15 minutes behind.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/**
+ * The VWAP's inputs, as eToro names them: what each candle contributes (Source), when it starts
+ * again (Anchor period), and whether the 1D and 5D charts include pre-market and after-hours
+ * candles. Changes apply at once.
+ */
+@Composable
+private fun VwapDialog(
+    settings: com.ataglanceplus.live.FinanceSource.VwapSettings,
+    onDone: () -> Unit,
+    onChange: (com.ataglanceplus.live.FinanceSource.VwapSettings) -> Unit,
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDone,
+        confirmButton = { TextButton(onClick = onDone) { Text("Done") } },
+        title = { Text("VWAP") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Source", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.ataglanceplus.live.FinanceSource.VwapSource.entries.forEach { option ->
+                        FilterChip(selected = settings.source == option, onClick = { onChange(settings.copy(source = option)) }, label = { Text(option.label) })
+                    }
+                }
+                Text("Anchor period", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.ataglanceplus.live.FinanceSource.VwapAnchor.entries.forEach { option ->
+                        FilterChip(selected = settings.anchor == option, onClick = { onChange(settings.copy(anchor = option)) }, label = { Text(option.label) })
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Extended hours")
+                        Text(
+                            "1D and 5D charts include pre-market and after-hours trading, as in eToro's 24/5 charts. Yahoo has no overnight candles.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    androidx.compose.material3.Switch(checked = settings.extendedHours, onCheckedChange = { onChange(settings.copy(extendedHours = it)) })
+                }
+            }
+        },
+    )
 }
 
 /** VWAP's line: the first categorical blue, in its dark-theme and light-theme steps. */

@@ -46,6 +46,9 @@ object Prefs {
     private const val KEY_FIN_PERIOD_HOURS = "finance_period_hours"
     private const val KEY_FIN_WINDOWS_ON = "finance_show_windows"
     private const val KEY_FIN_WINDOWS = "finance_windows"
+    private const val KEY_FIN_VWAP_SOURCE = "finance_vwap_source"
+    private const val KEY_FIN_VWAP_ANCHOR = "finance_vwap_anchor"
+    private const val KEY_FIN_EXTENDED_HOURS = "finance_extended_hours"
 
     /** Keys that only matter to the wireless-debugging screens; changing them needs no redraw. */
     val NON_CARD_KEYS = setOf(KEY_PAIRED, KEY_ACTIVATE_ON_BOOT)
@@ -378,6 +381,26 @@ object Prefs {
     }
 
     /** Tapping a stock opens this app's dashboard (else its Google Finance page). */
+    /** The stock dashboard's VWAP: eToro's defaults, (H + L + C)/3 starting each session, regular hours only. */
+    fun financeVwap(context: Context): com.ataglanceplus.live.FinanceSource.VwapSettings {
+        val prefs = get(context)
+        return com.ataglanceplus.live.FinanceSource.VwapSettings(
+            source = runCatching { com.ataglanceplus.live.FinanceSource.VwapSource.valueOf(prefs.getString(KEY_FIN_VWAP_SOURCE, null)!!) }
+                .getOrDefault(com.ataglanceplus.live.FinanceSource.VwapSource.HLC3),
+            anchor = runCatching { com.ataglanceplus.live.FinanceSource.VwapAnchor.valueOf(prefs.getString(KEY_FIN_VWAP_ANCHOR, null)!!) }
+                .getOrDefault(com.ataglanceplus.live.FinanceSource.VwapAnchor.SESSION),
+            extendedHours = prefs.getBoolean(KEY_FIN_EXTENDED_HOURS, false),
+        )
+    }
+
+    fun setFinanceVwap(context: Context, settings: com.ataglanceplus.live.FinanceSource.VwapSettings) {
+        get(context).edit()
+            .putString(KEY_FIN_VWAP_SOURCE, settings.source.name)
+            .putString(KEY_FIN_VWAP_ANCHOR, settings.anchor.name)
+            .putBoolean(KEY_FIN_EXTENDED_HOURS, settings.extendedHours)
+            .apply()
+    }
+
     fun financeOpensDashboard(context: Context): Boolean = get(context).getBoolean(KEY_FINANCE_OPEN, true)
 
     fun setFinanceOpensDashboard(context: Context, on: Boolean) {
