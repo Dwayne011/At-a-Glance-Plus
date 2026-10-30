@@ -231,3 +231,10 @@ where real data exists).
 | Car positions on the map | By the last mini-sector each car crossed (about 22–24 a lap), along the circuit outline from the f1-circuits project, so the dots step rather than glide. The outline may not start at the start line or may run the other way on some circuits; those can be corrected per circuit | Exact positions (Position.z) need an F1 TV token |
 | Dashboard Standings | Drivers' and constructors' championships with points and wins | From Jolpica (api.jolpi.ca), the open successor to the Ergast API that FastF1 uses; ESPN gives no points |
 | Dashboard Results | Full classification of the race, sprint and qualifying (time or gap, points, fastest lap); before Jolpica has the weekend, ESPN's top three | From Jolpica |
+
+## Activation timing (0.26.1)
+
+| Step | As built | Why |
+|---|---|---|
+| Override length | 120 s, the most Android allows | More time for the lock screen and launcher to reconnect |
+| After stopping the launcher | `am start -W -a android.intent.action.MAIN -c android.intent.category.HOME` opens the home screen | A stopped launcher only started again when the user next went home; after the override ran out it reconnected to Google's provider, so Activate seemed to do nothing |

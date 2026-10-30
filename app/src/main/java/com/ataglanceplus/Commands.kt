@@ -13,8 +13,9 @@ import com.ataglanceplus.service.AtAGlanceService
  *
  * How it works: the system keeps one cached binding to the active Smartspace service. A temporary
  * override lasts at most two minutes, but clients that open a session while it is active stay
- * bound to our service until our process dies. So: set the override, then restart the launcher
- * and SystemUI so they open fresh sessions while it is in force.
+ * bound to our service until our process dies. So: set the override, then restart SystemUI and
+ * the launcher, and open the home screen so the launcher starts again at once, and both open
+ * fresh sessions while it is in force.
  */
 object Commands {
 
@@ -29,7 +30,14 @@ object Commands {
      * the package name as the fallback.
      */
     private const val RESTART_SYSTEM_UI = "am crash \$(pidof $SYSTEM_UI || echo $SYSTEM_UI)"
-    private const val OVERRIDE_MS = 60_000
+    /** The longest temporary override Android allows (two minutes). */
+    private const val OVERRIDE_MS = 120_000
+
+    /**
+     * Opens the home screen, so the launcher (just stopped) starts again and connects while the
+     * override is in force, rather than whenever the user next goes home, which may be too late.
+     */
+    private const val OPEN_HOME = "am start -W -a android.intent.action.MAIN -c android.intent.category.HOME"
 
     fun serviceComponent(context: Context): String =
         ComponentName(context, AtAGlanceService::class.java).flattenToString()
@@ -82,7 +90,8 @@ object Commands {
     private fun overrideSteps(component: String): List<String> = listOf(
         "cmd smartspace set temporary-service ${userId()} $component $OVERRIDE_MS",
         RESTART_SYSTEM_UI,
-        "am force-stop $PIXEL_LAUNCHER"
+        "am force-stop $PIXEL_LAUNCHER",
+        OPEN_HOME,
     )
 
     /** Shell command that makes this app the At a Glance provider. */
@@ -114,5 +123,5 @@ object Commands {
 
     private fun overrideShell(component: String): String =
         "cmd smartspace set temporary-service ${userId()} $component $OVERRIDE_MS" +
-            " && $RESTART_SYSTEM_UI && am force-stop $PIXEL_LAUNCHER"
+            " && $RESTART_SYSTEM_UI && am force-stop $PIXEL_LAUNCHER && $OPEN_HOME"
 }
