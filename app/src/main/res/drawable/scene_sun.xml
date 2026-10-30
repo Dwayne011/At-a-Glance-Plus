@@ -8,8 +8,8 @@
     android:viewportHeight="76">
     <path android:name="glow" android:pathData="M0,0 H420 V76 H0 Z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="330" android:centerY="6" android:gradientRadius="70"
-                android:startColor="#80FFE8A3" android:endColor="#00FFE8A3" />
+            <gradient android:type="radial" android:centerX="300" android:centerY="4" android:gradientRadius="80"
+                android:startColor="#80FFD54F" android:endColor="#00FFD54F" />
         </aapt:attr>
     </path>
 </vector>

@@ -60,6 +60,7 @@ object HealthSource {
                 stepsText(steps),
                 wide = "${format.format(steps)} of ${format.format(goal)}",
                 detail = "$percent% of ${format.format(goal)}",
+                progress = (steps.toFloat() / goal.coerceAtLeast(1)).coerceIn(0f, 1f),
             )
         } catch (e: Exception) {
             Log.w(TAG, "steps read failed", e)

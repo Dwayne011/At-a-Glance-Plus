@@ -8,17 +8,9 @@
     android:viewportHeight="76">
     <path android:pathData="M0,0 H420 V76 H0 Z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="0" android:endY="76"
-                android:startColor="#FF1A2232" android:endColor="#FF2E384A" />
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="420" android:endY="76"
+                android:startColor="#F21B2333" android:centerColor="#F2161D2B" android:endColor="#F2111722" />
         </aapt:attr>
     </path>
-    <!-- Darker on the left, behind the temperature and date. -->
-    <path android:pathData="M0,0 H420 V76 H0 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="210.0" android:endY="0"
-                android:startColor="#40000000" android:endColor="#00000000" />
-        </aapt:attr>
-    </path>
-    <path android:fillColor="#000000" android:fillAlpha="0.16" android:pathData="M0,62 C40,54 80,56 120,60 C170,65 210,52 260,55 C310,58 350,50 420,57 L420,76 L0,76 Z" />
-    <path android:fillColor="#000000" android:fillAlpha="0.24" android:pathData="M0,70 C50,63 100,66 150,69 C200,72 250,62 300,65 C350,68 390,64 420,66 L420,76 L0,76 Z" />
+    <path android:fillColor="#1FE0F2FE" android:pathData="M300,76 C318,74 326,60 344,52 C364,43 380,46 396,34 C408,25 414,16 420,8 L420,76 Z" />
 </vector>

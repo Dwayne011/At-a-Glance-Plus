@@ -262,6 +262,7 @@ internal fun ChipsSection() {
         }
         Text(
             when (layout) {
+                WeatherLayout.MATERIAL -> "1 or 2 chips under the temperature and the next 4 hours; with more chips, a column of 2 on the right and 3 hours."
                 WeatherLayout.COLUMNS -> "Next 3 hours as columns; chips under the temperature and 2 stacked on the right."
                 WeatherLayout.SPLIT -> "Next 3 hours in a row; chips under the temperature and 2 wide chips under the forecast."
                 WeatherLayout.GRID -> "Next 2 hours in a box; chips under the temperature and a 2 x 2 grid of chips."
@@ -284,8 +285,8 @@ internal fun ChipsSection() {
         }
         Text(
             when (look) {
-                WeatherLook.STANDARD -> "A plain background, coloured for the weather."
-                WeatherLook.SCENES -> "A picture of the weather and time of day behind the card: sun, stars, clouds, fog, rain or snow."
+                WeatherLook.STANDARD -> "The Material You surface: a deep slate-navy gradient with a soft blue wave behind the chips."
+                WeatherLook.SCENES -> "The surface tinted for the weather and time of day, with the weather drawn clear of the temperature: sun, stars, clouds, fog, rain or snow."
                 WeatherLook.ANIMATED -> "The same scenes, moving: clouds drift, rain and snow fall, stars twinkle, lightning flashes. Uses more battery while the card is on screen."
             },
             style = MaterialTheme.typography.bodySmall
@@ -833,13 +834,14 @@ private fun chooseGoogleAccount(current: String?): Intent =
 
 /** What a chip shows: standard, extended across, and the second line when extended in a column. */
 private fun bigExample(kind: Complication): Triple<String, String, String> = when (kind) {
-    Complication.COUNTDOWN -> Triple("\"4d\"", "\"4d · Holiday · Mon 2 Nov\"", "\"Holiday · Mon 2 Nov\" under \"4d\"")
+    Complication.COUNTDOWN -> Triple("\"4d\"", "\"4d · Holiday (Mon 2 Nov)\"", "\"Holiday\" and \"Mon 2 Nov\" under \"4d\"")
     Complication.SLEEP -> Triple("\"5h 13m\"", "\"5h 13m · 23:40–05:10\"", "\"23:40–05:10\" under \"5h 13m\"")
-    Complication.STEPS -> Triple("\"2,047\"", "\"2,047 of 8,000\"", "\"26% of 8,000\" under \"2,047\"")
+    Complication.STEPS -> Triple("\"2,047\"", "\"2,047 of 8,000\" over a progress line", "\"26% of 8,000\" and a progress line under \"2,047\"")
     Complication.SCREEN_TIME -> Triple("\"1h 20m\"", "\"1h 20m · YouTube 35m\"", "\"YouTube 35m\" under \"1h 20m\"")
-    Complication.SUNSET -> Triple("\"16:38\"", "\"Sunset 16:38 · Sunrise 07:05\"", "\"Sunrise 07:05\" under \"16:38\"")
-    Complication.BUDS -> Triple("each device in turn", "every device side by side", "the devices on two rows")
-    Complication.ETORO -> Triple("\"+$412 +6.3%\"", "\"+$412 · +6.3% · $7,020\"", "\"Value $7,020\" under \"+$412 +6.3%\"")
+    Complication.SUNSET -> Triple("\"16:38\"", "\"Sunset 16:38 · Sunrise 07:05\"", "\"Sunset 16:38\" over \"Sunrise 07:05\"")
+    Complication.BUDS -> Triple("each device in turn", "every device side by side", "the device's name over its level (two devices: each level on its own row)")
+    Complication.HEALTH -> Triple("\"72\"", "\"72 bpm · 5 min ago\"", "\"5 min ago\" under \"72 bpm\"")
+    Complication.ETORO -> Triple("\"+$412 · +6.3%\"", "\"+$412 · +6.3% · $7,020\"", "\"+6.3%\" and \"$7,020\" under \"+$412\"")
     else -> Triple("", "", "")
 }
 

@@ -168,12 +168,15 @@ object SimpleSources {
             days == 0L -> "Today"
             else -> return null
         }
-        // For a big chip: what it is to, and the date ("Holiday · Mon 2 Nov").
+        // For a big chip: what it is to, and the date. Across: "4d · Holiday (Mon 2 Nov)";
+        // stacked: "4d", "Holiday", "Mon 2 Nov" (chips spec 2.2).
         val date = LocalDate.ofEpochDay(target).format(
             java.time.format.DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(java.util.Locale.getDefault(), "EEEdMMM"))
         )
-        val detail = listOf(Prefs.countdownName(context), date).filter { it.isNotEmpty() }.joinToString(" · ")
-        return ChipValues.Value(text, wide = "$text · $detail", detail = detail)
+        val name = Prefs.countdownName(context)
+        val detail = listOf(name, date).filter { it.isNotEmpty() }.joinToString(" · ")
+        val wide = if (name.isEmpty()) "$text · $date" else "$text · $name ($date)"
+        return ChipValues.Value(text, wide = wide, detail = detail, stacked = listOf(text, name, date).filter { it.isNotEmpty() })
     }
 
     /** Counts above 99 show as "99+" (spec 7.3, large number state). */

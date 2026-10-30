@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Weather forecast hour pill (weather spec 1.3) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#24FFFFFF" />
+    <stroke android:width="0.8dp" android:color="#33FFFFFF" />
+    <corners android:radius="7.5dp" />
+</shape>

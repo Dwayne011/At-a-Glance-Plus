@@ -1,104 +1,162 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Sports: a followed team's game, scoreboard style. Home team on the left, away on the right,
-    the competition and clock (or kick-off time) in the middle. Scores are hidden before a game.
+    Sports: a followed team's game (Material You sports spec 3.1 and 3.2). Home team on the left,
+    away on the right, each in its own colours; scores beside them while live and after; the
+    league, clock or start time and a status pill (LIVE, Next game, a countdown, or the result) in
+    the middle. The surface is the arena slate washed with the home team's colour from the left
+    and the away team's from the right, with a wave while live. Scores are hidden before a game,
+    or when the user hides this team's scores.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/card_root"
     style="@style/AagCardRoot">
 
+    <FrameLayout
+        android:id="@+id/sports_surface"
+        android:layout_width="match_parent"
+        android:layout_height="76dp"
+        android:layout_gravity="center_vertical"
+        android:background="@drawable/sports_surface"
+        android:clipToOutline="true">
+
+        <ImageView
+            android:id="@+id/sports_wash_home"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="fitXY"
+            android:src="@drawable/sports_wash_home" />
+
+        <ImageView
+            android:id="@+id/sports_wash_away"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="fitXY"
+            android:src="@drawable/sports_wash_away" />
+
+        <ImageView
+            android:id="@+id/sports_wave"
+            android:layout_width="96dp"
+            android:layout_height="64dp"
+            android:layout_gravity="bottom|end"
+            android:contentDescription="@null"
+            android:src="@drawable/sports_wave"
+            android:visibility="gone" />
+    </FrameLayout>
+
     <LinearLayout
         android:id="@+id/card_body"
         style="@style/AagCardBody"
-        android:background="@drawable/card_bg_sports"
+        android:background="@drawable/sports_border"
+        android:baselineAligned="false"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp">
+        android:paddingEnd="16dp">
 
+        <!-- Home team: logo in its colour's circle, short name, HOME tag. -->
         <LinearLayout
-            android:layout_width="56dp"
-            android:layout_height="wrap_content"
-            android:gravity="center_horizontal"
+            android:layout_width="68dp"
+            android:layout_height="match_parent"
+            android:gravity="center"
             android:orientation="vertical">
 
-            <ImageView
-                android:id="@+id/sports_home_logo"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:contentDescription="@null"
-                android:scaleType="fitCenter" />
+            <FrameLayout
+                android:layout_width="36dp"
+                android:layout_height="36dp">
+
+                <ImageView
+                    android:id="@+id/sports_home_circle"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:src="@drawable/team_circle" />
+
+                <ImageView
+                    android:id="@+id/sports_home_ring"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:src="@drawable/team_ring" />
+
+                <ImageView
+                    android:id="@+id/sports_home_logo"
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:scaleType="fitCenter" />
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/sports_home_abbr"
-                android:layout_width="match_parent"
-                android:layout_height="16dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:autoSizeMaxTextSize="13sp"
-                android:autoSizeMinTextSize="8sp"
-                android:autoSizeTextType="uniform"
                 android:fontFamily="sans-serif-medium"
-                android:gravity="center"
                 android:includeFontPadding="false"
-                android:maxLines="1"
-                android:textColor="#FFFFFFFF"
+                android:letterSpacing="0.04"
+                android:singleLine="true"
+                android:textColor="#FFE2E2E6"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/sports_home_side"
-                android:layout_width="match_parent"
-                android:layout_height="11dp"
+                android:layout_width="42dp"
+                android:layout_height="13dp"
+                android:layout_marginTop="1dp"
+                android:background="@drawable/tag_home_live"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:includeFontPadding="false"
-                android:letterSpacing="0.08"
-                android:maxLines="1"
+                android:singleLine="true"
                 android:text="HOME"
-                android:textColor="#99FFFFFF"
-                android:textSize="8sp" />
+                android:textColor="#FF410002"
+                android:textSize="9sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/sports_home_score"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:layout_marginEnd="6dp"
+            android:layout_marginStart="8dp"
             android:fontFamily="sans-serif-medium"
             android:includeFontPadding="false"
             android:singleLine="true"
             android:textColor="#FFFFFFFF"
-            android:textSize="32sp"
+            android:textSize="34sp"
             android:textStyle="bold" />
 
         <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="center_horizontal"
+            android:gravity="center"
             android:orientation="vertical">
 
             <TextView
                 android:id="@+id/sports_league"
-                android:layout_width="match_parent"
-                android:layout_height="16dp"
-                android:autoSizeMaxTextSize="12sp"
-                android:autoSizeMinTextSize="8sp"
-                android:autoSizeTextType="uniform"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
                 android:fontFamily="sans-serif-medium"
-                android:gravity="center"
                 android:includeFontPadding="false"
-                android:maxLines="1"
-                android:textColor="#FFC4C6D0"
-                android:textStyle="bold" />
+                android:letterSpacing="0.08"
+                android:singleLine="true"
+                android:textAllCaps="true"
+                android:textColor="#FF94A3B8"
+                android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/sports_status"
                 android:layout_width="match_parent"
                 android:layout_height="22dp"
                 android:layout_marginTop="2dp"
-                android:autoSizeMaxTextSize="16sp"
-                android:autoSizeMinTextSize="9sp"
+                android:autoSizeMaxTextSize="19sp"
+                android:autoSizeMinTextSize="11sp"
+                android:autoSizeStepGranularity="0.5sp"
                 android:autoSizeTextType="uniform"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
@@ -107,74 +165,113 @@
                 android:textColor="#FFFFFFFF"
                 android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/sports_note"
-                android:layout_width="match_parent"
-                android:layout_height="14dp"
-                android:autoSizeMaxTextSize="11sp"
-                android:autoSizeMinTextSize="8sp"
-                android:autoSizeTextType="uniform"
-                android:fontFamily="sans-serif"
+            <LinearLayout
+                android:id="@+id/sports_pill"
+                android:layout_width="wrap_content"
+                android:layout_height="18dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/status_pill_live"
                 android:gravity="center"
-                android:includeFontPadding="false"
-                android:maxLines="1"
-                android:textColor="#FF93C5FD"
-                android:visibility="gone" />
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/sports_dot"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:layout_marginEnd="4dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/live_dot" />
+
+                <TextView
+                    android:id="@+id/sports_note"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:includeFontPadding="false"
+                    android:letterSpacing="0.06"
+                    android:singleLine="true"
+                    android:textColor="#FFFF8A80"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
 
         <TextView
             android:id="@+id/sports_away_score"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:layout_marginEnd="6dp"
+            android:layout_marginEnd="8dp"
             android:fontFamily="sans-serif-medium"
             android:includeFontPadding="false"
             android:singleLine="true"
             android:textColor="#FFFFFFFF"
-            android:textSize="32sp"
+            android:textSize="34sp"
             android:textStyle="bold" />
 
+        <!-- Away team: logo in its colour's circle, short name, AWAY tag. -->
         <LinearLayout
-            android:layout_width="56dp"
-            android:layout_height="wrap_content"
-            android:gravity="center_horizontal"
+            android:layout_width="68dp"
+            android:layout_height="match_parent"
+            android:gravity="center"
             android:orientation="vertical">
 
-            <ImageView
-                android:id="@+id/sports_away_logo"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:contentDescription="@null"
-                android:scaleType="fitCenter" />
+            <FrameLayout
+                android:layout_width="36dp"
+                android:layout_height="36dp">
+
+                <ImageView
+                    android:id="@+id/sports_away_circle"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:src="@drawable/team_circle" />
+
+                <ImageView
+                    android:id="@+id/sports_away_ring"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:src="@drawable/team_ring" />
+
+                <ImageView
+                    android:id="@+id/sports_away_logo"
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:scaleType="fitCenter" />
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/sports_away_abbr"
-                android:layout_width="match_parent"
-                android:layout_height="16dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:autoSizeMaxTextSize="13sp"
-                android:autoSizeMinTextSize="8sp"
-                android:autoSizeTextType="uniform"
                 android:fontFamily="sans-serif-medium"
-                android:gravity="center"
                 android:includeFontPadding="false"
-                android:maxLines="1"
-                android:textColor="#FFFFFFFF"
+                android:letterSpacing="0.04"
+                android:singleLine="true"
+                android:textColor="#FFE2E2E6"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/sports_away_side"
-                android:layout_width="match_parent"
-                android:layout_height="11dp"
+                android:layout_width="42dp"
+                android:layout_height="13dp"
+                android:layout_marginTop="1dp"
+                android:background="@drawable/tag_away_live"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:includeFontPadding="false"
-                android:letterSpacing="0.08"
-                android:maxLines="1"
+                android:singleLine="true"
                 android:text="AWAY"
-                android:textColor="#99FFFFFF"
-                android:textSize="8sp" />
+                android:textColor="#FF1B1C1E"
+                android:textSize="9sp"
+                android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 

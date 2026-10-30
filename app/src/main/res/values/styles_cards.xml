@@ -66,6 +66,8 @@
     <style name="AagText.Chip">
         <item name="android:textSize">12.5sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
+        <!-- No extra font padding, so the text sits on the pill's true centre. -->
+        <item name="android:includeFontPadding">false</item>
         <item name="android:lineHeight">15sp</item>
         <item name="android:letterSpacing">0.008</item>
         <item name="android:maxWidth">44dp</item>

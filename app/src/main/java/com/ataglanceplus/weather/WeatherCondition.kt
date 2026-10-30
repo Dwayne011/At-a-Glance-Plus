@@ -27,16 +27,6 @@ enum class WeatherCondition(val label: String, @DrawableRes val dayIcon: Int, @D
         THUNDER -> R.drawable.ic_weather_thunder_aod
     }
 
-    /** Card background for these conditions (spec 4.1). */
-    @DrawableRes
-    fun background(isDay: Boolean): Int = when (this) {
-        CLEAR, PARTLY_CLOUDY -> if (isDay) R.drawable.card_bg_weather_clear_day else R.drawable.card_bg_weather_clear_night
-        CLOUDY -> R.drawable.card_bg_weather_cloudy
-        FOG, DRIZZLE, RAIN -> R.drawable.card_bg_weather_rain
-        SNOW -> R.drawable.card_bg_weather_snow
-        THUNDER -> R.drawable.card_bg_weather_thunder
-    }
-
     /** The scene's sky (Scenes looks). */
     @DrawableRes
     fun sceneSky(isDay: Boolean): Int = when (this) {

@@ -46,8 +46,17 @@ data class Followed(
     }
 }
 
-/** One side of a game. */
-data class Side(val id: String, val name: String, val abbr: String, val score: String?, val logoUrl: String?, val winner: Boolean)
+/** One side of a game, with the team's colours (ARGB) when the feed gives them. */
+data class Side(
+    val id: String,
+    val name: String,
+    val abbr: String,
+    val score: String?,
+    val logoUrl: String?,
+    val winner: Boolean,
+    val colour: Int? = null,
+    val altColour: Int? = null,
+)
 
 /** A team game, from a schedule or, while live, from the game's summary. */
 data class Game(
@@ -145,6 +154,7 @@ object SportsSource {
         _games.value = games
         _races.value = races
         loadLogos(context)
+        runCatching { loadColours(context) }.onFailure { Log.w(TAG, "team colours failed", it) }
     }
 
     /**
@@ -221,7 +231,11 @@ object SportsSource {
             is String -> s.ifEmpty { null }
             else -> null
         }
-        val logo = team.optJSONArray("logos")?.optJSONObject(0)?.optString("href")?.ifEmpty { null }
+        // The logo made for dark backgrounds, where there is one: it sits on a dark team circle.
+        val logos = team.optJSONArray("logos")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty()
+        fun rel(l: JSONObject) = l.optJSONArray("rel")?.let { r -> (0 until r.length()).map { r.optString(it) } }.orEmpty()
+        val logo = (logos.firstOrNull { rel(it).let { r -> "dark" in r && r.size == 2 } } ?: logos.firstOrNull())
+            ?.optString("href")?.ifEmpty { null }
             ?: team.optString("logo").ifEmpty { null }
         return Side(
             id = team.optString("id"),
@@ -230,8 +244,53 @@ object SportsSource {
             score = score,
             logoUrl = logo,
             winner = o.optBoolean("winner"),
+            colour = colour(team.optString("color")),
+            altColour = colour(team.optString("alternateColor")),
         )
     }
+
+    private fun colour(hex: String): Int? = hex.takeIf { it.length == 6 }?.toLongOrNull(16)?.let { (0xFF000000 or it).toInt() }
+
+    // --- Team colours ---
+
+    /** Colours by "sport/league/team id": the main and the alternate, from the team's own page. */
+    private val colours = ConcurrentHashMap<String, Pair<Int?, Int?>>()
+
+    /** [side]'s colours in [game]: from the feed when it gave them, else looked up earlier; null until known. */
+    fun colours(game: Game, side: Side): Pair<Int?, Int?>? =
+        if (side.colour != null) side.colour to side.altColour else colours["${game.sport}/${game.league}/${side.id}"]
+
+    /**
+     * Fetches the colours of teams the schedules did not give (they name only the followed team's),
+     * once per team, kept in settings.
+     */
+    private fun loadColours(context: Context) {
+        val prefs = Prefs.get(context)
+        if (colours.isEmpty()) {
+            runCatching { JSONObject(prefs.getString(KEY_COLOURS, "{}")!!) }.getOrNull()?.let { saved ->
+                saved.keys().forEach { key ->
+                    val pair = saved.getJSONArray(key)
+                    colours[key] = (if (pair.isNull(0)) null else pair.getInt(0)) to (if (pair.isNull(1)) null else pair.getInt(1))
+                }
+            }
+        }
+        var changed = false
+        _games.value.values.flatten().flatMap { game -> listOf(game.home, game.away).map { game to it } }
+            .filter { (game, side) -> side.colour == null && side.id.isNotEmpty() && !colours.containsKey("${game.sport}/${game.league}/${side.id}") }
+            .distinctBy { (game, side) -> "${game.sport}/${game.league}/${side.id}" }
+            .forEach { (game, side) ->
+                val team = getJson("$BASE/${game.sport}/${game.league}/teams/${side.id}")?.optJSONObject("team") ?: return@forEach
+                colours["${game.sport}/${game.league}/${side.id}"] = colour(team.optString("color")) to colour(team.optString("alternateColor"))
+                changed = true
+            }
+        if (changed) {
+            val saved = JSONObject()
+            colours.forEach { (key, pair) -> saved.put(key, JSONArray().put(pair.first ?: JSONObject.NULL).put(pair.second ?: JSONObject.NULL)) }
+            prefs.edit().putString(KEY_COLOURS, saved.toString()).apply()
+        }
+    }
+
+    private const val KEY_COLOURS = "sports_team_colours"
 
     /** [game] in detail (box score, line-ups, events), for the dashboard; null if the feed did not answer. */
     fun detail(game: Game): GameDetail? =

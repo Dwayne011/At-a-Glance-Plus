@@ -273,6 +273,7 @@ object HealthMetrics {
                         parts = listOf(ChipValues.Part(metric.icon, metric.aodIcon, text)),
                         wide = "${full(metric, total)} today",
                         detail = "${metric.label.lowercase()} today",
+                        stacked = listOf(full(metric, total), "${metric.label.lowercase()} today"),
                     )
                 }
                 else -> {
@@ -284,6 +285,7 @@ object HealthMetrics {
                         parts = listOf(ChipValues.Part(metric.icon, metric.aodIcon, text)),
                         wide = "${full(metric, latest.value, latest.second)} · $`when`",
                         detail = `when`,
+                        stacked = listOf(full(metric, latest.value, latest.second), `when`),
                     )
                 }
             }

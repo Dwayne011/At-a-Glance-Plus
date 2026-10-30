@@ -353,20 +353,45 @@ object LiveCards {
     // --- Sports ---
 
     /**
-     * A followed team's game, scoreboard style: live score and clock, the result for a while
-     * after, the kick-off time (with a countdown) before, or the next fixture.
+     * A followed team's game (Material You sports spec 3.1 and 3.2): each team in its own colours
+     * with its HOME or AWAY tag, scores while live and after, and in the middle the league, the
+     * clock or start time, and a pill: LIVE with its dot, the countdown or "Next game" before, the
+     * result after. The surface is washed with the home team's colour from the left and the away
+     * team's from the right, with a wave while live.
      */
     fun sports(context: Context, aod: Boolean, showing: SportsShowing.Team): SmartspaceTarget {
         val game = showing.game
         val key = showing.instanceKey
         val views = RemoteViews(context.packageName, R.layout.card_sports)
+        val upcoming = showing.phase == SportsPhase.BEFORE || showing.phase == SportsPhase.NEXT
         listOf(
-            Triple(game.home, R.id.sports_home_logo, R.id.sports_home_abbr),
-            Triple(game.away, R.id.sports_away_logo, R.id.sports_away_abbr),
-        ).forEach { (side, logo, abbr) ->
-            val bitmap = SportsSource.logo(side.logoUrl)
-            if (bitmap != null) views.setImageViewBitmap(logo, bitmap) else views.setViewVisibility(logo, View.GONE)
-            views.setTextViewText(abbr, side.abbr)
+            TeamViews(game.home, R.id.sports_home_logo, R.id.sports_home_abbr, R.id.sports_home_circle, R.id.sports_home_ring, R.id.sports_wash_home, R.id.sports_home_side, home = true),
+            TeamViews(game.away, R.id.sports_away_logo, R.id.sports_away_abbr, R.id.sports_away_circle, R.id.sports_away_ring, R.id.sports_wash_away, R.id.sports_away_side, home = false),
+        ).forEach { t ->
+            val bitmap = SportsSource.logo(t.side.logoUrl)
+            if (bitmap != null) views.setImageViewBitmap(t.logo, bitmap) else views.setViewVisibility(t.logo, View.GONE)
+            views.setTextViewText(t.abbr, t.side.abbr)
+            val (main, alt) = SportsSource.colours(game, t.side) ?: (null to null)
+            if (aod) {
+                views.setViewVisibility(t.circle, View.GONE)
+                views.setColorStateList(t.ring, "setImageTintList", ColorStateList.valueOf(Style.AOD_TEXT))
+                views.setInt(t.tag, "setBackgroundResource", R.drawable.aod_outline_r12)
+                views.setTextColor(t.tag, Style.AOD_TEXT)
+            } else {
+                // The team's colour, darkened to sit on the dark card (as the spec's examples are),
+                // with a rim in its second colour.
+                views.setColorStateList(t.circle, "setImageTintList", ColorStateList.valueOf(main?.let { darken(it, TEAM_CIRCLE_SHADE) } ?: NO_TEAM_COLOUR))
+                views.setColorStateList(t.ring, "setImageTintList", ColorStateList.valueOf(alt?.let { it and 0x00FFFFFF or 0x80000000.toInt() } ?: RIM))
+                main?.let { views.setColorStateList(t.wash, "setImageTintList", ColorStateList.valueOf(it)) } ?: views.setViewVisibility(t.wash, View.GONE)
+                val (tag, text) = when {
+                    upcoming && t.home -> R.drawable.tag_home_next to TAG_HOME_NEXT_TEXT
+                    upcoming -> R.drawable.tag_away_next to TAG_AWAY_NEXT_TEXT
+                    t.home -> R.drawable.tag_home_live to TAG_HOME_LIVE_TEXT
+                    else -> R.drawable.tag_away_live to TAG_AWAY_LIVE_TEXT
+                }
+                views.setInt(t.tag, "setBackgroundResource", tag)
+                views.setTextColor(t.tag, text)
+            }
         }
         // The user may hide this team's scores: then the card says the game is on or over, not how.
         val hidden = SportsSource.scoresHidden(context, game.eventId)
@@ -376,28 +401,44 @@ object LiveCards {
                 views.setTextViewText(id, side.score ?: "0")
                 // After the game the loser's score is dimmed.
                 if (showing.phase == SportsPhase.AFTER && !side.winner && (game.home.winner || game.away.winner)) {
-                    views.setTextColor(id, if (aod) Style.AOD_TEXT else DIMMED)
+                    views.setTextColor(id, if (aod) Style.AOD_TEXT else TRAILING)
                 }
             } else {
                 views.setViewVisibility(id, View.GONE)
             }
         }
         views.setTextViewText(R.id.sports_league, game.leagueName)
-        val (status, note) = when (showing.phase) {
-            SportsPhase.LIVE -> game.status to "LIVE"
-            SportsPhase.AFTER -> game.status to if (hidden) "Score hidden" else null
-            SportsPhase.BEFORE -> clock(context, game.start) to countdown(game.start)
+        // The clock reads "1:31 · 3rd" rather than the feed's "1:31 - 3rd".
+        val (status, pill) = when (showing.phase) {
+            SportsPhase.LIVE -> game.status.replace(" - ", " · ") to "LIVE"
+            SportsPhase.AFTER -> game.status.replace(" - ", " · ") to if (hidden) "Score hidden" else "Result"
+            SportsPhase.BEFORE -> day(context, game.start) to countdown(game.start).replaceFirstChar { it.uppercase() }
             SportsPhase.NEXT -> day(context, game.start) to "Next game"
         }
         views.setTextViewText(R.id.sports_status, status)
-        if (note != null) {
-            views.setViewVisibility(R.id.sports_note, View.VISIBLE)
-            views.setTextViewText(R.id.sports_note, note)
-            if (showing.phase == SportsPhase.LIVE) views.setTextColor(R.id.sports_note, if (aod) Style.AOD_TEXT else LIVE_RED)
+        if (upcoming) views.setTextColor(R.id.sports_status, UPCOMING_TIME)
+        views.setViewVisibility(R.id.sports_pill, View.VISIBLE)
+        views.setTextViewText(R.id.sports_note, pill)
+        when (showing.phase) {
+            SportsPhase.LIVE -> if (!aod) views.setViewVisibility(R.id.sports_wave, View.VISIBLE)
+            SportsPhase.AFTER -> {
+                views.setViewVisibility(R.id.sports_dot, View.GONE)
+                views.setInt(R.id.sports_pill, "setBackgroundResource", R.drawable.status_pill_final)
+                views.setTextColor(R.id.sports_note, FINAL_TEXT)
+            }
+            else -> {
+                views.setViewVisibility(R.id.sports_dot, View.GONE)
+                views.setInt(R.id.sports_pill, "setBackgroundResource", R.drawable.status_pill_next)
+                views.setTextColor(R.id.sports_note, NEXT_TEXT)
+                views.setTextViewTextSize(R.id.sports_note, android.util.TypedValue.COMPLEX_UNIT_SP, 11f)
+            }
         }
         if (aod) {
+            views.setViewVisibility(R.id.sports_surface, View.GONE)
+            views.setInt(R.id.sports_pill, "setBackgroundResource", R.drawable.aod_outline_r12)
+            views.setViewVisibility(R.id.sports_dot, View.GONE)
             Style.aodBody(
-                views, R.id.sports_home_abbr, R.id.sports_away_abbr, R.id.sports_home_side, R.id.sports_away_side, R.id.sports_home_score, R.id.sports_away_score,
+                views, R.id.sports_home_abbr, R.id.sports_away_abbr, R.id.sports_home_score, R.id.sports_away_score,
                 R.id.sports_league, R.id.sports_status, R.id.sports_note
             )
         }
@@ -408,34 +449,57 @@ object LiveCards {
         return Style.target(context, targetId(key), views, title, "$status · ${game.leagueName}", R.drawable.ic_nav_flag, tap, if (showing.phase == SportsPhase.LIVE) 1.65f else 1.2f)
     }
 
-    /** A followed series' session (Formula 1): live order, result, start time or the next session. */
+    /** One team's views on the sports card. */
+    private class TeamViews(val side: com.ataglanceplus.live.Side, val logo: Int, val abbr: Int, val circle: Int, val ring: Int, val wash: Int, val tag: Int, val home: Boolean)
+
+    /** [colour] with its red, green and blue scaled by [by] (0 to 1). */
+    private fun darken(colour: Int, by: Float): Int {
+        fun part(shift: Int) = (((colour shr shift) and 0xFF) * by).toInt().coerceIn(0, 255) shl shift
+        return (0xFF shl 24) or part(16) or part(8) or part(0)
+    }
+
+    /**
+     * A followed series' session, Formula 1 (Material You sports spec 3.3): the circuit in its box,
+     * the Grand Prix, the session, and when (with a countdown before it, LIVE and the order during,
+     * the result after), with Next stepping through the weekend's sessions.
+     */
     fun race(context: Context, aod: Boolean, showing: SportsShowing.Race): SmartspaceTarget {
         val session = showing.session
         val key = showing.instanceKey
         val views = RemoteViews(context.packageName, R.layout.card_race)
+        val grandPrix = session.eventName.replace("Grand Prix", "GP").trim()
         val title = "${session.eventName} · ${session.session}"
         val podium = if (SportsSource.scoresHidden(context, session.eventId)) "" else session.top.mapIndexed { i, name -> "${i + 1} ${name.substringAfter(". ")}" }.joinToString(" · ")
-        // The pill is the Next button, so what the session is doing leads the detail line.
-        val detail: CharSequence = when (showing.phase) {
-            SportsPhase.LIVE -> android.text.SpannableString("LIVE · " + podium.ifEmpty { session.status }).apply {
-                if (!aod) setSpan(android.text.style.ForegroundColorSpan(LIVE_RED), 0, 4, 0)
-            }
-            SportsPhase.AFTER -> "Result · " + podium.ifEmpty { session.status }
-            SportsPhase.BEFORE -> "${clock(context, session.start)} · ${countdown(session.start)}"
-            SportsPhase.NEXT -> day(context, session.start)
+        views.setTextViewText(R.id.race_title, grandPrix)
+        views.setTextViewText(R.id.race_session, sessionName(session.session))
+        val (detail, pill) = when (showing.phase) {
+            SportsPhase.LIVE -> podium.ifEmpty { session.status } to "LIVE"
+            SportsPhase.AFTER -> ("Result · " + podium.ifEmpty { session.status }) to null
+            SportsPhase.BEFORE -> day(context, session.start) to countdown(session.start).replaceFirstChar { it.uppercase() }
+            SportsPhase.NEXT -> "${day(context, session.start)} · Next session" to countdown(session.start).replaceFirstChar { it.uppercase() }
         }
-        views.setTextViewText(R.id.race_title, title)
         views.setTextViewText(R.id.race_detail, detail)
+        if (pill != null) {
+            views.setViewVisibility(R.id.race_countdown, View.VISIBLE)
+            views.setTextViewText(R.id.race_countdown, pill)
+            if (showing.phase == SportsPhase.LIVE) {
+                views.setInt(R.id.race_countdown, "setBackgroundResource", R.drawable.f1_live_pill)
+                views.setTextColor(R.id.race_countdown, LIVE_RED)
+            }
+        }
         if (showing.sessions.size > 1) {
-            views.setTextViewText(R.id.race_badge_text, if (showing.lastStep) "Back ›" else "Next ›")
+            views.setTextViewText(R.id.race_badge_text, if (showing.lastStep) "‹ Back" else "Next ›")
             views.setOnClickPendingIntent(R.id.race_next, CardActionReceiver.sportsStep(context, session.eventId))
         } else {
             views.setViewVisibility(R.id.race_next, View.GONE)
         }
         if (aod) {
-            Style.aodBody(views, R.id.race_title, R.id.race_detail, R.id.race_badge_text)
+            Style.aodBody(views, R.id.race_title, R.id.race_session, R.id.race_detail, R.id.race_badge_text, R.id.race_countdown)
             views.setInt(R.id.race_badge, "setBackgroundResource", R.drawable.aod_outline_r12)
             views.setInt(R.id.race_badge_text, "setBackgroundResource", R.drawable.aod_outline_r14)
+            views.setInt(R.id.race_countdown, "setBackgroundResource", R.drawable.aod_outline_r12)
+            views.setViewVisibility(R.id.race_mark_top, View.GONE)
+            views.setViewVisibility(R.id.race_mark_bottom, View.GONE)
             views.setImageViewResource(R.id.race_icon, R.drawable.ic_nav_flag_aod)
         }
         // The circuit's outline in place of the flag, when it is one we have.
@@ -443,7 +507,19 @@ object LiveCards {
         val tap = gameTap(context, "F1 ${session.eventName} ${session.session}", session.link, key, com.ataglanceplus.ui.DashboardActivity.KIND_RACE_PREFIX + session.eventId)
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
-        return Style.target(context, targetId(key), views, title, detail.toString(), R.drawable.ic_nav_flag, tap, if (showing.phase == SportsPhase.LIVE) 1.65f else 1.2f)
+        return Style.target(context, targetId(key), views, title, "$grandPrix · $detail", R.drawable.ic_nav_flag, tap, if (showing.phase == SportsPhase.LIVE) 1.65f else 1.2f)
+    }
+
+    /** "Practice 1 · FP1", "Qualifying", "Sprint", "Race": the session's name with ESPN's short code. */
+    private fun sessionName(code: String): String = when (code.uppercase()) {
+        "FP1" -> "Practice 1 · FP1"
+        "FP2" -> "Practice 2 · FP2"
+        "FP3" -> "Practice 3 · FP3"
+        "QUAL", "Q" -> "Qualifying"
+        "SQ", "SPRINT QUAL", "SS" -> "Sprint qualifying"
+        "SPRINT", "SR" -> "Sprint"
+        "RACE", "R" -> "Race"
+        else -> code
     }
 
     /**
@@ -729,8 +805,19 @@ object LiveCards {
     private const val NAV_GREEN = 0xFF6EE7B7.toInt()
     private const val UP = 0xFF34D399.toInt()
     private const val LIVE_RED = 0xFFF87171.toInt()
-    private const val DIMMED = 0x99FFFFFF.toInt()
     private const val DOWN = 0xFFF87171.toInt()
+    // Sports spec 3.1 and 3.2.
+    private const val TEAM_CIRCLE_SHADE = 0.6f
+    private const val NO_TEAM_COLOUR = 0xFF2A3140.toInt()
+    private const val RIM = 0x4DFFFFFF
+    private const val TRAILING = 0xFFE2E2E6.toInt()
+    private const val UPCOMING_TIME = 0xFFE2E2E6.toInt()
+    private const val NEXT_TEXT = 0xFF7FCFFF.toInt()
+    private const val FINAL_TEXT = 0xFFC4C6D0.toInt()
+    private const val TAG_HOME_LIVE_TEXT = 0xFF410002.toInt()
+    private const val TAG_AWAY_LIVE_TEXT = 0xFF1B1C1E.toInt()
+    private const val TAG_HOME_NEXT_TEXT = 0xFF101E42.toInt()
+    private const val TAG_AWAY_NEXT_TEXT = 0xFF3F0D0C.toInt()
     private const val MAX_STOCKS = 6
     private const val ALARM_WINDOW_MS = 12 * 60 * 60 * 1000L
 }

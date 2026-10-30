@@ -45,3 +45,19 @@ Every card except weather appears only while it has something real to show.
 
 Card text and layout read notification contents as each app posts them, so wording can differ
 between apps (for example the split between a distance and an instruction on navigation).
+
+## Material You weather, chips and sports spec (0.13.0)
+
+| Spec | As built | Why |
+|---|---|---|
+| Forecast hours 32dp wide with 30 x 15dp time pills | 34dp hours with 32 x 15dp pills, 3dp inside | "02:00" touched the 30dp pill's edges |
+| Right column 74dp | 78dp | The spec's stacked chip is 78dp wide |
+| Right column pills in navy (#1E2D42) | Each chip in its own tonal palette | Chosen: tonal chips everywhere |
+| Missed calls and texts: light or dark variant | Dark variants | Chosen |
+| Weather steps pill: mint-teal fill (1.2) | Dark green with a 2dp white progress line (2.2) | Chosen |
+| eToro standard: "+$412 · +6.3%" | "+6.3%" when the whole does not fit one slot | 13 characters cannot fit an 84dp pill legibly |
+| eToro in a fall | The spec has no loss colours: the chip uses a red tonal palette (#4A2626 fill) | So a fall does not show in green |
+| Sports team circles: team colours (Hawks red, Cavaliers wine) | Each team's ESPN colour darkened to 60%, rim in its second colour, the logo made for dark backgrounds | The spec's examples are darkened team colours; ESPN's "on primary colour" logos are 4096px files, too heavy for a card |
+| Sports background: fixed team-tinted gradients | The arena slate washed with each team's real colour | Chosen: real team colours |
+| F1 card: always "Next ›" | "‹ Back" on the last session | Next steps through the weekend and back |
+| Standard look: the spec's surface | Same, drawn behind the content with its wave; the scenes are the same surface tinted for the weather | The Standard look follows the spec; Scenes and Animated redrawn to match |

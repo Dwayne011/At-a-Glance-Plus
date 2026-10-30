@@ -148,8 +148,9 @@ class ComplicationEngine(private val context: Context) {
     }
 
     /**
-     * Profit/loss on open positions and copies, amount and percent: "+$412 +6.3%"; extended,
-     * with the portfolio's value. The icon trends up (green) or down (red).
+     * Profit/loss on open positions and copies, amount and percent: "+$412 · +6.3%"; extended,
+     * with the portfolio's value, stacked as three lines (chips spec 2.2). The icon trends up, or
+     * down with the chip in its red tones.
      */
     private fun etoroValue(p: com.ataglanceplus.live.EtoroSource.Portfolio): ChipValues.Value {
         val up = p.pnl >= 0
@@ -158,13 +159,16 @@ class ComplicationEngine(private val context: Context) {
         val icon = ChipValues.Part(
             if (up) com.ataglanceplus.R.drawable.ic_comp_trend_up else com.ataglanceplus.R.drawable.ic_comp_trend_down,
             if (up) com.ataglanceplus.R.drawable.ic_comp_trend_up_aod else com.ataglanceplus.R.drawable.ic_comp_trend_down_aod,
-            "$amount $percent",
+            "$amount · $percent",
         )
         return ChipValues.Value(
-            text = "$amount $percent",
+            text = "$amount · $percent",
             parts = listOf(icon),
             wide = "$amount · $percent · ${SimpleSources.money(p.equity)}",
             detail = "Value ${SimpleSources.money(p.equity)}",
+            stacked = listOf(amount, percent, SimpleSources.money(p.equity)),
+            down = !up,
+            compact = percent,
         )
     }
 

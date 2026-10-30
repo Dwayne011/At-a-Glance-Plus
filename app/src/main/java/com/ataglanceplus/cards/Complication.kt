@@ -43,7 +43,7 @@ enum class Complication(
     BUDS("buds", "Bluetooth battery", "100%", R.drawable.ic_comp_bluetooth, R.drawable.ic_comp_bluetooth_aod, canGrow = true),
     COUNTDOWN("count", "Date countdown", "12d", R.drawable.ic_comp_countdown, R.drawable.ic_comp_countdown_aod, canGrow = true),
     HEALTH("health", "Health metric", "72", R.drawable.ic_comp_heart, R.drawable.ic_comp_heart_aod, needsArg = true, canGrow = true),
-    ETORO("etoro", "eToro portfolio", "+$412 +6.3%", R.drawable.ic_comp_trend, R.drawable.ic_comp_trend_aod, canGrow = true),
+    ETORO("etoro", "eToro portfolio", "+$412 · +6.3%", R.drawable.ic_comp_trend, R.drawable.ic_comp_trend_aod, canGrow = true),
     APP_NOTIFICATIONS("notif", "App notifications", "5", R.drawable.ic_comp_bell, R.drawable.ic_comp_bell_aod, needsArg = true),
     RAIL_TICKET("ticket", "Rail ticket", "Ticket", R.drawable.ic_comp_ticket, R.drawable.ic_comp_ticket_aod, pickable = false);
 
@@ -182,10 +182,13 @@ fun gmailAccount(context: Context, account: String): Intent? {
 enum class ComplicationLayout { RIGHT, BOTTOM, NONE }
 
 /**
- * The weather card's arrangement (A+C hybrid spec): 3-hour columns + 2 stacked chips, a compact
- * 3-hour row over 2 wide chips, a 2-hour box + 2 x 2 chip grid, or no chips (forecast only).
+ * The weather card's arrangement: Material You (weather spec 1, the default: chips under the
+ * temperature, 3 or 4 hours, and a right column only when needed), or one of the A+C hybrid
+ * spec's: 3-hour columns + 2 stacked chips, a compact 3-hour row over 2 wide chips, a 2-hour box +
+ * 2 x 2 chip grid, or no chips (forecast only).
  */
 enum class WeatherLayout(val label: String) {
+    MATERIAL("Material You"),
     COLUMNS("Columns"),
     SPLIT("Split"),
     GRID("Grid"),
@@ -228,9 +231,10 @@ object Chips {
         val zoneWDp: Int? = null,
         val zoneHDp: Int = 24,
         val pillHDp: Int = 24,
-        @DrawableRes val background: Int = R.drawable.chip_selector_hybrid,
         /** Widest a wide pill may grow where the zone fits the pill. */
         val wideCapDp: Int = 0,
+        /** A stacked 2-slot pill's height, when set rather than following from the zone. */
+        val stackPillHDp: Int? = null,
     ) {
         /** The pill's natural width for [text] with its icon, in dp. */
         fun widthDp(context: Context, text: String): Float = 2 * padDp + iconDp + 4 + textWidthDp(context, text, textSp).coerceAtMost(maxTextDp.toFloat())
@@ -238,7 +242,7 @@ object Chips {
         /** A 2-slot chip's zone: twice as wide across a row, twice as tall in a stack. */
         val bigZoneWDp: Int? get() = if (stack) zoneWDp else zoneWDp?.let { 2 * it + gapDp }
         val bigZoneHDp: Int get() = if (stack) 2 * zoneHDp else zoneHDp
-        val bigPillHDp: Int get() = if (stack) 2 * zoneHDp - (zoneHDp - pillHDp) else pillHDp
+        val bigPillHDp: Int get() = if (stack) stackPillHDp ?: (2 * zoneHDp - (zoneHDp - pillHDp)) else pillHDp
 
         /** Room inside a 2-slot pill, in dp. */
         val bigInnerDp: Int get() = (bigZoneWDp ?: wideCapDp) - 2 * padDp
@@ -254,17 +258,28 @@ object Chips {
         }
     }
 
+    // Chips spec 2.1: a standard pill is 26dp tall with a 15dp icon, 9dp in from its ends.
     val DEFAULT_RIGHT = ChipStyle(
-        R.layout.include_complication_chip, 12.5f, 16, 8, 84, 44,
-        gapDp = 0, stack = true, zoneWDp = 84, zoneHDp = 38, background = R.drawable.chip_selector_normal,
+        R.layout.include_complication_chip, 12.5f, 15, 9, 84, 44,
+        gapDp = 0, stack = true, zoneWDp = 84, zoneHDp = 38, pillHDp = 26,
     )
     val DEFAULT_STRIP = ChipStyle(
-        R.layout.include_complication_chip_strip, 12.5f, 16, 8, 80, 44,
-        zoneHDp = 34, background = R.drawable.chip_selector_normal, wideCapDp = 2 * 80 + 6,
+        R.layout.include_complication_chip_strip, 12.5f, 15, 9, 84, 44,
+        zoneHDp = 34, pillHDp = 26, wideCapDp = 176,
     )
     val ANCHOR = ChipStyle(
         R.layout.include_chip_anchor, 11.5f, 13, 8, null, 56,
-        zoneHDp = 22, pillHDp = 22, background = R.drawable.chip_selector_anchor, wideCapDp = 200,
+        zoneHDp = 22, pillHDp = 22, wideCapDp = 200,
+    )
+    /** The Material You weather card's strip under the temperature (weather spec 1.2). */
+    val BOTTOM = ChipStyle(
+        R.layout.include_chip_bottom, 12f, 14, 8, null, 64,
+        zoneHDp = 26, pillHDp = 24, wideCapDp = 132,
+    )
+    /** Its right column (weather spec 1.4): 2 pills, or one stacked over both (78 x 54dp, chips spec 2.1). */
+    val RIGHT_COLUMN = ChipStyle(
+        R.layout.include_chip_rightcol, 12.5f, 14, 8, 78, 50,
+        gapDp = 0, stack = true, zoneWDp = 78, zoneHDp = 32, pillHDp = 26, stackPillHDp = 54,
     )
     val COLUMN = ChipStyle(R.layout.include_chip_column, 12f, 14, 6, 72, 56, gapDp = 0, stack = true, zoneWDp = 72, zoneHDp = 30)
     val WIDE = ChipStyle(R.layout.include_chip_wide, 12f, 14, 6, 84, 56, zoneWDp = 84)
@@ -396,38 +411,43 @@ object Chips {
     }
 
     private fun normalChip(context: Context, style: ChipStyle, spec: ChipSpec, value: ChipValues.Value, aod: Boolean, roomDp: Float? = null): RemoteViews {
-        val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
         val child = RemoteViews(context.packageName, style.layout)
         if (value.parts.size > 1) {
             // Several values (Bluetooth devices): take turns inside the pill.
+            val tone = ChipTones.of(spec, value)
             child.setViewVisibility(R.id.chip_icon, View.GONE)
             child.setViewVisibility(R.id.chip_text, View.GONE)
             val flipper = RemoteViews(context.packageName, R.layout.include_chip_flipper_inner)
-            value.parts.forEach { part -> flipper.addView(R.id.chip_flipper_inner, partView(context, part, aod)) }
+            value.parts.forEach { part -> flipper.addView(R.id.chip_flipper_inner, partView(context, part, aod, tone = tone)) }
             child.addView(R.id.chip_pill, flipper)
             child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + value.parts.joinToString(", ") { it.text })
-            if (aod) child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
+            child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else tone.pill)
         } else {
-            child.setTextViewText(R.id.chip_text, value.text)
+            // A shorter form, when there is one, rather than shrinking the text past reading.
+            val room = (roomDp ?: style.maxPillDp?.toFloat())?.let { it - 2 * style.padDp - style.iconDp - 4 } ?: Float.MAX_VALUE
+            val text = value.compact?.takeIf { textWidthDp(context, value.text, style.textSp) > minOf(room, style.maxTextDp.toFloat()) } ?: value.text
+            child.setTextViewText(R.id.chip_text, text)
             child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: ${value.text}")
-            look(child, spec, value, aod, textColour)
-            fit(context, child, style, value.text, roomDp)
+            look(child, spec, value, aod)
+            fit(context, child, style, text, roomDp)
         }
         return child
     }
 
     /**
-     * A chip taking 2 slots: wide shows the whole story on one line ("4d · Mon 2 Nov"), or every
-     * Bluetooth device side by side; tall shows the value with a second line under it, or the
-     * devices on two rows.
+     * A chip taking 2 slots (chips spec 2.1). Across: one line with the whole story ("2,047 of
+     * 8,000"), or every Bluetooth device side by side, and a 2dp progress line under it where the
+     * chip has one. Stacked: a rounded card with the value beside the icon and up to two lines
+     * under it, then the progress line; a Bluetooth chip shows the device and its level.
      */
     private fun bigChip(context: Context, style: ChipStyle, spec: ChipSpec, value: ChipValues.Value, aod: Boolean): RemoteViews {
         val dip = android.util.TypedValue.COMPLEX_UNIT_DIP
+        val sp = android.util.TypedValue.COMPLEX_UNIT_SP
         val px = android.util.TypedValue.COMPLEX_UNIT_PX
         val wrap = android.view.ViewGroup.LayoutParams.WRAP_CONTENT.toFloat()
         val match = android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat()
         val tall = style.stack
-        val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
+        val tone = ChipTones.of(spec, value)
         val child = RemoteViews(context.packageName, R.layout.include_chip_big)
 
         val zoneW = style.bigZoneWDp
@@ -435,78 +455,122 @@ object Chips {
         child.setViewLayoutHeight(R.id.chip_zone, style.bigZoneHDp.toFloat(), dip)
         if (!tall && style.gapDp > 0) child.setViewLayoutMargin(R.id.chip_zone, RemoteViews.MARGIN_END, style.gapDp.toFloat(), dip)
         if (zoneW != null) child.setViewLayoutWidth(R.id.chip_pill, match, px)
-        child.setViewLayoutHeight(R.id.chip_pill, style.bigPillHDp.toFloat(), dip)
-        child.setViewPadding(R.id.chip_pill, dp(context, style.padDp), 0, dp(context, style.padDp), 0)
-        child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else if (value.attention) R.drawable.chip_selector_attention else style.background)
-        child.setViewLayoutWidth(R.id.chip_icon, style.iconDp.toFloat(), dip)
-        child.setViewLayoutHeight(R.id.chip_icon, style.iconDp.toFloat(), dip)
-        child.setTextViewTextSize(R.id.chip_text, android.util.TypedValue.COMPLEX_UNIT_SP, style.textSp)
+        // A progress line makes an across pill 2dp taller, where its spot has the room.
+        val progress = value.progress?.takeIf { !aod && (tall || style.bigZoneHDp >= style.bigPillHDp + PROGRESS_EXTRA_DP) }
+        child.setViewLayoutHeight(R.id.chip_pill, (style.bigPillHDp + if (progress != null && !tall) PROGRESS_EXTRA_DP else 0).toFloat(), dip)
+        val pad = if (tall) STACK_PAD_DP else ACROSS_PAD_DP
+        val padV = if (tall) STACK_PAD_V_DP else 0
+        child.setViewPadding(R.id.chip_pill, dp(context, pad), dp(context, padV), dp(context, pad), dp(context, padV))
+        val iconDp = if (tall) STACK_ICON_DP else style.iconDp
+        child.setViewLayoutWidth(R.id.chip_icon, iconDp.toFloat(), dip)
+        child.setViewLayoutHeight(R.id.chip_icon, iconDp.toFloat(), dip)
+        child.setTextViewTextSize(R.id.chip_text, sp, if (tall) STACK_TEXT_SP else style.textSp)
+        if (!tall) child.setViewLayoutMargin(R.id.chip_text, RemoteViews.MARGIN_START, ACROSS_GAP_DP.toFloat(), dip)
+        look(child, spec, value, aod, stacked = tall)
+        val inner = ((if (tall) style.zoneWDp else zoneW) ?: style.wideCapDp) - 2f * pad
+        progress?.let {
+            child.setViewVisibility(R.id.chip_progress, View.VISIBLE)
+            child.setProgressBar(R.id.chip_progress, 1000, (it * 1000).toInt().coerceIn(0, 1000), false)
+        }
 
-        if (value.parts.size > 1) {
+        if (spec.kind == Complication.BUDS && (value.parts.size > 1 || tall)) {
             child.setViewVisibility(R.id.chip_icon, View.GONE)
             child.setViewVisibility(R.id.chip_text, View.GONE)
-            // Devices fill one row (wide) or two (tall) while they fit; any more are left off.
-            val rows = List(if (tall) 2 else 1) { mutableListOf<ChipValues.Part>() }
-            val inner = style.bigInnerDp.toFloat()
-            var row = 0
-            var used = 0f
-            for (part in value.parts) {
-                val width = 16 + 4 + textWidthDp(context, part.named, 12.5f) + if (rows[row].isEmpty()) 0 else PART_GAP_DP
-                if (rows[row].isNotEmpty() && used + width > inner) {
-                    if (row + 1 >= rows.size) break
-                    row++
-                    used = 0f
-                }
-                rows[row] += part
-                used += if (rows[row].size == 1) 16 + 4 + textWidthDp(context, part.named, 12.5f) else width
-            }
-            rows[0].forEachIndexed { i, part -> child.addView(R.id.chip_row, partView(context, part, aod, gap = i > 0, named = true)) }
-            if (rows.size > 1 && rows[1].isNotEmpty()) {
+            if (tall && value.parts.size == 1) {
+                // One device: its name beside its icon, then its level beside a battery.
+                val part = value.parts.first()
+                val name = part.name ?: part.text
+                child.addView(R.id.chip_row, partView(context, part.copy(text = name, name = null), aod, tone = tone, roomDp = inner - 16 - 4))
                 child.setViewVisibility(R.id.chip_row2, View.VISIBLE)
-                rows[1].forEachIndexed { i, part -> child.addView(R.id.chip_row2, partView(context, part, aod, gap = i > 0, named = true)) }
+                child.addView(R.id.chip_row2, partView(context, ChipValues.Part(R.drawable.ic_comp_battery, R.drawable.ic_comp_battery_aod, part.text), aod, tone = tone))
+            } else if (tall) {
+                // Two devices: each with its level, one per row. Names do not fit; any more are left off.
+                value.parts.take(2).forEachIndexed { i, part ->
+                    if (i == 1) child.setViewVisibility(R.id.chip_row2, View.VISIBLE)
+                    child.addView(if (i == 0) R.id.chip_row else R.id.chip_row2, partView(context, part, aod, tone = tone))
+                }
+            } else {
+                // Across: devices side by side while they fit; any more are left off.
+                var used = 0f
+                for ((i, part) in value.parts.withIndex()) {
+                    val width = 16 + 4 + textWidthDp(context, part.named, 12.5f) + if (i > 0) PART_GAP_DP else 0
+                    if (i > 0 && used + width > inner) break
+                    used += width
+                    child.addView(R.id.chip_row, partView(context, part, aod, gap = i > 0, named = true, tone = tone))
+                }
             }
-            child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + value.parts.joinToString(", ") { it.text })
+            child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + value.parts.joinToString(", ") { it.named })
             return child
         }
 
-        val text = if (tall) value.text else value.wide ?: value.text
-        child.setTextViewText(R.id.chip_text, text)
-        look(child, spec, value, aod, textColour)
-        // Shrink to fit the 2-slot pill (to 9sp at least); anything longer ends in "…".
-        val inner = style.bigInnerDp.toFloat()
-        shrink(context, child, R.id.chip_text, text, style.textSp, inner - style.iconDp - 4, 9f)
-        val detail = value.detail?.takeIf { tall }
-        if (detail != null) {
-            child.setViewVisibility(R.id.chip_detail, View.VISIBLE)
-            child.setTextViewText(R.id.chip_detail, detail)
-            if (aod) child.setTextColor(R.id.chip_detail, Style.AOD_TEXT)
-            shrink(context, child, R.id.chip_detail, detail, 10.5f, inner, 8f)
+        if (!tall) {
+            val text = value.wide ?: value.text
+            child.setTextViewText(R.id.chip_text, text)
+            // Shrink to fit the 2-slot pill (to 9sp at least); anything longer ends in "…" inside it.
+            shrink(context, child, R.id.chip_text, text, style.textSp, inner - iconDp - ACROSS_GAP_DP, 9f)
+            child.setInt(R.id.chip_text, "setMaxWidth", dp(context, (inner - iconDp - ACROSS_GAP_DP).toInt()))
+            child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: $text")
+            return child
         }
-        child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + listOfNotNull(text, detail).joinToString(", "))
+
+        val lines = value.lines
+        val secondary = if (aod) Style.AOD_TEXT else tone.secondary
+        val primary = if (aod) Style.AOD_TEXT else tone.text
+        if (spec.kind == Complication.SUNSET) {
+            // Both sun times, the same size, with no icon: "Sunset 16:38" over "Sunrise 07:05".
+            child.setViewVisibility(R.id.chip_icon, View.GONE)
+            child.setViewLayoutMargin(R.id.chip_text, RemoteViews.MARGIN_START, 0f, dip)
+            child.setTextViewTextSize(R.id.chip_text, sp, SUN_SP)
+            child.setTextViewText(R.id.chip_text, value.wide?.substringBefore(" · ") ?: lines.first())
+            shrink(context, child, R.id.chip_text, value.wide?.substringBefore(" · ") ?: lines.first(), SUN_SP, inner, 8f)
+            child.setInt(R.id.chip_text, "setMaxWidth", dp(context, inner.toInt()))
+            lines.getOrNull(1)?.let { line(context, child, R.id.chip_detail, it, SUN_SP, secondary, inner) }
+        } else {
+            child.setTextViewText(R.id.chip_text, lines.first())
+            shrink(context, child, R.id.chip_text, lines.first(), STACK_TEXT_SP, inner - iconDp - 4, 9f)
+            child.setInt(R.id.chip_text, "setMaxWidth", dp(context, (inner - iconDp - 4).toInt()))
+            lines.getOrNull(1)?.let { line(context, child, R.id.chip_detail, it, STACK_LINE_SP, secondary, inner) }
+            lines.getOrNull(2)?.let {
+                // eToro's third line is the portfolio's value, larger and white; others match line 2.
+                if (spec.kind == Complication.ETORO) line(context, child, R.id.chip_detail2, it, 12f, primary, inner)
+                else line(context, child, R.id.chip_detail2, it, STACK_LINE_SP, secondary, inner)
+            }
+        }
+        child.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + lines.joinToString(", "))
         return child
     }
 
-    /** The chip's icon and colours: always-on, needing attention, the app's own icon, or plain. */
-    private fun look(child: RemoteViews, spec: ChipSpec, value: ChipValues.Value, aod: Boolean, textColour: Int) {
+    /** Shows one of a stacked chip's lines. */
+    private fun line(context: Context, chip: RemoteViews, id: Int, text: String, sp: Float, colour: Int, roomDp: Float) {
+        chip.setViewVisibility(id, View.VISIBLE)
+        chip.setInt(id, "setMaxWidth", dp(context, roomDp.toInt()))
+        chip.setTextViewText(id, text)
+        chip.setTextViewTextSize(id, android.util.TypedValue.COMPLEX_UNIT_SP, sp)
+        chip.setTextColor(id, colour)
+        shrink(context, chip, id, text, sp, roomDp, 8f)
+    }
+
+    /**
+     * The chip's background, icon and colours (chips spec 2.2 and 2.3): its tonal palette, as a
+     * pill or, [stacked], a rounded card; on the always-on display, an outline in grey.
+     */
+    private fun look(child: RemoteViews, spec: ChipSpec, value: ChipValues.Value, aod: Boolean, stacked: Boolean = false) {
         val icon = value.parts.singleOrNull()?.let { if (aod) it.aodIcon else it.icon }
-        when {
-            aod -> {
-                child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
-                child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.aodIcon)
-                child.setTextColor(R.id.chip_text, Style.AOD_TEXT)
-            }
-            value.attention -> {
-                child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_selector_attention)
-                child.setImageViewResource(R.id.chip_icon, spec.kind.icon)
-                child.setInt(R.id.chip_icon, "setColorFilter", ATTENTION_ICON)
-                child.setTextColor(R.id.chip_text, ATTENTION_TEXT)
-            }
-            else -> child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.icon)
+        val tone = ChipTones.of(spec, value)
+        if (aod) {
+            child.setInt(R.id.chip_pill, "setBackgroundResource", R.drawable.chip_bg_aod)
+            child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.aodIcon)
+            child.setTextColor(R.id.chip_text, Style.AOD_TEXT)
+        } else {
+            child.setInt(R.id.chip_pill, "setBackgroundResource", if (stacked) tone.stack else tone.pill)
+            child.setImageViewResource(R.id.chip_icon, icon ?: spec.kind.icon)
+            child.setInt(R.id.chip_icon, "setColorFilter", tone.icon)
+            child.setTextColor(R.id.chip_text, tone.text)
         }
-        // The app's own status-bar icon, tinted like the chip's text.
-        if (value.appIcon != null && !value.attention) {
+        // The app's own status-bar icon, in the chip's icon colour.
+        if (value.appIcon != null) {
             child.setImageViewIcon(R.id.chip_icon, value.appIcon)
-            child.setInt(R.id.chip_icon, "setColorFilter", textColour)
+            child.setInt(R.id.chip_icon, "setColorFilter", if (aod) Style.AOD_TEXT else tone.icon)
         }
     }
 
@@ -527,7 +591,6 @@ object Chips {
         // is narrower than estimated.
         val width = (rowWidthDp - gap * (placed.size - 1)) / placed.size - TEXT_SPARE_DP
         val inner = width - 2 * style.padDp
-        val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
         placed.forEachIndexed { i, (spec, value, big) ->
             val child = RemoteViews(context.packageName, R.layout.include_chip_big_fill)
             child.setViewLayoutHeight(R.id.chip_zone, style.zoneHDp.toFloat(), dip)
@@ -535,7 +598,8 @@ object Chips {
             child.setViewLayoutWidth(R.id.chip_pill, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), px)
             child.setViewLayoutHeight(R.id.chip_pill, style.pillHDp.toFloat(), dip)
             child.setViewPadding(R.id.chip_pill, dp(context, style.padDp), 0, dp(context, style.padDp), 0)
-            child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else if (value.attention) R.drawable.chip_selector_attention else style.background)
+            val tone = ChipTones.of(spec, value)
+            child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else tone.pill)
             child.setViewLayoutWidth(R.id.chip_icon, style.iconDp.toFloat(), dip)
             child.setViewLayoutHeight(R.id.chip_icon, style.iconDp.toFloat(), dip)
             child.setTextViewTextSize(R.id.chip_text, android.util.TypedValue.COMPLEX_UNIT_SP, style.textSp)
@@ -547,7 +611,7 @@ object Chips {
                     val w = 16 + 4 + textWidthDp(context, part.named, 12.5f) + if (k > 0) PART_GAP_DP else 0
                     if (k > 0 && used + w > inner) return@forEachIndexed
                     used += w
-                    child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0, named = true))
+                    child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0, named = true, tone = tone))
                 }
             } else {
                 val name = label(context, spec)
@@ -557,7 +621,7 @@ object Chips {
                 val named = if (spec.kind == Complication.SUNSET) null else "$name · $story"
                 val text = listOfNotNull(named, story, value.text).firstOrNull { textWidthDp(context, it, style.textSp) <= room } ?: value.text
                 child.setTextViewText(R.id.chip_text, text)
-                look(child, spec, value, aod, textColour)
+                look(child, spec, value, aod)
                 shrink(context, child, R.id.chip_text, text, style.textSp, room, 9f)
             }
             child.setContentDescription(R.id.chip_zone, "${label(context, spec)}: ${value.wide ?: value.text}")
@@ -575,15 +639,14 @@ object Chips {
         val (spec, value, _) = placed
         val dip = android.util.TypedValue.COMPLEX_UNIT_DIP
         val px = android.util.TypedValue.COMPLEX_UNIT_PX
-        val style = DEFAULT_STRIP
-        val textColour = if (aod) Style.AOD_TEXT else CHIP_TEXT
+        val tone = ChipTones.of(spec, value)
         views.setViewVisibility(container, View.VISIBLE)
         val child = RemoteViews(context.packageName, R.layout.include_chip_big_fill)
         child.setViewLayoutHeight(R.id.chip_zone, heightDp, dip)
         child.setViewLayoutWidth(R.id.chip_pill, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), px)
         child.setViewLayoutHeight(R.id.chip_pill, heightDp - 8, dip)
         child.setViewPadding(R.id.chip_pill, dp(context, 16), 0, dp(context, 16), 0)
-        child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else if (value.attention) R.drawable.chip_selector_attention else style.background)
+        child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else tone.pill)
         child.setViewLayoutWidth(R.id.chip_icon, 20f, dip)
         child.setViewLayoutHeight(R.id.chip_icon, 20f, dip)
         val inner = widthDp - 32 - TEXT_SPARE_DP
@@ -603,17 +666,17 @@ object Chips {
                 used += if (rows[row].isEmpty()) 16 + 4 + textWidthDp(context, part.named, 12.5f) else w
                 rows[row] += part
             }
-            rows[0].forEachIndexed { k, part -> child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0, named = true)) }
+            rows[0].forEachIndexed { k, part -> child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0, named = true, tone = tone)) }
             if (rows[1].isNotEmpty()) {
                 child.setViewVisibility(R.id.chip_row2, View.VISIBLE)
-                rows[1].forEachIndexed { k, part -> child.addView(R.id.chip_row2, partView(context, part, aod, gap = k > 0, named = true)) }
+                rows[1].forEachIndexed { k, part -> child.addView(R.id.chip_row2, partView(context, part, aod, gap = k > 0, named = true, tone = tone)) }
             }
         } else {
             val name = label(context, spec)
             val headline = if (spec.kind == Complication.SUNSET) value.text else "$name · ${value.text}"
             child.setTextViewText(R.id.chip_text, headline)
             child.setTextViewTextSize(R.id.chip_text, android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
-            look(child, spec, value, aod, textColour)
+            look(child, spec, value, aod)
             shrink(context, child, R.id.chip_text, headline, 16f, inner - 24, 11f)
             // The second line: the whole story when it says more than the value, else the stacked second line.
             val more = value.wide?.takeIf { it != value.text } ?: value.detail
@@ -621,7 +684,7 @@ object Chips {
                 child.setViewVisibility(R.id.chip_detail, View.VISIBLE)
                 child.setTextViewText(R.id.chip_detail, more)
                 child.setTextViewTextSize(R.id.chip_detail, android.util.TypedValue.COMPLEX_UNIT_SP, 12.5f)
-                if (aod) child.setTextColor(R.id.chip_detail, Style.AOD_TEXT)
+                child.setTextColor(R.id.chip_detail, if (aod) Style.AOD_TEXT else tone.secondary)
                 shrink(context, child, R.id.chip_detail, more, 12.5f, inner, 9f)
             }
         }
@@ -641,11 +704,20 @@ object Chips {
     }
 
     /** One Bluetooth device: its icon and level, and its name where there is room ([named]). */
-    private fun partView(context: Context, part: ChipValues.Part, aod: Boolean, gap: Boolean = false, named: Boolean = false): RemoteViews {
+    private fun partView(context: Context, part: ChipValues.Part, aod: Boolean, gap: Boolean = false, named: Boolean = false, tone: ChipTone? = null, roomDp: Float? = null): RemoteViews {
         val row = RemoteViews(context.packageName, if (named) R.layout.include_chip_part_named else R.layout.include_chip_part)
         row.setImageViewResource(R.id.chip_icon, if (aod) part.aodIcon else part.icon)
         row.setTextViewText(R.id.chip_text, if (named) part.named else part.text)
         if (aod) row.setTextColor(R.id.chip_text, Style.AOD_TEXT)
+        else if (tone != null) {
+            row.setInt(R.id.chip_icon, "setColorFilter", tone.icon)
+            row.setTextColor(R.id.chip_text, tone.text)
+        }
+        // Where room is short (a stacked chip's device name), shrink, then end in "…".
+        roomDp?.let {
+            shrink(context, row, R.id.chip_text, if (named) part.named else part.text, 12.5f, it, 10f)
+            row.setInt(R.id.chip_text, "setMaxWidth", dp(context, it.toInt()))
+        }
         if (gap) row.setViewLayoutMargin(R.id.chip_part, RemoteViews.MARGIN_START, PART_GAP_DP.toFloat(), android.util.TypedValue.COMPLEX_UNIT_DIP)
         return row
     }
@@ -693,7 +765,14 @@ object Chips {
         }
     }
 
-    private const val ATTENTION_ICON = 0xFFFF8A80.toInt()
-    private const val CHIP_TEXT = 0xFFE2E2E6.toInt()
-    private const val ATTENTION_TEXT = 0xFFFFDAD6.toInt()
+    // Chips spec 2.1: two slots across and stacked.
+    private const val ACROSS_PAD_DP = 10
+    private const val ACROSS_GAP_DP = 6
+    private const val PROGRESS_EXTRA_DP = 2
+    private const val STACK_PAD_DP = 8
+    private const val STACK_PAD_V_DP = 6
+    private const val STACK_ICON_DP = 14
+    private const val STACK_TEXT_SP = 13f
+    private const val STACK_LINE_SP = 10f
+    private const val SUN_SP = 11f
 }

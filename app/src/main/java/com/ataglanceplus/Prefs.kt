@@ -19,6 +19,7 @@ object Prefs {
     private const val KEY_CALENDAR_ALL_DAY = "calendar_all_day"
     private const val KEY_COMP_LAYOUT = "comp_layout"
     private const val KEY_WEATHER_LAYOUT = "weather_layout"
+    private const val KEY_MATERIAL_MOVED = "weather_layout_material_moved"
     private const val KEY_WEATHER_LOOK = "weather_look"
     private const val KEY_CHIPS = "chips"
     private const val KEY_DISMISSED = "dismissed_cards"
@@ -108,15 +109,20 @@ object Prefs {
      * The weather card's arrangement. Before it existed there was a Right / Bottom / None
      * choice; that maps to Columns / Split / No chips.
      */
+    /**
+     * The weather card's layout: Material You by default. 0.13.0 moved everyone to it once (from
+     * any layout but "No chips"); after that the choice stands.
+     */
     fun weatherLayout(context: Context): WeatherLayout {
-        get(context).getString(KEY_WEATHER_LAYOUT, null)?.let { raw ->
-            return runCatching { WeatherLayout.valueOf(raw) }.getOrDefault(WeatherLayout.COLUMNS)
+        val prefs = get(context)
+        val stored = prefs.getString(KEY_WEATHER_LAYOUT, null)?.let { raw -> runCatching { WeatherLayout.valueOf(raw) }.getOrNull() }
+            ?: if (prefs.getString(KEY_COMP_LAYOUT, null) == ComplicationLayout.NONE.name) WeatherLayout.NONE else null
+        if (!prefs.getBoolean(KEY_MATERIAL_MOVED, false)) {
+            val layout = if (stored == WeatherLayout.NONE) WeatherLayout.NONE else WeatherLayout.MATERIAL
+            prefs.edit().putBoolean(KEY_MATERIAL_MOVED, true).putString(KEY_WEATHER_LAYOUT, layout.name).apply()
+            return layout
         }
-        return when (get(context).getString(KEY_COMP_LAYOUT, null)) {
-            ComplicationLayout.BOTTOM.name -> WeatherLayout.SPLIT
-            ComplicationLayout.NONE.name -> WeatherLayout.NONE
-            else -> WeatherLayout.COLUMNS
-        }
+        return stored ?: WeatherLayout.MATERIAL
     }
 
     fun setWeatherLayout(context: Context, layout: WeatherLayout) {

@@ -15,8 +15,7 @@
         android:layout_width="wrap_content"
         android:layout_height="24dp"
         android:layout_gravity="center"
-        android:background="@drawable/chip_selector_hybrid"
-        android:duplicateParentState="true"
+                android:duplicateParentState="true"
         android:gravity="center"
         android:orientation="vertical"
         android:paddingStart="8dp"
@@ -54,7 +53,9 @@
             style="@style/AagText.Chip"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="1dp"
+            android:gravity="center"
+            android:lineHeight="12sp"
             android:ellipsize="end"
             android:maxWidth="400dp"
             android:singleLine="true"
@@ -62,7 +63,21 @@
             android:textSize="10.5sp"
             android:visibility="gone" />
 
-        <!-- Tall Bluetooth chip: the devices after the first. -->
+        <!-- Stacked: a third line (the countdown's date, eToro's value). -->
+        <TextView
+            android:id="@+id/chip_detail2"
+            style="@style/AagText.Chip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:lineHeight="14sp"
+            android:ellipsize="end"
+            android:maxWidth="400dp"
+            android:singleLine="true"
+            android:textSize="10sp"
+            android:visibility="gone" />
+
+        <!-- Stacked Bluetooth chip: the level, or the second device. -->
         <LinearLayout
             android:id="@+id/chip_row2"
             android:layout_width="wrap_content"
@@ -70,6 +85,19 @@
             android:layout_marginTop="3dp"
             android:gravity="center"
             android:orientation="horizontal"
+            android:visibility="gone" />
+
+        <!-- How far along (steps toward the goal): a 2dp line across the pill, inside its padding. -->
+        <ProgressBar
+            android:id="@+id/chip_progress"
+            style="@android:style/Widget.Material.ProgressBar.Horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:layout_marginTop="3dp"
+            android:max="1000"
+            android:minHeight="2dp"
+            android:maxHeight="2dp"
+            android:progressDrawable="@drawable/chip_progress"
             android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>

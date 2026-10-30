@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Generates the weather card's scene backgrounds (the "Scenes" looks).
+"""Generates the weather card's surfaces: the Standard look and the scenes (the "Scenes" looks).
 
-Each scene is a sky for the conditions and time of day (with soft hills and a darker left side so
-the white text stays readable), plus weather layers on top: sun glow, stars, light or heavy
-clouds, fog, rain, snow and lightning. Every layer comes as a still vector (the Scenes look) and
+Drawn in the Material You weather spec's style (section 1.1): a deep tonal gradient at 95% from the
+top left to the bottom right, with an organic wave rising in the bottom right corner behind the
+chip column. Standard is the spec's own slate-navy surface and sky-blue wave; each scene tints the
+gradient and wave for the conditions and time of day. Weather layers go on top: sun glow, stars,
+light or heavy clouds, fog, rain, snow and lightning, kept clear of the temperature and date on
+the left (the left 190 of 420). Every layer comes as a still vector (the Scenes look) and
 an animated vector (Animated scenes): clouds and fog drift, rain and snow fall, stars twinkle, the
 sun glows and lightning flashes now and then. Falling layers repeat with the same step they move
 by, so the loop has no seam. All drawn for the 420 x 76dp card; the card stretches them to fit.
 Run from the repository root; the output is committed.
 """
+import math
 import os
 import random
 
@@ -16,33 +20,41 @@ OUT = "app/src/main/res/drawable"
 W, H = 420, 76
 HDR = '<?xml version="1.0" encoding="utf-8"?>\n'
 
-# Sky, top to bottom, by conditions and day/night.
+# Sky by conditions and day/night: the gradient's three stops (top left, middle, bottom right)
+# and the wave's tint, all deep Material You tones.
 SKIES = {
-    ("clear", "day"): ("#FF1E4F8C", "#FF3D74B3"),
-    ("clear", "night"): ("#FF0A1028", "#FF1A2550"),
-    ("partly", "day"): ("#FF2A5A92", "#FF4E7FB4"),
-    ("partly", "night"): ("#FF0E1530", "#FF222C4E"),
-    ("cloudy", "day"): ("#FF3B4352", "#FF5A6372"),
-    ("cloudy", "night"): ("#FF1C2230", "#FF2C3342"),
-    ("fog", "day"): ("#FF4A515D", "#FF6A717C"),
-    ("fog", "night"): ("#FF22262E", "#FF353A44"),
-    ("rain", "day"): ("#FF2A3340", "#FF404A58"),
-    ("rain", "night"): ("#FF141A24", "#FF232B38"),
-    ("snow", "day"): ("#FF3E4C62", "#FF66758C"),
-    ("snow", "night"): ("#FF1A2232", "#FF2E384A"),
-    ("thunder", "day"): ("#FF262338", "#FF3C3652"),
-    ("thunder", "night"): ("#FF14121F", "#FF262238"),
+    ("clear", "day"): ("#F21B3A63", "#F2163052", "#F2102440", "#1FFFD54F"),
+    ("clear", "night"): ("#F2161D36", "#F2111729", "#F20B101E", "#1FD0E1FD"),
+    ("partly", "day"): ("#F21E3554", "#F2182C47", "#F2122236", "#1F64B5F6"),
+    ("partly", "night"): ("#F21A2033", "#F2141A2A", "#F20E131F", "#1F8AB4F8"),
+    ("cloudy", "day"): ("#F2283240", "#F2212934", "#F21A2029", "#1FCFD8DC"),
+    ("cloudy", "night"): ("#F21D2330", "#F2181D28", "#F212161F", "#1FB7C0CC"),
+    ("fog", "day"): ("#F22C343D", "#F2252C34", "#F21E242B", "#1FCFD8DC"),
+    ("fog", "night"): ("#F21F242B", "#F21A1E25", "#F214181E", "#1FB7C0CC"),
+    ("rain", "day"): ("#F21E2A3B", "#F2192331", "#F2131B27", "#1F64B5F6"),
+    ("rain", "night"): ("#F2161E2B", "#F2121925", "#F20D131C", "#1F64B5F6"),
+    ("snow", "day"): ("#F2253246", "#F21F2A3B", "#F2192231", "#1FE0F2FE"),
+    ("snow", "night"): ("#F21B2333", "#F2161D2B", "#F2111722", "#1FE0F2FE"),
+    ("thunder", "day"): ("#F2221F36", "#F21C1A2E", "#F2161424", "#1FB39DDB"),
+    ("thunder", "night"): ("#F219172A", "#F2151323", "#F2100E1B", "#1FB39DDB"),
 }
 
-FAR_HILLS = "M0,62 C40,54 80,56 120,60 C170,65 210,52 260,55 C310,58 350,50 420,57 L420,76 L0,76 Z"
-NEAR_HILLS = "M0,70 C50,63 100,66 150,69 C200,72 250,62 300,65 C350,68 390,64 420,66 L420,76 L0,76 Z"
+# The Standard look: the spec's surface exactly (weather spec 1.1).
+STANDARD = ("#F21E293B", "#F2172030", "#F20F172A", "#1F64B5F6")
+
+# The organic wave (weather spec 1.1): about 110 x 68 in the bottom right, behind the chip column.
+WAVE = "M300,76 C318,74 326,60 344,52 C364,43 380,46 396,34 C408,25 414,16 420,8 L420,76 Z"
+
+# Weather stays right of this, clear of the temperature and date.
+LEFT_CLEAR = 190
 
 
-def gradient_fill(x1, y1, x2, y2, start, end):
+def gradient_fill(x1, y1, x2, y2, start, end, center=None):
+    middle = f' android:centerColor="{center}"' if center else ''
     return f'''
         <aapt:attr name="android:fillColor">
             <gradient android:type="linear" android:startX="{x1}" android:startY="{y1}" android:endX="{x2}" android:endY="{y2}"
-                android:startColor="{start}" android:endColor="{end}" />
+                android:startColor="{start}"{middle} android:endColor="{end}" />
         </aapt:attr>'''
 
 
@@ -67,15 +79,12 @@ def vector(body, comment):
 '''
 
 
-def sky(top, bottom):
+def sky(start, center, end, wave):
+    """The 135-degree tonal gradient (top left to bottom right) and the wave in the bottom right."""
     rect = f"M0,0 H{W} V{H} H0 Z"
-    return f'''    <path android:pathData="{rect}">{gradient_fill(0, 0, 0, H, top, bottom)}
+    return f'''    <path android:pathData="{rect}">{gradient_fill(0, 0, W, H, start, end, center)}
     </path>
-    <!-- Darker on the left, behind the temperature and date. -->
-    <path android:pathData="{rect}">{gradient_fill(0, 0, W * 0.5, 0, "#40000000", "#00000000")}
-    </path>
-    <path android:fillColor="#000000" android:fillAlpha="0.16" android:pathData="{FAR_HILLS}" />
-    <path android:fillColor="#000000" android:fillAlpha="0.24" android:pathData="{NEAR_HILLS}" />'''
+    <path android:fillColor="{wave}" android:pathData="{WAVE}" />'''
 
 
 def circle(cx, cy, r):
@@ -91,63 +100,82 @@ def cloud(x, y, s):
     return body + base
 
 
-def bank(y, size, rng_):
-    """A soft bank of cloud across the whole card: overlapping puffs of varied size along a line."""
-    puffs = ""
-    x = -30.0
-    while x < W + 30:
-        r = rng_.uniform(size * 0.7, size * 1.2)
-        puffs += circle(x, y + rng_.uniform(-size * 0.3, size * 0.3), r)
-        x += r * rng_.uniform(0.9, 1.3)
-    # Filled down to the card's bottom, anticlockwise like the puffs.
-    puffs += f"M-30,{y:.1f} V{H + 10} H{W + 30} V{y:.1f} Z"
-    return puffs
-
-
 rng = random.Random(7)  # Fixed, so the output is the same on every run.
 
 # --- Layers: (still body, animated targets) ---
 
 def sun():
-    path = f'''    <path android:name="glow" android:pathData="M0,0 H{W} V{H} H0 Z">{radial_fill(330, 6, 70, "#80FFE8A3", "#00FFE8A3")}
+    path = f'''    <path android:name="glow" android:pathData="M0,0 H{W} V{H} H0 Z">{radial_fill(300, 4, 80, "#80FFD54F", "#00FFD54F")}
     </path>'''
     anim = [("glow", "fillAlpha", 1.0, 0.55, 4000, "reverse")]
     return path, anim
 
 
+def sparkle(x, y, r):
+    """A four-point star: long points up, down and to the sides, pinched in between."""
+    k = r * 0.28
+    return (f"M{x:.1f},{y - r:.1f} L{x + k:.1f},{y - k:.1f} L{x + r:.1f},{y:.1f} L{x + k:.1f},{y + k:.1f} "
+            f"L{x:.1f},{y + r:.1f} L{x - k:.1f},{y + k:.1f} L{x - r:.1f},{y:.1f} L{x - k:.1f},{y - k:.1f} Z")
+
+
 def stars():
-    def group(name, n):
-        dots = "".join(circle(rng.uniform(150, W - 6), rng.uniform(4, 44), rng.uniform(0.6, 1.3)) for _ in range(n))
-        return f'    <path android:name="{name}" android:fillColor="#FFFFFFFF" android:fillAlpha="0.85" android:pathData="{dots}" />'
-    path = group("stars_a", 12) + "\n" + group("stars_b", 10)
-    anim = [("stars_a", "fillAlpha", 0.85, 0.3, 2600, "reverse"), ("stars_b", "fillAlpha", 0.3, 0.85, 3400, "reverse")]
+    """A clear night: a few bright four-point stars and tiny pinpoints in the upper sky, with
+    moonlight in the top right. Unlike snow: sparse, pointed, still, and twinkling in turn."""
+    local = random.Random(23)
+    glow = f'''    <path android:pathData="M0,0 H{W} V{H} H0 Z">{radial_fill(392, 6, 70, "#40D0E1FD", "#00D0E1FD")}
+    </path>'''
+    def points(n, y_max):
+        return [(local.uniform(LEFT_CLEAR + 10, W - 30), local.uniform(5, y_max)) for _ in range(n)]
+    bright_a = "".join(sparkle(x, y, local.uniform(3.2, 4.4)) for x, y in points(3, 34))
+    bright_b = "".join(sparkle(x, y, local.uniform(2.6, 3.4)) for x, y in points(2, 30))
+    tiny_a = "".join(circle(x, y, local.uniform(0.45, 0.7)) for x, y in points(9, 46))
+    tiny_b = "".join(circle(x, y, local.uniform(0.45, 0.7)) for x, y in points(8, 46))
+    path = glow + f'''
+    <path android:name="bright_a" android:fillColor="#FFF4F8FF" android:fillAlpha="0.95" android:pathData="{bright_a}" />
+    <path android:name="bright_b" android:fillColor="#FFD0E1FD" android:fillAlpha="0.6" android:pathData="{bright_b}" />
+    <path android:name="tiny_a" android:fillColor="#FFD0E1FD" android:fillAlpha="0.8" android:pathData="{tiny_a}" />
+    <path android:name="tiny_b" android:fillColor="#FFD0E1FD" android:fillAlpha="0.35" android:pathData="{tiny_b}" />'''
+    anim = [
+        ("bright_a", "fillAlpha", 0.95, 0.45, 2800, "reverse"),
+        ("bright_b", "fillAlpha", 0.6, 1.0, 3600, "reverse"),
+        ("tiny_a", "fillAlpha", 0.8, 0.25, 2200, "reverse"),
+        ("tiny_b", "fillAlpha", 0.35, 0.85, 3100, "reverse"),
+    ]
     return path, anim
 
 
 def clouds(heavy, night):
-    colour = "#FFB7C0CC" if night else "#FFFFFFFF"
+    """Light cloud (two small clouds) or heavy cloud: layered puffy clouds, a fainter row behind
+    and a brighter one in front, each with a lighter top for depth. Nothing is filled straight
+    down, so there is no hard edge; all of it sits right of the text."""
+    colour = "#FFB7C0CC" if night else "#FFCFD8DC"
+    top = "#FFD5DCE6" if night else "#FFF1F4F8"
     if heavy:
-        # Two soft banks, the far one higher and fainter, like an overcast sky.
-        local = random.Random(11)
-        body = f'''        <path android:fillColor="{colour}" android:fillAlpha="0.07" android:pathData="{bank(14, 16, local)}" />
-        <path android:fillColor="{colour}" android:fillAlpha="0.09" android:pathData="{bank(40, 20, local)}" />'''
+        back = [(LEFT_CLEAR + 30, 14, 1.35), (LEFT_CLEAR + 105, 8, 1.6), (LEFT_CLEAR + 185, 12, 1.45)]
+        front = [(LEFT_CLEAR + 62, 24, 1.55), (LEFT_CLEAR + 150, 22, 1.75)]
+        shapes = lambda spots, dy=0: "".join(cloud(x, y + dy, sc) for x, y, sc in spots)
+        body = f'''        <path android:fillColor="{colour}" android:fillAlpha="0.10" android:pathData="{shapes(back)}" />
+        <path android:fillColor="{top}" android:fillAlpha="0.06" android:pathData="{shapes(back, -3)}" />
+        <path android:fillColor="{colour}" android:fillAlpha="0.16" android:pathData="{shapes(front)}" />
+        <path android:fillColor="{top}" android:fillAlpha="0.10" android:pathData="{shapes(front, -3)}" />'''
     else:
-        spots = [(240, 18, 1.1), (372, 30, 0.85)]
-        body = f'''        <path android:fillColor="{colour}" android:fillAlpha="0.16" android:pathData="{"".join(cloud(x, y, s) for x, y, s in spots)}" />'''
+        spots = [(LEFT_CLEAR + 60, 18, 1.1), (LEFT_CLEAR + 180, 30, 0.85)]
+        body = f'''        <path android:fillColor="{colour}" android:fillAlpha="0.16" android:pathData="{"".join(cloud(x, y, sc) for x, y, sc in spots)}" />
+        <path android:fillColor="{top}" android:fillAlpha="0.10" android:pathData="{"".join(cloud(x, y - 2.5, sc) for x, y, sc in spots)}" />'''
     path = f'''    <group android:name="drift">
 {body}
     </group>'''
-    anim = [("drift", "translateX", -18, 18, 8000 if heavy else 7000, "reverse")]
+    anim = [("drift", "translateX", -14, 14, 8000 if heavy else 7000, "reverse")]
     return path, anim
 
 
 def fog():
     bands = "".join(
         f"M{x},{y} h{w} a5,5 0 0 1 0,10 h-{w} a5,5 0 0 1 0,-10 Z"
-        for x, y, w in [(-20, 22, 260), (120, 38, 320), (-10, 54, 240)]
+        for x, y, w in [(LEFT_CLEAR + 10, 22, 220), (LEFT_CLEAR + 60, 38, 240), (LEFT_CLEAR + 20, 54, 230)]
     )
     path = f'''    <group android:name="drift">
-        <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.13" android:pathData="{bands}" />
+        <path android:fillColor="#FFCFD8DC" android:fillAlpha="0.14" android:pathData="{bands}" />
     </group>'''
     anim = [("drift", "translateX", -25, 25, 9000, "reverse")]
     return path, anim
@@ -158,8 +186,8 @@ RAIN_STEP_Y, RAIN_STEP_X = 19, -4
 
 def rain():
     # Rows of streaks every 19 down and 4 left: moving the group by exactly that loops seamlessly.
-    xs = [rng.uniform(0, W) for _ in range(26)]
-    ys = [rng.uniform(0, RAIN_STEP_Y) for _ in range(26)]
+    xs = [rng.uniform(LEFT_CLEAR + 8, W + 10) for _ in range(22)]
+    ys = [rng.uniform(0, RAIN_STEP_Y) for _ in range(22)]
     streaks = ""
     for row in range(-2, H // RAIN_STEP_Y + 2):
         for x, y in zip(xs, ys):
@@ -167,27 +195,55 @@ def rain():
             sy = y + RAIN_STEP_Y * row
             streaks += f"M{sx:.1f},{sy:.1f} l-1.5,6 "
     path = f'''    <group android:name="fall">
-        <path android:strokeColor="#FFCFE0F5" android:strokeAlpha="0.22" android:strokeWidth="1" android:strokeLineCap="round" android:pathData="{streaks}" />
+        <path android:strokeColor="#FFA8C7FA" android:strokeAlpha="0.4" android:strokeWidth="1.2" android:strokeLineCap="round" android:pathData="{streaks}" />
     </group>'''
     anim = [("fall", "translateY", 0, RAIN_STEP_Y, 520, "restart"), ("fall", "translateX", 0, RAIN_STEP_X, 520, "restart")]
     return path, anim
 
 
-SNOW_STEP = 25
+def flake(x, y, r):
+    """A six-armed snowflake: three strokes crossing at its centre."""
+    out = ""
+    for deg in (90, 30, -30):
+        dx, dy = r * math.cos(math.radians(deg)), r * math.sin(math.radians(deg))
+        out += f"M{x - dx:.1f},{y - dy:.1f} L{x + dx:.1f},{y + dy:.1f} "
+    return out
 
 
 def snow():
-    xs = [rng.uniform(0, W) for _ in range(30)]
-    ys = [rng.uniform(0, SNOW_STEP) for _ in range(30)]
-    flakes = ""
-    for row in range(-1, H // SNOW_STEP + 2):
-        for x, y in zip(xs, ys):
-            flakes += circle(x, y + SNOW_STEP * row, 0.9)
-    path = f'''    <group android:name="fall">
-        <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.45" android:pathData="{flakes}" />
+    """Snow: six-armed flakes in front, softer round flakes behind, falling in three layers at
+    different speeds with a slight sway, over a pale bank along the bottom. Each layer repeats
+    every step it falls, so the loop has no seam."""
+    local = random.Random(31)
+    def tile(step, n, draw):
+        xs = [local.uniform(LEFT_CLEAR + 6, W - 4) for _ in range(n)]
+        ys = [local.uniform(0, step) for _ in range(n)]
+        return "".join(draw(x, y + step * row) for row in range(-1, H // step + 2) for x, y in zip(xs, ys))
+    far = tile(SNOW_FAR, 10, lambda x, y: circle(x, y, 0.9))
+    mid = tile(SNOW_MID, 8, lambda x, y: circle(x, y, 1.5))
+    near = tile(SNOW_NEAR, 6, lambda x, y: flake(x, y, 2.6))
+    bank = f"M{LEFT_CLEAR},76 C{LEFT_CLEAR + 40},68 {LEFT_CLEAR + 90},70 {LEFT_CLEAR + 130},71 C180,72 220,66 260,67 C300,68 340,64 380,66 C400,67 412,65 420,64 L420,76 Z"
+    path = f'''    <path android:fillColor="#FFF4F8FF" android:fillAlpha="0.16" android:pathData="{bank}" />
+    <group android:name="far">
+        <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.35" android:pathData="{far}" />
+    </group>
+    <group android:name="mid">
+        <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.55" android:pathData="{mid}" />
+    </group>
+    <group android:name="near">
+        <path android:strokeColor="#FFFFFFFF" android:strokeAlpha="0.7" android:strokeWidth="0.7" android:strokeLineCap="round" android:pathData="{near}" />
     </group>'''
-    anim = [("fall", "translateY", 0, SNOW_STEP, 4200, "restart")]
+    anim = [
+        ("far", "translateY", 0, SNOW_FAR, 6000, "restart"),
+        ("mid", "translateY", 0, SNOW_MID, 4200, "restart"),
+        ("near", "translateY", 0, SNOW_NEAR, 3000, "restart"),
+        ("near", "translateX", -3, 3, 1500, "reverse"),
+        ("mid", "translateX", -2, 2, 2100, "reverse"),
+    ]
     return path, anim
+
+
+SNOW_FAR, SNOW_MID, SNOW_NEAR = 18, 24, 30
 
 
 def bolt():
@@ -271,22 +327,16 @@ def write(name, text):
         f.write(text)
 
 
-for (cond, time), (top, bottom) in SKIES.items():
-    write(f"scene_sky_{cond}_{time}", vector(sky(top, bottom), f"Weather scene sky: {cond}, {time}."))
+for (cond, time), stops in SKIES.items():
+    write(f"scene_sky_{cond}_{time}", vector(sky(*stops), f"Weather scene sky: {cond}, {time}."))
+write("scene_sky_standard", vector(sky(*STANDARD), "The Standard look: the Material You weather surface (weather spec 1.1)."))
 for name, (body, anims) in LAYERS.items():
     write(f"scene_{name}", vector(body, f'Weather scene layer "{name}", still.'))
     write(f"avd_scene_{name}", animated(name, body, anims))
 
 write("card_scene_shape", HDR + '''<!-- The scene's outline: the card's rounded corners, which the scene is clipped to. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#FF1B2538" />
-    <corners android:radius="24dp" />
-</shape>
-''')
-write("card_bg_scene_border", HDR + '''<!-- The card's edge over a scene: no fill, the same hairline as the other looks. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#00000000" />
-    <stroke android:width="1dp" android:color="#24FFFFFF" />
+    <solid android:color="#FF0F172A" />
     <corners android:radius="24dp" />
 </shape>
 ''')

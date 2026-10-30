@@ -40,11 +40,6 @@ def shape(name, *, fill=None, start=None, end=None, stroke=None, stroke_w="1dp",
 # Card backgrounds, spec section 4.1: (start, end, 1dp stroke)
 CARD_BG = {
     "weather_cloudy": ("#F01B2538", "#F0121926", "#24FFFFFF"),
-    "weather_clear_day": ("#F015355C", "#F00F2342", "#29FFFFFF"),
-    "weather_clear_night": ("#F0111626", "#F00A0D18", "#24FFFFFF"),
-    "weather_rain": ("#F2172236", "#F20E1624", "#2E38BDF8"),
-    "weather_snow": ("#F0222E42", "#F0161E2E", "#33E0F2FE"),
-    "weather_thunder": ("#F2241836", "#F2120E1E", "#33FACC15"),
     "weather_needed": ("#F01E222C", "#F014171E", "#33FBBF24"),
     "live": ("#F2102624", "#F20B1A19", "#422DD4BF"),
     "media": ("#F22A1924", "#F21A1017", "#40FDA4AF"),
@@ -58,18 +53,14 @@ CARD_BG = {
 for key, (s, e, st) in CARD_BG.items():
     shape(f"card_bg_{key}", start=s, end=e, stroke=st, radius="24dp", comment=f"Card background: {key} (spec 4.1)")
 
-# Complication chips, spec 7.3
-shape("chip_bg_normal", fill="#24FFFFFF", stroke="#2EFFFFFF", radius="12dp", comment="Chip: normal")
-shape("chip_bg_pressed", fill="#52FFFFFF", stroke="#7AFFFFFF", radius="12dp", comment="Chip: pressed")
-shape("chip_bg_attention", fill="#47FF5252", stroke="#FFFF5252", radius="12dp", comment="Chip: needs attention")
+# Weather spec 1.3: each forecast hour's time in a small pill.
+shape("forecast_hour_pill", fill="#24FFFFFF", stroke="#33FFFFFF", radius="7.5dp", comment="Weather forecast hour pill (weather spec 1.3)", stroke_w="0.8dp")
+# Weather spec 1.1: the card's soft blue edge, drawn over its surface.
+shape("card_bg_material_border", fill="#00000000", stroke="#2993C5FD", radius="24dp", comment="Weather card edge (weather spec 1.1)")
+
+# Complication chips: the always-on outline (chips spec 2.3). The tonal backgrounds come from
+# tools/gen_chip_tones.py.
 shape("chip_bg_aod", fill="#00000000", stroke="#FF5F6368", radius="12dp", comment="Chip: always-on display")
-for state in ("normal", "attention"):
-    write(f"chip_selector_{state}", f"""
-<!-- Chip {state} with the pressed state shown while a finger is down (spec 7.3). -->
-<selector {A}>
-    <item android:drawable="@drawable/chip_bg_pressed" android:state_pressed="true" />
-    <item android:drawable="@drawable/chip_bg_{state}" />
-</selector>""")
 
 # Card parts (spec section 8)
 shape("live_badge_bg", fill="#3814B8A6", stroke="#592DD4BF", radius="12dp", comment="8.2 app badge")
@@ -98,20 +89,6 @@ shape("aod_outline_oval", fill="#00000000", stroke="#FF5F6368", oval=True, comme
 shape("aod_segment_on", fill="#FF9AA0A6", radius="2dp", comment="AOD progress segment, filled")
 shape("aod_segment_off", fill="#FF202124", radius="2dp", comment="AOD progress segment, unfilled")
 
-write("island_progress", f"""
-<!-- 6.1 countdown bar: green to cyan gradient over a transparent track. -->
-<layer-list {A}>
-    <item android:id="@android:id/background">
-        <shape android:shape="rectangle"><solid android:color="#00000000" /></shape>
-    </item>
-    <item android:id="@android:id/progress">
-        <clip>
-            <shape android:shape="rectangle">
-                <gradient android:angle="0" android:startColor="#FF25D366" android:endColor="#FF38BDF8" />
-            </shape>
-        </clip>
-    </item>
-</layer-list>""")
 write("media_track_progress", f"""
 <!-- 8.3 compact 3dp track progress. -->
 <layer-list {A}>
@@ -172,10 +149,10 @@ W = "#FFFFFFFF"
 # Weather (spec prototype SVGs, 28dp)
 WEATHER = {
     "ic_weather_cloudy": [
-        {"d": "M17.5,19H7a5,5 0 0 1-.5,-9.97A7,7 0 0 1 20,10.5a4.5,4.5 0 0 1-2.5,8.5Z", "fill": "#FFB0BEC5", "stroke": "#FFECEFF1", "width": 1.4}],
+        {"d": "M17.5,19H7a5,5 0 0 1-.5,-9.97A7,7 0 0 1 20,10.5a4.5,4.5 0 0 1-2.5,8.5Z", "fill": "#FFCFD8DC", "stroke": "#FFECEFF1", "width": 1.4}],
     "ic_weather_clear_day": [
-        {"d": circle_path(12, 12, 5), "fill": "#FFFBBF24", "stroke": "#FFFDE68A", "width": 1.5},
-        {"d": "M12,2v2M12,20v2M4.93,4.93l1.41,1.41M17.66,17.66l1.41,1.41M2,12h2M20,12h2M6.34,17.66l-1.41,1.41M19.07,4.93l-1.41,1.41", "stroke": "#FFFBBF24", "width": 1.8}],
+        {"d": circle_path(12, 12, 5), "fill": "#FFFFD54F", "stroke": "#FFFDE68A", "width": 1.5},
+        {"d": "M12,2v2M12,20v2M4.93,4.93l1.41,1.41M17.66,17.66l1.41,1.41M2,12h2M20,12h2M6.34,17.66l-1.41,1.41M19.07,4.93l-1.41,1.41", "stroke": "#FFFFD54F", "width": 1.8}],
     "ic_weather_rain": [
         {"d": "M17.5,15H7a4.5,4.5 0 0 1-.4,-8.98A6,6 0 0 1 18.5,7.5a3.75,3.75 0 0 1-1,7.5Z", "fill": "#FF64748B", "stroke": "#FF94A3B8", "width": 1.3},
         {"d": "M8,18l-1.5,3M12,18l-1.5,3M16,18l-1.5,3", "stroke": "#FF38BDF8", "width": 1.8}],
@@ -190,7 +167,7 @@ WEATHER = {
         {"d": circle_path(12, 10, 3), "stroke": "#FFFBBF24", "width": 2}],
     # Not in the spec; kept from the existing set for night and partial cloud.
     "ic_weather_clear_night": [
-        {"d": "M14.5,3.2A8.8,8.8 0 1,0 20.8,15.3A7,7 0 0,1 14.5,3.2z", "fill": "#FFDCE3F0"}],
+        {"d": "M14.5,3.2A8.8,8.8 0 1,0 20.8,15.3A7,7 0 0,1 14.5,3.2z", "fill": "#FFD0E1FD"}],
 }
 for name, els in WEATHER.items():
     vector(name, 28, 24, els, "Weather icon (spec 8.1)")

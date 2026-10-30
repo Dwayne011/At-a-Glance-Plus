@@ -26,7 +26,21 @@ object ChipValues {
         val wide: String? = null,
         /** A second line under [text], for a tall chip: "Mon 2 Nov". */
         val detail: String? = null,
-    )
+        /**
+         * The lines of a chip stacked over two slots, when they differ from [text] and [detail]:
+         * the first sits beside the icon ("4d"), the rest under it ("Holiday", "Mon 2 Nov").
+         */
+        val stacked: List<String>? = null,
+        /** How far along, 0 to 1, drawn as a thin line on an extended chip (steps toward the goal). */
+        val progress: Float? = null,
+        /** A fall, for a chip that can go either way (eToro): drawn in its red tones. */
+        val down: Boolean = false,
+        /** Shorter [text] for a one-slot pill it does not fit ("+6.3%" for "+$412 · +6.3%"). */
+        val compact: String? = null,
+    ) {
+        /** The stacked chip's lines: [stacked], else the value with its second line. */
+        val lines: List<String> get() = stacked ?: listOfNotNull(text, detail)
+    }
 
     data class Part(val icon: Int, val aodIcon: Int, val text: String, val name: String? = null) {
         /** With its name, where there is room: "Pixel Buds Pro 100%". */
