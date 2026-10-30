@@ -173,3 +173,10 @@ where real data exists).
 |---|---|---|
 | Animated scenes | Everything slower and smaller: rain falls at half the speed (1.1 s per step) and fainter; snow at about half speed with a gentler sway; clouds drift ±7 to ±12dp over 14 to 22 s; wisps ±10 to ±14dp over 20 to 24 s; fog ±14dp over 16 s; the sun's rays turn ±3° over 16 s and pulse over 5 s | 0.22.0 moved too much; it should be barely noticeable |
 | Sports dashboard colours | The hero and Team Stats bars use each team's ESPN colour, looked up for teams the game gave none (as on the card). A colour too dark for the dark screen becomes the team's strong second colour (Cavaliers' gold) or is lifted towards white (Bucks' green); if the teams still look alike, the away team takes its second colour | Bars showed a fixed red and gold |
+
+## Activation and the lock screen (0.22.2)
+
+| Step | As built | Why |
+|---|---|---|
+| Restarting SystemUI | `am crash $(pidof com.android.systemui || echo com.android.systemui)`: the main process by its id | `am crash com.android.systemui` crashes only one of SystemUI's processes; once a screenshot had been taken it hit `com.android.systemui:screenshot`, so the lock screen never reconnected |
+| adb from a computer | The command in single quotes | So the computer's shell leaves `$(pidof …)` for the phone's |

@@ -20,6 +20,15 @@ object Commands {
 
     const val PIXEL_LAUNCHER = "com.google.android.apps.nexuslauncher"
     const val SYSTEM_UI = "com.android.systemui"
+
+    /**
+     * Restarts SystemUI's main process, the one that draws the lock screen. `am crash` with the
+     * package name crashes only one of its processes, and once a screenshot has been taken that
+     * can be `com.android.systemui:screenshot` instead, leaving the lock screen on Google's
+     * provider. So the main process is crashed by its id (`pidof` matches the exact name), with
+     * the package name as the fallback.
+     */
+    private const val RESTART_SYSTEM_UI = "am crash \$(pidof $SYSTEM_UI || echo $SYSTEM_UI)"
     private const val OVERRIDE_MS = 60_000
 
     fun serviceComponent(context: Context): String =
@@ -72,7 +81,7 @@ object Commands {
 
     private fun overrideSteps(component: String): List<String> = listOf(
         "cmd smartspace set temporary-service ${userId()} $component $OVERRIDE_MS",
-        "am crash $SYSTEM_UI",
+        RESTART_SYSTEM_UI,
         "am force-stop $PIXEL_LAUNCHER"
     )
 
@@ -98,11 +107,12 @@ object Commands {
         }
     }
 
-    fun activateAdb(context: Context): String = "adb shell \"${activateShell(context)}\""
+    // Single quotes, so the computer's shell leaves the $(pidof …) for the phone's.
+    fun activateAdb(context: Context): String = "adb shell '${activateShell(context)}'"
 
-    fun resetAdb(context: Context): String? = resetShell(context)?.let { "adb shell \"$it\"" }
+    fun resetAdb(context: Context): String? = resetShell(context)?.let { "adb shell '$it'" }
 
     private fun overrideShell(component: String): String =
         "cmd smartspace set temporary-service ${userId()} $component $OVERRIDE_MS" +
-            " && am crash $SYSTEM_UI && am force-stop $PIXEL_LAUNCHER"
+            " && $RESTART_SYSTEM_UI && am force-stop $PIXEL_LAUNCHER"
 }
