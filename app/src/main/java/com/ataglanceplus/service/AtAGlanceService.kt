@@ -85,6 +85,7 @@ class AtAGlanceService : SmartspaceService() {
                 screenOff = intent.action == Intent.ACTION_SCREEN_OFF
             }
             if (intent.action == Intent.ACTION_SCREEN_ON) refreshIfStale()
+            updateLiveTiming()
             pushAll()
         }
     }
@@ -156,7 +157,14 @@ class AtAGlanceService : SmartspaceService() {
         scope.launch { FinanceSource.quotes.drop(1).collect { pushAll() } }
         restartFinance()
         scope.launch { SportsSource.games.drop(1).collect { pushAll() } }
-        scope.launch { SportsSource.races.drop(1).collect { pushAll() } }
+        scope.launch { SportsSource.races.drop(1).collect { updateLiveTiming(); pushAll() } }
+        // F1 live timing: redraw as it changes, at most every 3 s (the state keeps only the latest).
+        scope.launch {
+            com.ataglanceplus.live.LiveTiming.state.drop(1).collect {
+                pushAll()
+                delay(LIVE_TIMING_MS)
+            }
+        }
         TorchSource.start(this)
         scope.launch { TorchSource.torch.drop(1).collect { pushAll() } }
         restartSports()
@@ -214,6 +222,7 @@ class AtAGlanceService : SmartspaceService() {
                 // The calendar card counts down ("in 25 min") and the alarm card appears 12 hours
                 // ahead, so those redraw each minute too.
                 refreshCalendar()
+                updateLiveTiming()
                 // The finance card comes and goes with the time (periods and windows).
                 val finance = FinanceRules.showing(this@AtAGlanceService, FinanceSource.quotes.value)?.instanceKey
                 // Sports cards count down to kick-off and come and go with the time.
@@ -235,7 +244,20 @@ class AtAGlanceService : SmartspaceService() {
         Log.i(TAG, "onCreate")
     }
 
+    /**
+     * F1 live timing is connected only while a followed race session is live, the sports card is
+     * on and the screen is on (nothing to see otherwise, and it saves the battery).
+     */
+    private fun updateLiveTiming() {
+        val live = !screenOff && Prefs.cardEnabled(this, CardType.SPORTS) && runCatching {
+            SportsRules.showing(this, SportsSource.games.value, SportsSource.races.value)
+                .any { it is com.ataglanceplus.live.SportsShowing.Race && it.phase == com.ataglanceplus.live.SportsPhase.LIVE }
+        }.getOrDefault(false)
+        com.ataglanceplus.live.LiveTiming.want(scope, live)
+    }
+
     override fun onDestroy() {
+        com.ataglanceplus.live.LiveTiming.want(scope, false)
         Prefs.get(this).unregisterOnSharedPreferenceChangeListener(prefsListener)
         unregisterReceiver(screenReceiver)
         contentResolver.unregisterContentObserver(calendarObserver)
@@ -489,5 +511,6 @@ class AtAGlanceService : SmartspaceService() {
         private const val WALLET_SYNC_MS = 6 * 60 * 60_000L
         private const val TRACK_BAR_MS = 30_000L
         private const val NAV_TRIP_MS = 15_000L
+        private const val LIVE_TIMING_MS = 3_000L
     }
 }

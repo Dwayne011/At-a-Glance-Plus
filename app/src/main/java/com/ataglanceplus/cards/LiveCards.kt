@@ -28,6 +28,7 @@ import com.ataglanceplus.live.TravelMode
 import com.ataglanceplus.live.FinanceRules
 import com.ataglanceplus.live.FinanceSource
 import com.ataglanceplus.live.Quote
+import com.ataglanceplus.live.RaceSession
 import com.ataglanceplus.live.SportsPhase
 import com.ataglanceplus.live.SportsShowing
 import com.ataglanceplus.live.SportsSource
@@ -397,6 +398,130 @@ object LiveCards {
         views.setOnClickPendingIntent(R.id.card_root, tap)
         val title = listOfNotNull(lead, nav.instruction).joinToString(" · ")
         return Style.target(context, targetId(key), views, title, detail, R.drawable.ic_nav_turn_left, tap, 1.8f)
+    }
+
+    // --- Formula 1, live ---
+
+    /**
+     * A followed series' session while it is on, from F1's live timing ([LiveTiming]): the
+     * circuit with every car on it, the Grand Prix and session, the track status, the time or
+     * laps left, and the top three with their gaps. Tapping opens the weekend's dashboard, as the
+     * race card does.
+     */
+    fun raceLive(context: Context, aod: Boolean, showing: SportsShowing.Race, live: com.ataglanceplus.live.LiveTiming.State): SmartspaceTarget {
+        val key = showing.instanceKey
+        val views = RemoteViews(context.packageName, R.layout.card_race_live)
+        val session = showing.session
+        views.setTextViewText(R.id.live_title, session.eventName.replace("Grand Prix", "GP").trim())
+        views.setTextViewText(R.id.live_session, live.session.ifEmpty { sessionName(session.session) })
+        val (flag, flagColour) = when (live.trackStatus) {
+            "2" -> "Yellow" to 0xFFFFD54F.toInt()
+            "4" -> "Safety car" to 0xFFFFC107.toInt()
+            "5" -> "Red flag" to 0xFFFF5252.toInt()
+            "6", "7" -> "Virtual SC" to 0xFFFFC107.toInt()
+            else -> "Green" to 0xFF38E5B5.toInt()
+        }
+        views.setTextViewText(R.id.live_flag, "● $flag")
+        views.setTextColor(R.id.live_flag, if (aod) Style.AOD_TEXT else flagColour)
+        views.setColorStateList(R.id.live_flag, "setBackgroundTintList", ColorStateList.valueOf(if (aod) 0x00000000 else (flagColour and 0x00FFFFFF) or 0x33000000))
+        val clock = when {
+            live.race && live.lap != null -> "Lap ${live.lap}" + (live.totalLaps?.let { "/$it" } ?: "")
+            live.remainingMs != null -> {
+                val seconds = live.remainingMs / 1000
+                (if (seconds >= 3600) "%d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60) else "%d:%02d".format(seconds / 60, seconds % 60)) + " left"
+            }
+            else -> ""
+        }
+        views.setTextViewText(R.id.live_clock, clock)
+        val hidden = SportsSource.scoresHidden(context, session.eventId)
+        val rows = listOf(
+            Triple(R.id.live_row1, R.id.live_bar1, R.id.live_code1) to R.id.live_gap1,
+            Triple(R.id.live_row2, R.id.live_bar2, R.id.live_code2) to R.id.live_gap2,
+            Triple(R.id.live_row3, R.id.live_bar3, R.id.live_code3) to R.id.live_gap3,
+        )
+        rows.forEachIndexed { i, (ids, gap) ->
+            val car = live.cars.getOrNull(i)
+            if (car == null || hidden) {
+                views.setViewVisibility(ids.first, View.GONE)
+                return@forEachIndexed
+            }
+            views.setInt(ids.second, "setColorFilter", if (aod) Style.AOD_TEXT else car.colour)
+            views.setTextViewText(ids.third, car.code)
+            views.setTextViewText(gap, if (car.inPit) "In pit" else car.figure)
+            if (aod) Style.aodBody(views, ids.third, gap)
+        }
+        if (hidden) views.setTextViewText(R.id.live_clock, "$clock · scores hidden")
+        views.setImageViewBitmap(R.id.live_track, liveTrack(context, session, live, aod, hidden))
+        if (aod) Style.aodBody(views, R.id.live_title, R.id.live_session, R.id.live_clock)
+        Style.holdBar(views, pinned = false, aod = aod)
+        val tap = gameTap(context, "F1 ${session.eventName} ${session.session}", session.link, key, com.ataglanceplus.ui.DashboardActivity.KIND_RACE_PREFIX + session.eventId)
+        views.setOnClickPendingIntent(R.id.card_root, tap)
+        val leader = live.cars.firstOrNull()?.takeIf { !hidden }?.let { " · ${it.code} leads" }.orEmpty()
+        return Style.target(context, targetId(key), views, "${session.eventName} · ${live.session}", "$flag$leader", R.drawable.ic_nav_flag, tap, 2.6f)
+    }
+
+    /** Each circuit's outline as a path, read once from its drawing. */
+    private val circuitPaths = java.util.concurrent.ConcurrentHashMap<Int, android.graphics.Path>()
+
+    private fun circuitPath(context: Context, res: Int): android.graphics.Path? = circuitPaths[res] ?: runCatching {
+        val parser = context.resources.getXml(res)
+        var data: String? = null
+        while (parser.next() != org.xmlpull.v1.XmlPullParser.END_DOCUMENT && data == null) {
+            if (parser.eventType == org.xmlpull.v1.XmlPullParser.START_TAG && parser.name == "path") {
+                data = parser.getAttributeValue("http://schemas.android.com/apk/res/android", "pathData")
+            }
+        }
+        androidx.core.graphics.PathParser.createPathFromPathData(data ?: return null)
+    }.getOrNull()?.also { circuitPaths[res] = it }
+
+    /**
+     * The circuit (84dp square) with each car on it at its share of the lap, in its team's colour:
+     * the top three larger with a white ring, cars in the pits or out of the session faded. The
+     * outline is drawn from the start line round in race direction, as the circuit data has it.
+     */
+    private fun liveTrack(context: Context, session: RaceSession, live: com.ataglanceplus.live.LiveTiming.State, aod: Boolean, hidden: Boolean): android.graphics.Bitmap {
+        val d = context.resources.displayMetrics.density
+        val size = (84 * d).toInt()
+        val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        val res = CircuitIcons.find(session.circuitCity, session.circuitName, aod = false) ?: return bitmap
+        val outline = circuitPath(context, res) ?: return bitmap
+        val bounds = android.graphics.RectF().also { outline.computeBounds(it, true) }
+        val inset = 10 * d
+        val scale = minOf((size - 2 * inset) / bounds.width(), (size - 2 * inset) / bounds.height())
+        val matrix = android.graphics.Matrix().apply {
+            setTranslate(-bounds.centerX(), -bounds.centerY())
+            postScale(scale, scale)
+            postTranslate(size / 2f, size / 2f)
+        }
+        val path = android.graphics.Path(outline).apply { transform(matrix) }
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 2.2f * d
+            strokeCap = android.graphics.Paint.Cap.ROUND
+            strokeJoin = android.graphics.Paint.Join.ROUND
+            color = if (aod) Style.AOD_TEXT else 0x8CFFFFFF.toInt()
+        }
+        canvas.drawPath(path, paint)
+        if (hidden) return bitmap
+        val measure = android.graphics.PathMeasure(path, false)
+        val length = measure.length
+        val point = FloatArray(2)
+        paint.style = android.graphics.Paint.Style.FILL
+        // Back markers first, so the leaders are drawn on top.
+        live.cars.sortedByDescending { it.position }.forEach { car ->
+            measure.getPosTan(length * (car.lapFraction % 1f), point, null)
+            val top = car.position <= 3
+            val faded = car.inPit || car.out
+            val r = (if (top) 4.2f else 2.8f) * d
+            paint.color = if (aod) Style.AOD_TEXT else if (top) 0xFFFFFFFF.toInt() else 0xFF0B1E1A.toInt()
+            paint.alpha = if (faded) 90 else 255
+            canvas.drawCircle(point[0], point[1], r + (if (top) 1.4f else 0.9f) * d, paint)
+            paint.color = if (aod) 0xFF000000.toInt() else car.colour
+            paint.alpha = if (faded) 90 else 255
+            canvas.drawCircle(point[0], point[1], r, paint)
+        }
+        return bitmap
     }
 
     /** "12 min", or "1 h 5 min". */

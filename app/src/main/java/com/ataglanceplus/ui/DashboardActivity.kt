@@ -1705,7 +1705,23 @@ private fun F1EventDashboard(eventId: String) {
                 val next = sessions.firstOrNull { it.state == "pre" } ?: sessions.firstOrNull { it.state == "in" }
                 if (next != null) F1UpNext(context, next)
                 val results = sessions.filter { it.state != "pre" && it.top.isNotEmpty() && !hiddenTop }
-                val tabs = buildList { add("Weekend"); if (results.isNotEmpty()) add("Results") }
+                // Full classifications and the championship, from Jolpica (the open Ergast successor).
+                val raceDay = (sessions.firstOrNull { it.session.equals("Race", ignoreCase = true) } ?: sessions.last()).start
+                    .let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() }
+                val full by produceState<List<com.ataglanceplus.live.JolpicaSource.SessionResult>?>(null, eventId, refresh.generation) {
+                    value = withContext(Dispatchers.IO) { com.ataglanceplus.live.JolpicaSource.weekendResults(raceDay) }
+                }
+                val standings by produceState<Pair<List<com.ataglanceplus.live.JolpicaSource.DriverStanding>?, List<com.ataglanceplus.live.JolpicaSource.TeamStanding>?>?>(null, refresh.generation) {
+                    value = withContext(Dispatchers.IO) {
+                        com.ataglanceplus.live.JolpicaSource.driverStandings() to com.ataglanceplus.live.JolpicaSource.teamStandings()
+                    }
+                }
+                val fullResults = full.orEmpty().takeIf { !hiddenTop }.orEmpty()
+                val tabs = buildList {
+                    add("Weekend")
+                    if (fullResults.isNotEmpty() || results.isNotEmpty()) add("Results")
+                    add("Standings")
+                }
                 val pager = rememberPagerState(pageCount = { tabs.size })
                 val scope = rememberCoroutineScope()
                 if (tabs.size > 1) SegmentedPills(tabs, pager.currentPage.coerceIn(0, tabs.lastIndex)) { idx -> scope.launch { pager.animateScrollToPage(idx) } }
@@ -1713,12 +1729,18 @@ private fun F1EventDashboard(eventId: String) {
                     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         when (tabs.getOrNull(page)) {
                             "Weekend" -> sessions.forEach { F1SessionRow(context, it, it == next) }
-                            "Results" -> results.forEach { s ->
-                                Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp)) {
-                                    Text(f1SessionName(s.session), color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
-                                    s.top.forEachIndexed { i, driver -> Text("${i + 1}. $driver", color = SportSub, fontSize = 12.5.sp) }
+                            "Results" -> if (fullResults.isNotEmpty()) {
+                                fullResults.forEach { F1ResultTable(it) }
+                            } else {
+                                // Before Jolpica has the weekend (practice), the feed's top three.
+                                results.forEach { s ->
+                                    Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp)) {
+                                        Text(f1SessionName(s.session), color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                                        s.top.forEachIndexed { i, driver -> Text("${i + 1}. $driver", color = SportSub, fontSize = 12.5.sp) }
+                                    }
                                 }
                             }
+                            "Standings" -> F1Standings(standings)
                         }
                     }
                 }
@@ -1729,6 +1751,62 @@ private fun F1EventDashboard(eventId: String) {
             }
         }
     }
+}
+
+/** One session's full classification: position, team colour, driver, time or gap, points. */
+@Composable
+private fun F1ResultTable(result: com.ataglanceplus.live.JolpicaSource.SessionResult) {
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Text(result.title, color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+        result.rows.forEach { r ->
+            F1Row(r.position, r.teamId, r.code, r.name, r.time + if (r.fastestLap) "  ⏱" else "", r.points?.let { "$it pts" })
+        }
+    }
+}
+
+/** A table row: position, a bar in the team's colour, the driver (or team), then the figures on the right. */
+@Composable
+private fun F1Row(position: String, teamId: String, code: String, name: String, figure: String, extra: String?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(position, color = SportSub, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(24.dp))
+        Box(Modifier.size(width = 4.dp, height = 16.dp).clip(RoundedCornerShape(2.dp)).background(Color(com.ataglanceplus.live.JolpicaSource.teamColour(teamId))))
+        if (code.isNotEmpty()) Text(code, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp).width(40.dp))
+        Text(name, color = if (code.isEmpty()) Color.White else SportSub, modifier = Modifier.padding(start = if (code.isEmpty()) 8.dp else 0.dp).weight(1f), fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(figure, color = Color.White, fontSize = 12.5.sp, modifier = Modifier.padding(start = 8.dp))
+        if (extra != null) Text(extra, color = SportSub, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp).width(48.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+    }
+}
+
+/** The championship: drivers or teams, with points and wins. */
+@Composable
+private fun F1Standings(
+    standings: Pair<List<com.ataglanceplus.live.JolpicaSource.DriverStanding>?, List<com.ataglanceplus.live.JolpicaSource.TeamStanding>?>?,
+) {
+    var teams by remember { mutableStateOf(false) }
+    if (standings == null) {
+        Text("Loading…", color = SportSub)
+        return
+    }
+    val (drivers, constructors) = standings
+    if (drivers == null && constructors == null) {
+        Text("The standings could not be loaded. Try again in a moment.", color = SportSub)
+        return
+    }
+    SegmentedPills(listOf("Drivers", "Teams"), if (teams) 1 else 0) { teams = it == 1 }
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        if (teams) {
+            constructors.orEmpty().forEach { t -> F1Row("${t.position}", t.teamId, "", t.name, "${t.points} pts", if (t.wins > 0) "${t.wins} won" else null) }
+        } else {
+            drivers.orEmpty().forEach { d -> F1Row("${d.position}", d.teamId, d.code, d.team, "${d.points} pts", if (d.wins > 0) "${d.wins} won" else null) }
+        }
+    }
+    Text("Standings and results from Jolpica (the open Ergast successor).", color = SportSub, fontSize = 11.sp)
 }
 
 @Composable

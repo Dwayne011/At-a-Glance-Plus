@@ -221,3 +221,13 @@ where real data exists).
 | Trip bar | Drawn in code, 6dp: each public-transport leg in its line's colour (one leg: the card's green), grey legs dotted as walks, the part to go faded, a ring at each change, a white dot where you are, a flag at the end; under it the distance and time left and the arrival time, when the maps app's text gives them | Was a 3dp single-colour bar |
 | Trip bar movement | Redrawn every 15 s while navigating with the screen on; between the maps app's updates the dot moves on at the pace the time left implies (at most 15% past the app's figure), and never steps back unless the app's figure drops by more than 10% (a reroute) | It only moved when the maps app updated its notification |
 | Message pop-up | Ends as soon as its notification goes (read or cleared), as well as on swipe, tap, dismiss, a newer message or 10 minutes; the Reply button's space grows with its text | It stayed after the message had been read; "Reply" was cut off at larger font sizes |
+
+## Formula 1 live timing and standings (0.26.0)
+
+| Area | As built | Why |
+|---|---|---|
+| Live session card | While a followed F1 session is live, the screen is on and F1's live timing answers: the circuit with every car on it in its team's colour (top three larger and ringed; in the pits or out, faded), the Grand Prix and session, the track status (green, yellow, safety car, virtual safety car, red), the time left (practice, qualifying) or lap (race), and the top three with best lap or gaps. Redrawn at most every 3 s. Otherwise the race card as before | Chosen |
+| Where the data comes from | F1's own live timing feed (livetiming.formula1.com, SignalR Core long polling), the one behind formula1.com's Live Timing and read by FastF1 and OpenF1. Not a published API; no account. If it stops answering, the card shows ESPN's data as before | The only free live source with gaps and flags; OpenF1's hosted API needs a paid key during sessions |
+| Car positions on the map | By the last mini-sector each car crossed (about 22–24 a lap), along the circuit outline from the f1-circuits project, so the dots step rather than glide. The outline may not start at the start line or may run the other way on some circuits; those can be corrected per circuit | Exact positions (Position.z) need an F1 TV token |
+| Dashboard Standings | Drivers' and constructors' championships with points and wins | From Jolpica (api.jolpi.ca), the open successor to the Ergast API that FastF1 uses; ESPN gives no points |
+| Dashboard Results | Full classification of the race, sprint and qualifying (time or gap, points, fastest lap); before Jolpica has the weekend, ESPN's top three | From Jolpica |
