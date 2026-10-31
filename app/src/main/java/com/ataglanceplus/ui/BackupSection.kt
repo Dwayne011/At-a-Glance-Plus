@@ -2,11 +2,12 @@ package com.ataglanceplus.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -16,16 +17,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import com.ataglanceplus.backup.SettingsBackup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
-/** Backup to the Google account, and settings export and import by hand. */
+/** Backup and restore: what the phone's own backup keeps, and settings export and import by hand. */
 @Composable
-internal fun BackupSection() {
+internal fun BackupPage(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>(null) }
@@ -44,20 +44,20 @@ internal fun BackupSection() {
     }
     val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pending = uri }
 
-    Section("Backup") {
-        Text(
-            "Your settings are backed up to your Google account with the phone's own backup (when it is on, in Settings › System › Backup) and come back when you reinstall or set up a new phone.",
-            style = MaterialTheme.typography.bodySmall,
+    SettingsPage("Backup and restore", onBack) {
+        Subheader("Google account")
+        SettingRow(
+            "Backed up with the phone",
+            "Your settings are kept in your Google account by the phone's own backup (Settings › System › Backup) and come back on a reinstall or a new phone.",
+            icon = Icons.Default.CheckCircle,
         )
-        Text(
-            "Not included, on purpose: the wireless debugging pairing, the eToro keys and the Google Wallet sign-in, which are tied to this phone. Set those up again on a new phone.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { export.launch("at-a-glance-plus-settings-${LocalDate.now()}.json") }) { Text("Export settings") }
-            OutlinedButton(onClick = { import.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Text("Import settings") }
-        }
-        status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        Subheader("By hand")
+        SettingRow("Export settings", "Save them to a file", icon = Icons.Default.Share,
+            onClick = { export.launch("at-a-glance-plus-settings-${LocalDate.now()}.json") })
+        SettingRow("Import settings", "Replace these settings with a file's", icon = Icons.Default.Refresh,
+            onClick = { import.launch(arrayOf("application/json", "text/plain", "*/*")) })
+        status?.let { SettingNote(it, MaterialTheme.colorScheme.primary) }
+        SettingNote("Not included, on purpose: the wireless debugging pairing, the eToro keys and the Google Wallet sign-in, which are tied to this phone. Set those up again on a new phone.")
     }
 
     pending?.let { uri ->

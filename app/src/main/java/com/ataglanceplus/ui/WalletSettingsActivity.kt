@@ -156,70 +156,6 @@ private fun WalletScreens(onExit: () -> Unit) {
     }
 }
 
-// --- Shared rows ------------------------------------------------------------------------------
-
-@Composable
-private fun TopBar(title: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
-        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        actions()
-    }
-}
-
-@Composable
-private fun Subheader(text: String) {
-    Text(text, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 6.dp))
-}
-
-/** A settings row: an optional leading icon or [lead], the title and summary, and a trailing part. */
-@Composable
-private fun SettingRow(
-    title: String,
-    summary: String? = null,
-    icon: ImageVector? = null,
-    lead: (@Composable () -> Unit)? = null,
-    accent: Boolean = false,
-    onClick: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        when {
-            lead != null -> { lead(); Box(Modifier.width(16.dp)) }
-            icon != null -> {
-                Icon(icon, contentDescription = null, tint = if (accent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
-                Box(Modifier.width(20.dp))
-            }
-        }
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, color = if (accent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-            if (summary != null) Text(summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (trailing != null) { Box(Modifier.width(12.dp)); trailing() }
-    }
-}
-
-/** A row whose text opens something and whose switch toggles it, split by a short line. */
-@Composable
-private fun SplitSwitchRow(title: String, summary: String, lead: @Composable () -> Unit, checked: Boolean, onOpen: () -> Unit, onToggle: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).clickable(onClick = onOpen).padding(start = 20.dp, end = 12.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            lead()
-            Column(Modifier.padding(start = 16.dp)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-        }
-        VerticalDivider(Modifier.height(32.dp))
-        Box(Modifier.padding(horizontal = 16.dp)) { Switch(checked = checked, onCheckedChange = onToggle) }
-    }
-}
-
 /** The pass's colour with its first letters, standing in for its logo. */
 @Composable
 private fun PassBadge(pass: WalletPass) {
@@ -348,11 +284,11 @@ private fun PassList(version: Int, onBack: () -> Unit, onOpen: (String) -> Unit,
         }
         if (on.isNotEmpty()) {
             Subheader("Passes on the card")
-            on.forEach { pass -> SplitSwitchRow(pass.title, summary(pass, rules.getValue(pass.id)), { PassBadge(pass) }, true, { onOpen(pass.id) }) { toggle(pass, it) } }
+            on.forEach { pass -> SplitSwitchRow(pass.title, summary(pass, rules.getValue(pass.id)), checked = true, onOpen = { onOpen(pass.id) }, lead = { PassBadge(pass) }) { toggle(pass, it) } }
         }
         if (off.isNotEmpty()) {
             Subheader("Not on the card")
-            off.forEach { pass -> SplitSwitchRow(pass.title, "Off", { PassBadge(pass) }, false, { onOpen(pass.id) }) { toggle(pass, it) } }
+            off.forEach { pass -> SplitSwitchRow(pass.title, "Off", checked = false, onOpen = { onOpen(pass.id) }, lead = { PassBadge(pass) }) { toggle(pass, it) } }
         }
         Text("Switch a pass on to show it; tap its name to choose where and when.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp))

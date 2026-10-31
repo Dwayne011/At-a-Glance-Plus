@@ -4,55 +4,69 @@ import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.AccountBox
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -64,11 +78,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ataglanceplus.Commands
 import com.ataglanceplus.Prefs
+import com.ataglanceplus.R
+import com.ataglanceplus.cards.CardType
+import com.ataglanceplus.complications.NotificationCounter
 import com.ataglanceplus.service.ServiceState
 import com.ataglanceplus.wadb.Activator
 import com.ataglanceplus.wadb.PairingService
 import com.ataglanceplus.wadb.Wadb
-import com.ataglanceplus.weather.WeatherRepository
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
@@ -82,49 +98,8 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val scheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             MaterialTheme(colorScheme = scheme) {
-                StatusScreen()
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusScreen() {
-    val scope = rememberCoroutineScope()
-    val tabs = listOf("App", "Cards", "Chips")
-    // The App tab (pairing, activation, weather) comes first; the tabs also follow a swipe.
-    val pager = rememberPagerState(pageCount = { tabs.size })
-
-    Scaffold { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            Text(
-                "At a Glance Plus",
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
-            )
-            PrimaryTabRow(selectedTabIndex = pager.currentPage) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = pager.currentPage == index,
-                        onClick = { scope.launch { pager.animateScrollToPage(index) } },
-                        text = { Text(title) },
-                    )
-                }
-            }
-            HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.Top) { page ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    when (page) {
-                        1 -> CardPreviewSection()
-                        2 -> ChipsSection()
-                        else -> AppTab()
-                    }
-                    Spacer(Modifier.height(24.dp))
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    Box(Modifier.safeDrawingPadding()) { SettingsApp() }
                 }
             }
         }
@@ -132,12 +107,338 @@ private fun StatusScreen() {
 }
 
 /**
- * The App tab: whether the app is running At a Glance, and the switch to do so; problems and
- * failed device checks only when there are any; weather location; backup. Everything technical
- * is in Advanced, closed until opened.
+ * Settings as one list (Material's settings pattern) instead of tabs: Home, and a page for each
+ * card, the chips, Backup and Advanced. [page] names the page open; back goes up a level.
  */
 @Composable
-private fun AppTab() {
+private fun SettingsApp() {
+    val context = LocalContext.current
+    var page by rememberSaveable { mutableStateOf("home") }
+    // Bumped whenever a setting changes or the app comes back, so every page reads afresh.
+    var version by remember { mutableIntStateOf(0) }
+    DisposableEffect(Unit) {
+        val prefs = Prefs.get(context)
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> version++ }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) version++ }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    fun up() {
+        page = when (page) {
+            "finance/add" -> "card/finance"
+            "sports/add" -> "card/sports"
+            else -> "home"
+        }
+    }
+    BackHandler(enabled = page != "home") { up() }
+    val open: (String) -> Unit = { page = it }
+
+    when (page) {
+        "home" -> HomePage(version, open)
+        "card/weather" -> WeatherPage(version, ::up)
+        "card/calendar" -> CalendarPage(version, ::up)
+        "card/finance" -> FinancePage(version, ::up, open)
+        "finance/add" -> AddStockPage(::up)
+        "card/sports" -> SportsPage(version, ::up, open)
+        "sports/add" -> AddTeamPage(::up)
+        "card/media" -> MediaPage(version, ::up)
+        "card/wallet" -> WalletSignInPage(version, ::up)
+        "more" -> MoreCardsPage(version, ::up)
+        "chips" -> ChipsSection(::up)
+        "backup" -> BackupPage(::up)
+        "advanced" -> AdvancedPage(version, ::up)
+        else -> HomePage(version, open)
+    }
+}
+
+/** A page: its top bar, then its rows, scrolling. */
+@Composable
+internal fun SettingsPage(title: String, onBack: (() -> Unit)?, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        TopBar(title, onBack)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            content()
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+// --- Home -------------------------------------------------------------------------------------
+
+/**
+ * Home: whether the app is showing (with the one button that matters now), anything that needs
+ * fixing, then the cards, the chips, the display, and the system.
+ */
+@Composable
+private fun HomePage(version: Int, open: (String) -> Unit) {
+    val context = LocalContext.current
+    @Suppress("UNUSED_EXPRESSION") version
+    val wadbStatus by Wadb.status.collectAsStateWithLifecycle()
+    val weatherStatus by com.ataglanceplus.weather.WeatherRepository.status.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) scope.launch { com.ataglanceplus.weather.WeatherRepository.refresh(context, force = true) }
+    }
+    val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { Prefs.chipPermissionsChanged(context) }
+    var editingHeight by remember { mutableStateOf(false) }
+
+    SettingsPage("At a Glance Plus", null) {
+        StatusBanner(version)
+
+        // Only what needs doing: permissions a switched-on card can't work without, device problems, errors.
+        val notifications = NotificationCounter.isEnabled(context)
+        val needsNotifications = !notifications && listOf(CardType.MEDIA, CardType.NAV, CardType.LIVE, CardType.TIMER, CardType.MESSAGES).any { Prefs.cardEnabled(context, it) }
+        val hasLocation = remember(version, weatherStatus) { com.ataglanceplus.weather.WeatherRepository.hasLocationPermission(context) }
+        val calendarNeeded = Prefs.cardEnabled(context, CardType.CALENDAR) && !com.ataglanceplus.live.CalendarSource.hasPermission(context)
+        val errors = remember(version) { com.ataglanceplus.CrashLog.read(context) }
+        val provider = remember(version) { Commands.lookupDefaultProvider(context) }
+        val deviceOk = Commands.isPixelLauncherInstalled(context) && provider is Commands.Provider.Found
+        if (needsNotifications || !hasLocation || calendarNeeded || !deviceOk || errors.isNotEmpty()) {
+            Subheader("Needs attention")
+            if (needsNotifications) NotificationAccessRow()
+            if (!hasLocation) SettingRow("Allow location for the weather", "Only your approximate location is sent, to Open-Meteo", icon = Icons.Default.LocationOn, error = true,
+                onClick = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) })
+            if (calendarNeeded) SettingRow("Allow calendar access", "For the calendar card", icon = Icons.Default.DateRange, error = true,
+                onClick = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) })
+            if (!deviceOk) LinkRow("This phone may not be supported", "See Advanced › Device", icon = Icons.Default.Warning, error = true) { open("advanced") }
+            if (errors.isNotEmpty()) LinkRow("Errors recorded", "${errors.lines().count { it.startsWith("20") }.coerceAtLeast(1)} · copy or clear them in Advanced", icon = Icons.Default.Warning, error = true) { open("advanced") }
+        }
+
+        Subheader("Cards")
+        LinkRow("Weather", weatherSummary(context), iconRes = R.drawable.ic_comp_sunset) { open("card/weather") }
+        CardSwitchRow(CardType.CALENDAR, calendarSummary(context), icon = Icons.Default.DateRange) { open("card/calendar") }
+        CardSwitchRow(CardType.FINANCE, financeSummary(context), iconRes = R.drawable.ic_comp_trend) { open("card/finance") }
+        CardSwitchRow(CardType.SPORTS, sportsSummary(context), icon = Icons.Default.Star) { open("card/sports") }
+        CardSwitchRow(CardType.WALLET, walletSummary(context), iconRes = R.drawable.ic_comp_ticket) {
+            if (com.ataglanceplus.wallet.GoogleAccount.isSignedIn(context)) context.startActivity(Intent(context, WalletSettingsActivity::class.java))
+            else open("card/wallet")
+        }
+        CardSwitchRow(CardType.MEDIA, if (Prefs.mediaWave(context)) "Equaliser · stays 5 min after pausing" else "Progress bar · stays 5 min after pausing", icon = Icons.Default.PlayArrow) { open("card/media") }
+        LinkRow("More cards", MORE_CARDS.joinToString(", ") { it.label }, icon = Icons.AutoMirrored.Filled.List) { open("more") }
+
+        Subheader("Chips")
+        val chips = remember(version) { Prefs.chips(context).orEmpty() }
+        LinkRow(
+            "Chips",
+            if (chips.isEmpty()) "None chosen: the cards show examples"
+            else "${chips.size} chosen · " + chips.take(3).joinToString(", ") { it.kind.label } + if (chips.size > 3) "…" else "",
+            iconRes = R.drawable.ic_comp_gauge,
+        ) { open("chips") }
+
+        Subheader("Display")
+        LinkRow("Card height", "${Prefs.cardHeightDp(context)} dp", iconRes = R.drawable.ic_comp_screen) { editingHeight = true }
+        SwitchSettingRow("Show all cards", "Off: only as many as the launcher asks for", icon = Icons.AutoMirrored.Filled.List, checked = Prefs.showAllCards(context)) { Prefs.setShowAllCards(context, it) }
+        SwitchSettingRow("Always-on look on the lock screen", "The always-on display style with the screen on", icon = Icons.Default.Lock, checked = Prefs.aodPreview(context)) { Prefs.setAodPreview(context, it) }
+        val dismissed = Prefs.dismissed(context)
+        if (dismissed.isNotEmpty()) SettingRow("Bring back dismissed cards", "${dismissed.size} hidden", icon = Icons.Default.Refresh, onClick = { Prefs.restoreDismissed(context) })
+
+        Subheader("System")
+        if (Prefs.isPaired(context)) {
+            SwitchSettingRow("Re-activate after a restart", "Waits for Wi-Fi, then activates", icon = Icons.Default.Refresh, checked = Prefs.activateOnBoot(context)) { Prefs.setActivateOnBoot(context, it) }
+        }
+        LinkRow("Backup and restore", "Export or import your settings", icon = Icons.Default.AccountBox) { open("backup") }
+        LinkRow("Advanced", "Connection, wireless debugging, logs and adb commands", icon = Icons.Default.Settings) { open("advanced") }
+        if (wadbStatus.isNotEmpty()) SettingNote(wadbStatus, MaterialTheme.colorScheme.primary)
+        SettingNote("Version ${runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()}")
+    }
+
+    if (editingHeight) CardHeightDialog { editingHeight = false }
+}
+
+/** The cards with nothing to set but on or off. */
+internal val MORE_CARDS = listOf(CardType.NAV, CardType.LIVE, CardType.TIMER, CardType.MESSAGES, CardType.TORCH)
+
+@Composable
+private fun CardSwitchRow(
+    type: CardType,
+    summary: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    iconRes: Int? = null,
+    onOpen: () -> Unit,
+) {
+    val context = LocalContext.current
+    val on = Prefs.cardEnabled(context, type)
+    SplitSwitchRow(type.label, if (on) summary else "Off", checked = on, onOpen = onOpen, icon = icon, iconRes = iconRes) { Prefs.setCardEnabled(context, type, it) }
+}
+
+private fun weatherSummary(context: Context): String {
+    val look = Prefs.weatherLook(context).label
+    val now = com.ataglanceplus.weather.WeatherRepository.weather.value
+    return listOfNotNull("Material You · $look", now?.let { "${it.condition.label}, ${it.temperatureText}" }).joinToString(" · ")
+}
+
+private fun calendarSummary(context: Context): String {
+    if (!com.ataglanceplus.live.CalendarSource.hasPermission(context)) return "Needs calendar access"
+    val lead = Prefs.calendarLeadMinutes(context)
+    val shown = runCatching { com.ataglanceplus.live.CalendarSource.calendars(context).count { it.id !in Prefs.calendarHidden(context) } }.getOrDefault(0)
+    return "$shown calendar${if (shown == 1) "" else "s"} · from ${leadText(lead)} before"
+}
+
+internal fun leadText(minutes: Int) = if (minutes < 60) "$minutes min" else "${minutes / 60} h"
+
+private fun financeSummary(context: Context): String {
+    val tickers = Prefs.financeTickers(context)
+    if (tickers.isEmpty()) return "No stocks yet"
+    return tickers.take(3).joinToString(", ") + (if (tickers.size > 3) "…" else "") + " · every ${refreshText(Prefs.financeRefreshMinutes(context))}"
+}
+
+internal fun refreshText(minutes: Int) = if (minutes < 60) "$minutes min" else "${minutes / 60} h"
+
+private fun sportsSummary(context: Context): String =
+    Prefs.sportsFollowed(context).map { it.name }.ifEmpty { listOf("Nobody followed yet") }.let { names ->
+        names.take(3).joinToString(", ") + if (names.size > 3) "…" else ""
+    }
+
+private fun walletSummary(context: Context): String {
+    if (!com.ataglanceplus.wallet.GoogleAccount.isSignedIn(context)) return "Sign in to show your passes"
+    com.ataglanceplus.wallet.WalletSource.ensureLoaded(context)
+    val passes = com.ataglanceplus.wallet.WalletSource.passes.value
+    val on = com.ataglanceplus.wallet.WalletRules.rules(context).filter { it.enabled }.map { it.passId }.toSet()
+    return "${passes.count { it.id in on }} of ${passes.size} on the card"
+}
+
+/**
+ * The status at the top: whether the cards are showing, and the button that moves it on
+ * (pair, activate, or back to Google), plus the way to wireless debugging when Android blocks
+ * switching it on.
+ */
+@Composable
+private fun StatusBanner(version: Int) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val sessions by ServiceState.sessions.collectAsStateWithLifecycle()
+    val wadbStatus by Wadb.status.collectAsStateWithLifecycle()
+    val busy by Wadb.busy.collectAsStateWithLifecycle()
+    val paired = remember(version, wadbStatus) { Prefs.isPaired(context) }
+    val wifi = remember(version, wadbStatus) { Wadb.isWifiConnected(context) }
+    val switchBlocked = remember(version, wadbStatus) { Prefs.debugSwitchBlocked(context) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startPairing(context)
+    }
+    val surfaces = sessions.values.map { it.surface }.toSet()
+    val home = com.ataglanceplus.service.AtAGlanceService.SURFACE_HOME in surfaces
+    val lock = com.ataglanceplus.service.AtAGlanceService.SURFACE_LOCKSCREEN in surfaces
+    val (headline, detail) = when {
+        home && lock -> "Showing on your home and lock screen" to "At a Glance Plus has replaced Google's At a Glance."
+        home -> "Showing on the home screen only" to "Activate to connect the lock screen too."
+        lock -> "Showing on the lock screen only" to "Activate to connect the home screen too."
+        paired -> "Not showing yet" to "Activate to replace Google's At a Glance."
+        else -> "Not set up yet" to "Pair once with this phone's wireless debugging; no computer needed. In the page that opens, choose \"Pair device with pairing code\" and type the code into this app's notification."
+    }
+    Column(
+        Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(20.dp)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                if (home && lock) Icons.Default.CheckCircle else Icons.Default.Info, contentDescription = null,
+                tint = if (home && lock) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(headline, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 10.dp))
+        }
+        Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!wifi) Text("Wireless debugging needs Wi-Fi.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
+            when {
+                !paired -> Button(onClick = {
+                    if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) startPairing(context)
+                    else notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }) { Text("Pair with this phone") }
+                !(home && lock) -> Button(enabled = !busy, onClick = { scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) } }) { Text("Activate") }
+            }
+            if (paired) OutlinedButton(enabled = !busy && Commands.defaultProvider(context) != null, onClick = {
+                scope.launch { Activator.run(context, Activator.Mode.RESET) }
+            }) { Text("Back to Google") }
+            // Android no longer lets the app switch wireless debugging on: a way straight to it.
+            if (paired && switchBlocked && !(home && lock)) {
+                TextButton(onClick = { runCatching { context.startActivity(Wadb.wirelessDebuggingSettingsIntent()) } }) { Text("Open wireless debugging") }
+            }
+        }
+    }
+}
+
+/** Notification access, needed by media, navigation, live updates, timers and the message pop-up. */
+@Composable
+internal fun NotificationAccessRow() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val busy by Wadb.busy.collectAsStateWithLifecycle()
+    var asking by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    SettingRow(
+        "Allow notification access",
+        message.ifEmpty { "Media, navigation, live updates, timers and messages read your notifications. Nothing leaves the phone." },
+        icon = Icons.Default.Notifications, error = true, onClick = { asking = true },
+    )
+    if (asking) {
+        AlertDialog(
+            onDismissRequest = { asking = false },
+            title = { Text("Notification access") },
+            text = { Text("Grant it over wireless debugging (Wi-Fi needed), or open Android's setting and switch it on there.") },
+            confirmButton = {
+                TextButton(enabled = !busy, onClick = {
+                    asking = false
+                    scope.launch {
+                        message = "Granting over wireless debugging…"
+                        val outcome = Activator.grant(context, Commands.chipGrantSteps(context, notifications = true, usage = false, callLog = false))
+                        message = if (outcome is Activator.Outcome.Failure) outcome.reason else "Done."
+                        Prefs.chipPermissionsChanged(context)
+                    }
+                }) { Text("Grant") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    asking = false
+                    runCatching {
+                        context.startActivity(
+                            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                                .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, NotificationCounter.component(context).flattenToString())
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                }) { Text("Open the setting") }
+            },
+        )
+    }
+}
+
+/** Card height, on a slider, saved when it is let go. */
+@Composable
+private fun CardHeightDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var height by remember { mutableFloatStateOf(Prefs.cardHeightDp(context).toFloat()) }
+    val default = com.ataglanceplus.cards.Style.CARD_HEIGHT_DEFAULT_DP
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Card height") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${height.toInt()} dp", style = MaterialTheme.typography.titleMedium)
+                Slider(value = height, onValueChange = { height = it }, valueRange = 76f..140f, steps = 15)
+                Text("$default dp by default. Taller cards are cut off where the launcher has no room.", style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = { TextButton(onClick = { Prefs.setCardHeightDp(context, height.toInt()); onDismiss() }) { Text("Done") } },
+        dismissButton = { TextButton(onClick = { Prefs.setCardHeightDp(context, default); onDismiss() }) { Text("Reset") } },
+    )
+}
+
+internal fun startPairing(context: Context) {
+    context.startForegroundService(PairingService.startIntent(context))
+    runCatching { context.startActivity(Wadb.wirelessDebuggingSettingsIntent()) }
+}
+
+// --- Advanced ---------------------------------------------------------------------------------
+
+/** The technical parts: the connection, the device checks, wireless debugging, logs and adb commands. */
+@Composable
+private fun AdvancedPage(version: Int, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sessions by ServiceState.sessions.collectAsStateWithLifecycle()
@@ -145,292 +446,101 @@ private fun AppTab() {
     val wadbStatus by Wadb.status.collectAsStateWithLifecycle()
     val busy by Wadb.busy.collectAsStateWithLifecycle()
     val wadbLog by Wadb.log.collectAsStateWithLifecycle()
-    var activateOnBoot by remember { mutableStateOf(Prefs.activateOnBoot(context)) }
-    var advanced by rememberSaveable { mutableStateOf(false) }
+    val paired = remember(version, wadbStatus) { Prefs.isPaired(context) }
+    val wirelessOn = remember(version, wadbStatus) { Wadb.wirelessDebuggingState(context) }
+    val canSelfEnable = remember(version, wadbStatus) { Wadb.canSwitchDebuggingOn(context) }
+    val switchBlocked = remember(version, wadbStatus) { Prefs.debugSwitchBlocked(context) }
+    val wifi = remember(version, wadbStatus) { Wadb.isWifiConnected(context) }
+    var errors by remember(version) { mutableStateOf(com.ataglanceplus.CrashLog.read(context)) }
+    val provider = remember(version) { Commands.lookupDefaultProvider(context) }
 
-    // Re-read settings and permissions whenever the screen comes back to the foreground.
-    var refresh by remember { mutableIntStateOf(0) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh++ }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-    val paired = remember(refresh, wadbStatus) { Prefs.isPaired(context) }
-    val wirelessOn = remember(refresh, wadbStatus) { Wadb.wirelessDebuggingState(context) }
-    val canSelfEnable = remember(refresh, wadbStatus) { Wadb.canSwitchDebuggingOn(context) }
-    val switchBlocked = remember(refresh, wadbStatus) { Prefs.debugSwitchBlocked(context) }
-    val wifi = remember(refresh, wadbStatus) { Wadb.isWifiConnected(context) }
+    SettingsPage("Advanced", onBack) {
+        Subheader("Connection")
+        if (sessions.isEmpty()) SettingRow("No sessions", "No launcher or lock screen has connected to this service yet", icon = Icons.Default.Info)
+        sessions.values.sortedBy { it.surface }.forEach { s ->
+            val pushed = if (s.lastPushAt == 0L) "no push yet" else "pushed " + DateFormat.getTimeInstance().format(Date(s.lastPushAt))
+            SettingRow(
+                s.surface.replaceFirstChar { it.uppercase() },
+                "${s.clientPackage} · $pushed" + if (s.lastPushAt > 0) "\nNow: ${s.showing.joinToString(" · ").ifEmpty { "nothing" }}" else "",
+                icon = Icons.Default.CheckCircle,
+            )
+        }
+        if (lastEvent.isNotEmpty()) SettingNote("Last event: $lastEvent")
 
-    val weather by WeatherRepository.weather.collectAsStateWithLifecycle()
-    val weatherStatus by WeatherRepository.status.collectAsStateWithLifecycle()
-    val hasLocation = remember(refresh, weatherStatus) { WeatherRepository.hasLocationPermission(context) }
-    val hasBackgroundLocation = remember(refresh, weatherStatus) { WeatherRepository.hasBackgroundLocationPermission(context) }
-    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        refresh++
-        if (granted) scope.launch { WeatherRepository.refresh(context, force = true) }
-    }
-    val backgroundLocationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        refresh++
-    }
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startPairing(context)
-    }
+        Subheader("Device")
+        SettingRow("Android", "API ${Build.VERSION.SDK_INT}", icon = Icons.Default.CheckCircle)
+        CheckRow("Pixel Launcher installed", Commands.isPixelLauncherInstalled(context), Commands.PIXEL_LAUNCHER)
+        when (provider) {
+            is Commands.Provider.Found -> CheckRow("Google At a Glance provider found", true, provider.component.flattenToShortString())
+            is Commands.Provider.Missing -> CheckRow("Google At a Glance provider found", false, provider.reason)
+        }
 
-    val androidOk = Build.VERSION.SDK_INT >= 36
-    val launcherOk = Commands.isPixelLauncherInstalled(context)
-    val provider = Commands.lookupDefaultProvider(context)
-    val providerOk = provider is Commands.Provider.Found
-
-    Section("At a Glance") {
-        val surfaces = sessions.values.map { it.surface }.toSet()
-        val home = com.ataglanceplus.service.AtAGlanceService.SURFACE_HOME in surfaces
-        val lock = com.ataglanceplus.service.AtAGlanceService.SURFACE_LOCKSCREEN in surfaces
-        Text(
+        Subheader("Wireless debugging")
+        CheckRow("Paired with this phone", paired, if (paired) "The phone trusts this app's key" else "Pair once; no computer needed")
+        CheckRow("Wireless debugging on", wirelessOn == true, if (wirelessOn == true) "Developer options › Wireless debugging" else "Android hides this setting from apps; Activate checks it directly")
+        CheckRow(
+            "Can switch it on after a restart", canSelfEnable,
             when {
-                home && lock -> "Showing on the home screen and lock screen."
-                home -> "Showing on the home screen, not the lock screen. Tap Activate to connect it."
-                lock -> "Showing on the lock screen, not the home screen. Tap Activate to connect it."
-                paired -> "Not showing yet. Tap Activate."
-                else -> "Not set up yet. Pair once with this phone's wireless debugging; no computer needed."
+                canSelfEnable -> "Secure-settings permission held"
+                switchBlocked -> "Android no longer lets apps switch it on; turn it on yourself after a restart (a notification reminds you)"
+                else -> "Granted automatically during the first activation"
             },
-            style = MaterialTheme.typography.bodyLarge,
         )
-        if (!wifi) Text("Wireless debugging needs Wi-Fi.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        CheckRow("Wi-Fi connected", wifi, "Wireless debugging only works on Wi-Fi")
+        SettingRow(if (paired) "Pair again" else "Pair with this phone", icon = Icons.Default.Refresh, onClick = { startPairing(context) })
+        SettingRow("Activate now", "Runs the activation steps again", icon = Icons.Default.PlayArrow, enabled = paired && !busy,
+            onClick = { scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) } })
+        SettingRow("Open wireless debugging", "Android's own setting", icon = Icons.Default.Settings, onClick = { runCatching { context.startActivity(Wadb.wirelessDebuggingSettingsIntent()) } })
 
-        if (!paired) {
-            Text(
-                "Tap the button, then in the Developer options page that opens choose \"Pair device with pairing code\". A notification from this app asks for the six-digit code. Keep the dialog open while you type it.",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Button(onClick = {
-                if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                    startPairing(context)
-                } else {
-                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-            }) { Text("Pair with this phone") }
+        Subheader("Diagnostics")
+        SettingRow("Read the phone's crash log", "Into the command log below", icon = Icons.Default.Build, enabled = paired && !busy,
+            onClick = { scope.launch { Activator.readCrashLog(context) } })
+        if (wadbLog.isNotEmpty()) {
+            SettingRow("Command log", "Activation, permission grant or crash log · tap to copy", icon = Icons.AutoMirrored.Filled.List, onClick = { copy(context, "Command log", wadbLog) })
+            LogText(wadbLog)
+        }
+        if (errors.isNotEmpty()) {
+            SettingRow("Errors this app recorded", "Newest first · tap to copy", icon = Icons.Default.Warning, error = true, onClick = { copy(context, "At a Glance Plus errors", errors) })
+            LogText(errors)
+            SettingRow("Clear the errors", icon = Icons.Default.Refresh, onClick = { com.ataglanceplus.CrashLog.clear(context); errors = "" })
         } else {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                // Greyed out only while both the home and lock screens are connected to this app;
-                // with one missing (after an update, say), Activate reconnects it.
-                Button(enabled = !busy && !(home && lock), onClick = {
-                    scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) }
-                }) { Text("Activate") }
-                OutlinedButton(enabled = !busy && Commands.defaultProvider(context) != null, onClick = {
-                    scope.launch { Activator.run(context, Activator.Mode.RESET) }
-                }) { Text("Back to Google") }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Re-activate after a restart")
-                    Text("Waits for Wi-Fi, then activates. The launcher and System UI restart once.", style = MaterialTheme.typography.bodySmall)
-                }
-                Switch(checked = activateOnBoot, onCheckedChange = {
-                    activateOnBoot = it
-                    Prefs.setActivateOnBoot(context, it)
-                })
-            }
+            SettingRow("No errors recorded", icon = Icons.Default.CheckCircle)
         }
-        if (wadbStatus.isNotEmpty()) {
-            Text(wadbStatus, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-        }
-        // Android no longer lets the app switch wireless debugging on: a way straight to it.
-        if (paired && switchBlocked && !(home && lock)) {
-            OutlinedButton(onClick = { runCatching { context.startActivity(Wadb.wirelessDebuggingSettingsIntent()) } }) {
-                Text("Open wireless debugging")
-            }
-        }
-    }
 
-    ProblemsSection()
+        Subheader("Chip fitting")
+        SettingNote(com.ataglanceplus.cards.WeatherCard.fitReport(context))
 
-    if (!androidOk || !launcherOk || !providerOk) {
-        Section("This phone") {
-            if (!androidOk) CheckRow("Android 16 or newer", false, "API ${Build.VERSION.SDK_INT}")
-            if (!launcherOk) CheckRow("Pixel Launcher installed", false, Commands.PIXEL_LAUNCHER)
-            if (provider is Commands.Provider.Missing) CheckRow("Google At a Glance provider found", false, provider.reason)
-        }
-    }
-
-    Section("Weather") {
-        if (!hasLocation) {
-            Text("Weather needs your approximate location. Only that is sent, to Open-Meteo.", style = MaterialTheme.typography.bodySmall)
-            Button(onClick = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) {
-                Text("Allow location")
-            }
-        } else if (!hasBackgroundLocation) {
-            Text(
-                "Without background location, weather uses where you were when the app was last open. On the next screen choose \"Allow all the time\".",
-                style = MaterialTheme.typography.bodySmall
-            )
-            OutlinedButton(onClick = { backgroundLocationPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) }) {
-                Text("Allow in the background")
-            }
-        }
-        val current = weather
-        if (current != null) {
-            val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(current.fetchedAt))
-            Text("${current.condition.label}, ${current.temperatureText}. ${current.detailText}. Updated $time", style = MaterialTheme.typography.bodyMedium)
-        } else {
-            Text(weatherStatus.ifEmpty { "No weather yet." }, style = MaterialTheme.typography.bodySmall)
-        }
-        OutlinedButton(enabled = hasLocation, onClick = {
-            scope.launch { WeatherRepository.refresh(context, force = true) }
-        }) { Text("Refresh weather") }
-    }
-
-    BackupSection()
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable { advanced = !advanced },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Advanced", style = MaterialTheme.typography.titleMedium)
-                    Text("Connection, wireless debugging, logs and adb commands", style = MaterialTheme.typography.bodySmall)
-                }
-                Icon(
-                    Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (advanced) "Hide" else "Show",
-                    modifier = Modifier.rotate(if (advanced) 180f else 0f),
-                )
-            }
-            if (!advanced) return@Column
-
-            Text("Connection", style = MaterialTheme.typography.labelLarge)
-            if (sessions.isEmpty()) {
-                Text("No client has opened a session with this service yet.", style = MaterialTheme.typography.bodySmall)
-            }
-            sessions.values.sortedBy { it.surface }.forEach { s ->
-                val pushed = if (s.lastPushAt == 0L) "no push yet" else "pushed " + DateFormat.getTimeInstance().format(Date(s.lastPushAt))
-                Text("• ${s.surface} from ${s.clientPackage} · $pushed", style = MaterialTheme.typography.bodySmall)
-                // What each surface was last sent, so a card that should be there but is not can
-                // be told apart from one the launcher did not draw.
-                if (s.lastPushAt > 0) Text("   now: ${s.showing.joinToString(" · ").ifEmpty { "nothing" }}", style = MaterialTheme.typography.bodySmall)
-            }
-            if (lastEvent.isNotEmpty()) Text("Last event: $lastEvent", style = MaterialTheme.typography.bodySmall)
-
-            HorizontalDivider()
-            Text("Device", style = MaterialTheme.typography.labelLarge)
-            CheckRow("Android 16 or newer", androidOk, "API ${Build.VERSION.SDK_INT}")
-            CheckRow("Pixel Launcher installed", launcherOk, Commands.PIXEL_LAUNCHER)
-            when (provider) {
-                is Commands.Provider.Found -> CheckRow("Google At a Glance provider found", true, provider.component.flattenToShortString())
-                is Commands.Provider.Missing -> CheckRow("Google At a Glance provider found", false, provider.reason)
-            }
-
-            HorizontalDivider()
-            Text("Wireless debugging", style = MaterialTheme.typography.labelLarge)
-            CheckRow("Paired with this phone", paired, if (paired) "The phone trusts this app's key" else "Pair once; no computer needed")
-            when (wirelessOn) {
-                true -> CheckRow("Wireless debugging on", true, "Developer options › Wireless debugging")
-                else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("--", style = MaterialTheme.typography.labelLarge)
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("Wireless debugging")
-                        Text("Android hides this setting from apps. Activate checks it directly.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-            CheckRow(
-                "Can switch it on after a restart", canSelfEnable,
-                when {
-                    canSelfEnable -> "Secure-settings permission held"
-                    switchBlocked -> "This version of Android no longer lets apps switch it on; turn it on yourself after a restart (a notification reminds you)"
-                    else -> "Granted automatically during the first activation"
-                },
-            )
-            CheckRow("Wi-Fi connected", wifi, "Wireless debugging only works on Wi-Fi")
-            if (paired) OutlinedButton(onClick = { startPairing(context) }) { Text("Pair again") }
-            OutlinedButton(enabled = !busy && paired, onClick = {
-                scope.launch { Activator.readCrashLog(context) }
-            }) { Text("Read the phone's crash log") }
-            if (wadbLog.isNotEmpty()) {
-                Text("Last command log (activation, permission grant or crash log):", style = MaterialTheme.typography.bodySmall)
-                Button(onClick = { copy(context, "Command log", wadbLog) }) { Text("Copy") }
-                Text(wadbLog.takeLast(4000), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-            }
-
-            HorizontalDivider()
-            Text("Chip fitting", style = MaterialTheme.typography.labelLarge)
-            Text(com.ataglanceplus.cards.WeatherCard.fitReport(context), style = MaterialTheme.typography.bodySmall)
-
-            HorizontalDivider()
-            Text("From a computer", style = MaterialTheme.typography.labelLarge)
-            Text("The same commands, for adb over USB if wireless debugging is not an option.", style = MaterialTheme.typography.bodySmall)
-            CommandBlock(Commands.activateAdb(context))
-            Commands.resetAdb(context)?.let { CommandBlock(it) }
-            Text("Service component: ${Commands.serviceComponent(context)} · user ${Commands.userId()}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-private fun startPairing(context: Context) {
-    context.startForegroundService(PairingService.startIntent(context))
-    runCatching { context.startActivity(Wadb.wirelessDebuggingSettingsIntent()) }
-}
-
-@Composable
-internal fun Section(title: String, content: @Composable () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            content()
-        }
+        Subheader("From a computer")
+        SettingNote("The same commands, for adb over USB if wireless debugging is not an option. Tap one to copy it.")
+        CommandRow("Activate", Commands.activateAdb(context))
+        Commands.resetAdb(context)?.let { CommandRow("Back to Google", it) }
+        SettingNote("Service component: ${Commands.serviceComponent(context)} · user ${Commands.userId()}")
     }
 }
 
 @Composable
 private fun CheckRow(label: String, ok: Boolean, detail: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(if (ok) "OK" else "NO", style = MaterialTheme.typography.labelLarge, color = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(label)
-            Text(detail, style = MaterialTheme.typography.bodySmall)
-        }
-    }
+    SettingRow(label, detail, icon = if (ok) Icons.Default.CheckCircle else Icons.Default.Warning, error = !ok)
 }
 
 @Composable
-private fun CommandBlock(command: String) {
-    val context = LocalContext.current
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(command, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-        Button(onClick = {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("command", command))
-        }) {
-            Text("Copy command")
-        }
-    }
+private fun LogText(text: String) {
+    Text(
+        text.take(4000), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp)).padding(12.dp),
+    )
 }
 
-/** The app's own error log, ready to copy; shown only when there is something in it. The phone's crash log is in Advanced. */
 @Composable
-private fun ProblemsSection() {
+private fun CommandRow(title: String, command: String) {
     val context = LocalContext.current
-    var log by remember { mutableStateOf(com.ataglanceplus.CrashLog.read(context)) }
-
-    if (log.isEmpty()) return
-    Section("Problems") {
-        Text("Errors this app recorded, newest first:", style = MaterialTheme.typography.bodySmall)
-        Text(log.take(4000), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Button(onClick = { copy(context, "At a Glance Plus errors", log) }) { Text("Copy errors") }
-            OutlinedButton(onClick = {
-                com.ataglanceplus.CrashLog.clear(context)
-                log = ""
-            }) { Text("Clear") }
-        }
-    }
+    SettingRow(title, "Tap to copy", icon = Icons.Default.Build, onClick = { copy(context, "command", command) })
+    LogText(command)
+    HorizontalDivider(Modifier.padding(top = 8.dp))
 }
 
-private fun copy(context: Context, label: String, text: String) {
+internal fun copy(context: Context, label: String, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
 }

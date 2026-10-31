@@ -867,7 +867,7 @@ private fun StockDashboard(initial: String) {
  * candles. Changes apply at once.
  */
 @Composable
-private fun VwapDialog(
+internal fun VwapDialog(
     settings: com.ataglanceplus.live.FinanceSource.VwapSettings,
     onDone: () -> Unit,
     onChange: (com.ataglanceplus.live.FinanceSource.VwapSettings) -> Unit,

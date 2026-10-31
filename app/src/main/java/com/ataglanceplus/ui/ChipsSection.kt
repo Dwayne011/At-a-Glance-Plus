@@ -7,6 +7,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import com.ataglanceplus.R
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -172,7 +176,7 @@ private val ADD_GROUPS = listOf(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ChipsSection() {
+internal fun ChipsSection(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val values by ChipValues.values.collectAsStateWithLifecycle()
@@ -250,17 +254,10 @@ internal fun ChipsSection() {
         }
     }
 
-    Section("Your chips") {
-        Text(
-            "Most important first: hold ≡ and drag to reorder. Tap a chip for its settings.",
-            style = MaterialTheme.typography.bodySmall
-        )
-        if (grantMessage.isNotEmpty()) {
-            Text(grantMessage, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-        }
-        if (chips.isEmpty()) {
-            Text("No chips chosen: the cards use examples (Steps, Gmail, Battery).", style = MaterialTheme.typography.bodySmall)
-        }
+    if (settingsFor == null) SettingsPage("Chips", onBack) {
+        Subheader("On the cards · hold ≡ and drag to reorder")
+        if (grantMessage.isNotEmpty()) SettingNote(grantMessage, MaterialTheme.colorScheme.primary)
+        if (chips.isEmpty()) SettingNote("No chips chosen: the cards use examples (Steps, Gmail, Battery).")
         ReorderableChips(
             chips = chips,
             onReorder = { Prefs.setChips(context, it) },
@@ -280,10 +277,11 @@ internal fun ChipsSection() {
             )
         }
         if (chips.size < Chips.MAX_CHOSEN) {
-            Button(onClick = { adding = true }) { Text("+ Add a chip") }
+            SettingRow("Add a chip", "${chips.size} of ${Chips.MAX_CHOSEN}", icon = Icons.Default.Add, accent = true, onClick = { adding = true })
         } else {
-            Text("Remove a chip to add another (${Chips.MAX_CHOSEN} at most).", style = MaterialTheme.typography.bodySmall)
+            SettingNote("Remove a chip to add another (${Chips.MAX_CHOSEN} at most).")
         }
+        SettingNote("Most important first. Tap a chip for its size, what it opens and its own options.")
     }
 
     if (adding) {
@@ -316,7 +314,7 @@ internal fun ChipsSection() {
     }
     settingsFor?.let { spec ->
         val missing = needs(context, spec, healthGranted).firstOrNull()
-        ChipSettingsDialog(
+        ChipSettingsPage(
             spec,
             onPickApp = { onPicked -> picking = onPicked },
             onChooseAccount = {
@@ -391,11 +389,13 @@ internal fun ChipsSection() {
 @Composable
 private fun ChipRow(icon: Int, title: String, value: String?, status: String?, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 20.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+        Box(Modifier.size(40.dp).background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+            Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+        }
+        Column(modifier = Modifier.padding(start = 16.dp).weight(1f)) {
             Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (status != null) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -533,7 +533,7 @@ private fun MetricPickerDialog(chosen: List<ChipSpec>, onPick: (HealthMetric) ->
 }
 
 @Composable
-private fun ChipSettingsDialog(
+private fun ChipSettingsPage(
     spec: ChipSpec,
     onPickApp: (((String) -> Unit)) -> Unit,
     onChooseAccount: () -> Unit,
@@ -554,163 +554,138 @@ private fun ChipSettingsDialog(
     }
     var size by remember { mutableStateOf(Prefs.chipSize(context, spec.key)) }
     var goal by remember { mutableStateOf(Prefs.stepGoal(context).toString()) }
+    // Which value is being changed in a dialog: "size", "goal" or "name".
+    var editing by remember { mutableStateOf<String?>(null) }
     if (spec.kind == Complication.GMAIL && spec.arg != null) {
         LaunchedEffect(spec.key) { labels = withContext(Dispatchers.IO) { GmailSource.labels(context, spec.arg) } }
     }
+    BackHandler(onBack = onDismiss)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
-        title = { Text(chipTitle(context, spec)) },
-        text = {
-            LazyColumn(modifier = Modifier.heightIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { access() } }
-                if (spec.kind == Complication.GMAIL) {
-                    item {
-                        Text("Gmail account", style = MaterialTheme.typography.labelLarge)
-                        Text(spec.arg ?: "None chosen yet")
-                        OutlinedButton(onClick = onChooseAccount) { Text("Choose account") }
-                    }
-                }
-                item {
-                    Text("When tapped, opens", style = MaterialTheme.typography.labelLarge)
-                    Text(
-                        appLabel(context, opens) ?: spec.defaultAppName(context)?.let { "$it (default)" } ?: "Its usual app or screen",
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        OutlinedButton(onClick = {
-                            onPickApp { pkg ->
-                                Prefs.setChipApp(context, spec.key, pkg)
-                                opens = pkg
-                            }
-                        }) { Text("Choose app to open") }
-                        if (opens != null) {
-                            TextButton(onClick = {
-                                Prefs.setChipApp(context, spec.key, null)
-                                opens = null
-                            }) { Text("Use default") }
-                        }
-                    }
-                }
-                if (spec.kind.canGrow) {
-                    item {
-                        Text("Size", style = MaterialTheme.typography.labelLarge)
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            ChipSize.entries.forEachIndexed { index, option ->
-                                SegmentedButton(
-                                    selected = size == option,
-                                    onClick = {
-                                        Prefs.setChipSize(context, spec.key, option)
-                                        size = option
-                                    },
-                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = ChipSize.entries.size)
-                                ) { Text(option.label) }
-                            }
-                        }
-                        Text(
-                            when (size) {
-                                ChipSize.STANDARD -> "One slot: ${bigExample(spec.kind).first}."
-                                ChipSize.EXTENDED -> "Two slots when there is room, showing ${bigExample(spec.kind).second}. " +
-                                    "Under the temperature (and in Split, Grid and strips) it spreads across; in a stacked column it takes two rows, with ${bigExample(spec.kind).third}."
-                            },
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Text("On the extra chips card, chips are always extended.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                if (spec.kind == Complication.STEPS) {
-                    item {
-                        Text("Daily goal", style = MaterialTheme.typography.labelLarge)
-                        OutlinedTextField(
-                            value = goal,
-                            onValueChange = { typed ->
-                                goal = typed.filter { it.isDigit() }.take(6)
-                                goal.toIntOrNull()?.takeIf { it > 0 }?.let { Prefs.setStepGoal(context, it) }
-                            },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            supportingText = { Text("Shown when the steps chip is extended.") }
-                        )
-                    }
-                }
-                if (spec.kind == Complication.ETORO) {
-                    item { EtoroKeysSection() }
-                }
-                if (spec.kind == Complication.COUNTDOWN) {
-                    item {
-                        Text("Count down to", style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            countdown?.let { LocalDate.ofEpochDay(it).format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.FULL)) }
-                                ?.let { if (countdownEvent != null) "$it · from your calendar (follows the event if it moves)" else it }
-                                ?: "No date chosen"
-                        )
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            OutlinedButton(onClick = {
-                                val start = countdown?.let { LocalDate.ofEpochDay(it) } ?: LocalDate.now().plusDays(1)
-                                DatePickerDialog(context, { _, y, m, d ->
-                                    val day = LocalDate.of(y, m + 1, d).toEpochDay()
-                                    Prefs.setCountdownDay(context, day)
-                                    countdown = day
-                                    countdownEvent = null
-                                }, start.year, start.monthValue - 1, start.dayOfMonth).show()
-                            }) { Text("Choose date") }
-                            OutlinedButton(onClick = {
-                                if (CalendarSource.hasPermission(context)) pickingEvent = true
-                                else calendarPermission.launch(Manifest.permission.READ_CALENDAR)
-                            }) { Text("Pick from calendar") }
-                        }
-                        if (pickingEvent) {
-                            EventPickerDialog(
-                                onPick = { event ->
-                                    Prefs.setCountdownEvent(context, event.eventId, event.day.toEpochDay(), event.title)
-                                    countdown = event.day.toEpochDay()
-                                    countdownEvent = event.eventId
-                                    countdownName = Prefs.countdownName(context)
-                                    pickingEvent = false
-                                },
-                                onDismiss = { pickingEvent = false }
-                            )
-                        }
-                        OutlinedTextField(
-                            value = countdownName,
-                            onValueChange = {
-                                countdownName = it.take(30)
-                                Prefs.setCountdownName(context, countdownName)
-                            },
-                            singleLine = true,
-                            label = { Text("What it's for (optional)") },
-                            supportingText = { Text("Shown when the countdown chip is extended, with the date.") }
-                        )
-                    }
-                }
-                if (spec.kind == Complication.GMAIL && spec.arg != null) {
-                    item {
-                        Text("Count unread in", style = MaterialTheme.typography.labelLarge)
-                        when {
-                            !GmailSource.hasPermission(context) -> Text("Grant the Gmail permission first.")
-                            labels == null -> Text("Gmail did not return any labels for this account. Check that it is signed in to the Gmail app.")
-                        }
-                    }
-                    items(labels.orEmpty()) { label ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                chosenLabels = if (label.canonicalName in chosenLabels) chosenLabels - label.canonicalName else chosenLabels + label.canonicalName
-                                Prefs.setGmailLabels(context, spec.arg, chosenLabels)
-                            }
-                        ) {
-                            Checkbox(checked = label.canonicalName in chosenLabels, onCheckedChange = null)
-                            Text("${GmailSource.displayName(label)} (${label.unread} unread)", modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
-                }
-                item {
-                    TextButton(onClick = onRemove) { Text("Remove this chip", color = MaterialTheme.colorScheme.error) }
-                }
+    SettingsPage(chipTitle(context, spec), onDismiss) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { access() }
+        if (spec.kind == Complication.GMAIL) {
+            Subheader("Account")
+            LinkRow("Gmail account", spec.arg ?: "None chosen yet", iconRes = R.drawable.ic_comp_mail, onClick = onChooseAccount)
+        }
+        if (spec.kind.canGrow) {
+            Subheader("Look")
+            LinkRow("Size", size.label) { editing = "size" }
+            SettingNote("On the extra chips card, chips are always extended.")
+        }
+        if (spec.kind == Complication.STEPS) {
+            Subheader("Steps")
+            LinkRow("Daily goal", "$goal steps · shown when the chip is extended", iconRes = R.drawable.ic_comp_steps) { editing = "goal" }
+        }
+        if (spec.kind == Complication.ETORO) {
+            Subheader("eToro")
+            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { EtoroKeysSection() }
+        }
+        if (spec.kind == Complication.COUNTDOWN) {
+            Subheader("Count down to")
+            LinkRow(
+                "Date",
+                countdown?.let { LocalDate.ofEpochDay(it).format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.FULL)) }
+                    ?.let { if (countdownEvent != null) "$it · from your calendar (follows the event if it moves)" else it }
+                    ?: "No date chosen",
+                iconRes = R.drawable.ic_comp_countdown,
+            ) {
+                val start = countdown?.let { LocalDate.ofEpochDay(it) } ?: LocalDate.now().plusDays(1)
+                DatePickerDialog(context, { _, y, m, d ->
+                    val day = LocalDate.of(y, m + 1, d).toEpochDay()
+                    Prefs.setCountdownDay(context, day)
+                    countdown = day
+                    countdownEvent = null
+                }, start.year, start.monthValue - 1, start.dayOfMonth).show()
+            }
+            LinkRow("Pick from your calendar", "Follows the event if it moves") {
+                if (CalendarSource.hasPermission(context)) pickingEvent = true
+                else calendarPermission.launch(Manifest.permission.READ_CALENDAR)
+            }
+            LinkRow("What it's for", countdownName.ifEmpty { "Optional · shown with the date when the chip is extended" }) { editing = "name" }
+            if (pickingEvent) {
+                EventPickerDialog(
+                    onPick = { event ->
+                        Prefs.setCountdownEvent(context, event.eventId, event.day.toEpochDay(), event.title)
+                        countdown = event.day.toEpochDay()
+                        countdownEvent = event.eventId
+                        countdownName = Prefs.countdownName(context)
+                        pickingEvent = false
+                    },
+                    onDismiss = { pickingEvent = false }
+                )
             }
         }
-    )
+        if (spec.kind == Complication.GMAIL && spec.arg != null) {
+            Subheader("Count unread in")
+            when {
+                !GmailSource.hasPermission(context) -> SettingNote("Grant the Gmail permission first.")
+                labels == null -> SettingNote("Gmail did not return any labels for this account. Check that it is signed in to the Gmail app.")
+            }
+            labels.orEmpty().forEach { label ->
+                SettingRow(
+                    GmailSource.displayName(label), "${label.unread} unread",
+                    onClick = {
+                        chosenLabels = if (label.canonicalName in chosenLabels) chosenLabels - label.canonicalName else chosenLabels + label.canonicalName
+                        Prefs.setGmailLabels(context, spec.arg, chosenLabels)
+                    },
+                    trailing = { Checkbox(checked = label.canonicalName in chosenLabels, onCheckedChange = null) },
+                )
+            }
+        }
+        Subheader("Tapping it opens")
+        LinkRow("App", appLabel(context, opens) ?: spec.defaultAppName(context)?.let { "$it (default)" } ?: "Its usual app or screen") {
+            onPickApp { pkg ->
+                Prefs.setChipApp(context, spec.key, pkg)
+                opens = pkg
+            }
+        }
+        if (opens != null) SettingRow("Use the default", onClick = {
+            Prefs.setChipApp(context, spec.key, null)
+            opens = null
+        })
+        HorizontalDivider(Modifier.padding(top = 8.dp))
+        SettingRow("Remove this chip", error = true, onClick = onRemove)
+    }
+
+    when (editing) {
+        "size" -> ChoiceDialog(
+            "Size", ChipSize.entries, size, label = { it.label },
+            details = {
+                when (it) {
+                    ChipSize.STANDARD -> "One slot: ${bigExample(spec.kind).first}."
+                    ChipSize.EXTENDED -> "Two slots when there is room, showing ${bigExample(spec.kind).second}; in a stacked column, two rows with ${bigExample(spec.kind).third}."
+                }
+            },
+            onDismiss = { editing = null },
+        ) { Prefs.setChipSize(context, spec.key, it); size = it; editing = null }
+        "goal", "name" -> {
+            var text by remember { mutableStateOf(if (editing == "goal") goal else countdownName) }
+            AlertDialog(
+                onDismissRequest = { editing = null },
+                title = { Text(if (editing == "goal") "Daily goal" else "What it's for") },
+                text = {
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { typed -> text = if (editing == "goal") typed.filter { it.isDigit() }.take(6) else typed.take(30) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = if (editing == "goal") KeyboardType.Number else KeyboardType.Text),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (editing == "goal") {
+                            text.toIntOrNull()?.takeIf { it > 0 }?.let { Prefs.setStepGoal(context, it); goal = it.toString() }
+                        } else {
+                            countdownName = text
+                            Prefs.setCountdownName(context, text)
+                        }
+                        editing = null
+                    }) { Text("Done") }
+                },
+                dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } },
+            )
+        }
+    }
 }
 
 /** Upcoming calendar events to count down to, searchable, soonest first. */
