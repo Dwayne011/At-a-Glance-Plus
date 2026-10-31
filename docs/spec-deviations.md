@@ -294,3 +294,13 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | Area | Now | Why |
 |---|---|---|
 | Live tower | The last column is split in two, "Tyre" and "Laps", each centred over its own figure (the ring and the laps on that set), instead of the ring and number centred together under one "Tyre · laps" title | User: the laps numbers did not line up with their heading |
+
+## 0.29.0 — Stock and eToro dashboards in the sports look; drag and zoom; Wallet sync status
+
+| Area | Now | Why |
+|---|---|---|
+| Stock and eToro dashboards | The sports/F1 dashboards' dark screen: 22sp title, pill tabs for the stocks (scrolling past four) and ranges, a hero panel (name, value large, moves in lifted green/red on a green or red wash), 16dp rounded panels; dialogs and buttons take the same dark colours | User request; chose the Sports/F1 style for both |
+| Candle chart | Tap or drag along it to read any candle (a sideways drag holds the page still; an up-and-down one still scrolls); pinch to zoom in and out, two fingers to move along; the price scale and the time labels fit the candles on screen; "Reset zoom" shows the whole range; the chosen candle has a guide, a line at its close and a ring | User request |
+| eToro value chart | The same drag and zoom | User chose both |
+| Other line charts (health) | Drag along to read values (tap as before); no zoom | Shared chart code |
+| Wallet sync | "Sync now" shows "Syncing…" and then how the last sync went: Google refusing the Wallet token (its HTTP code and error), Wallet's own HTTP error, or what came back (passes received, unreadable, inactive, shown) | User report: signed in but nothing synced, with no reason shown |

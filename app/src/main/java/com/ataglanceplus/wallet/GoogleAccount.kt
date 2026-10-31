@@ -35,6 +35,10 @@ object GoogleAccount {
     private const val KEY_WALLET = "google_wallet_token"
     private const val KEY_WALLET_EXPIRY = "google_wallet_token_expiry"
 
+    /** Why the last Wallet token request failed, for the settings; null after one succeeds. */
+    @Volatile var lastError: String? = null
+        private set
+
     fun isSignedIn(context: Context): Boolean = SecureStore.getString(context, KEY_MASTER) != null
 
     fun email(context: Context): String? = SecureStore.getString(context, KEY_EMAIL)
@@ -93,10 +97,20 @@ object GoogleAccount {
         )
         // 403: the master token was revoked (signed out from the Google account's security page).
         if (code == 403) {
+            lastError = "Google refused the saved sign-in (HTTP 403)" + (response?.get("Error")?.let { ": $it" } ?: "") + ", so it was removed. Sign in again."
             signOut(context)
             return null
         }
-        val auth = response?.get("Auth") ?: return null
+        val auth = response?.get("Auth")
+        if (auth == null) {
+            lastError = when {
+                response == null -> "Google's sign-in service did not answer. Check the connection."
+                else -> "Google did not give a Wallet token (HTTP $code" + (response["Error"]?.let { ", $it" } ?: "") + ")."
+            }
+            Log.w(TAG, "wallet token refused: $lastError")
+            return null
+        }
+        lastError = null
         SecureStore.putString(context, KEY_WALLET, auth)
         SecureStore.putString(context, KEY_WALLET_EXPIRY, response["Expiry"] ?: (System.currentTimeMillis() / 1000 + 3000).toString())
         return auth

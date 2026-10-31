@@ -40,6 +40,15 @@ object WalletSource {
 
     @Volatile private var loaded = false
 
+    /** How the last sync went, in words, and when; null before the first since the app started. */
+    data class SyncStatus(val ok: Boolean, val message: String, val at: Long = System.currentTimeMillis())
+
+    private val _status = MutableStateFlow<SyncStatus?>(null)
+    val status: StateFlow<SyncStatus?> = _status.asStateFlow()
+
+    /** Why the last request failed (an HTTP code or an error), for [status]. */
+    @Volatile private var requestError: String? = null
+
     /** Reads what is already on disk into [passes], once. Safe to call often. */
     @Synchronized
     fun ensureLoaded(context: Context) {
@@ -59,20 +68,34 @@ object WalletSource {
      */
     fun sync(context: Context): Boolean {
         ensureLoaded(context)
-        val token = GoogleAccount.walletToken(context) ?: return false
+        fun fail(why: String): Boolean {
+            _status.value = SyncStatus(false, why)
+            return false
+        }
+        val token = GoogleAccount.walletToken(context) ?: return fail(GoogleAccount.lastError ?: "Not signed in.")
         val stored = readStore(context)
 
         var response = request(token, stored)
         if (response == null) {
             // A stale Wallet token reads as 401; drop it and try once with a fresh one.
             GoogleAccount.clearWalletToken(context)
-            val fresh = GoogleAccount.walletToken(context) ?: return false
-            response = request(fresh, stored) ?: return false
+            val fresh = GoogleAccount.walletToken(context) ?: return fail(GoogleAccount.lastError ?: "Not signed in.")
+            response = request(fresh, stored) ?: return fail(requestError ?: "Google Wallet did not answer.")
         }
 
         val merged = merge(stored, response)
         writeStore(context, merged)
-        _passes.value = parseAll(merged)
+        val parsed = merged.mapNotNull { runCatching { WalletPass.parse(it.id, Proto(it.raw)) }.getOrNull() }
+        _passes.value = parsed.filter { it.active }
+        _status.value = SyncStatus(
+            true,
+            when {
+                merged.isEmpty() -> "Synced. Google Wallet sent no passes for this account (${response.size} bytes)."
+                parsed.size < merged.size -> "Synced. ${merged.size} passes from Google; ${merged.size - parsed.size} could not be read, ${_passes.value.size} shown."
+                _passes.value.size < parsed.size -> "Synced. ${parsed.size} passes from Google; ${parsed.size - _passes.value.size} are expired or inactive, ${_passes.value.size} shown."
+                else -> "Synced. ${parsed.size} passes."
+            },
+        )
         return true
     }
 
@@ -108,18 +131,22 @@ object WalletSource {
             setRequestProperty("Authorization", "Bearer $token")
             setRequestProperty("Content-Type", "application/x-protobuf")
         }
+        requestError = null
         return try {
             connection.outputStream.use { it.write(body) }
             when (val code = connection.responseCode) {
                 in 200..299 -> connection.inputStream.use { it.readBytes() }
-                401 -> null
                 else -> {
-                    Log.w(TAG, "sync HTTP $code")
+                    val detail = runCatching { connection.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
+                        ?.replace(Regex("\\s+"), " ")?.take(160)
+                    requestError = "Google Wallet answered HTTP $code" + (detail?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ".")
+                    Log.w(TAG, "sync HTTP $code $detail")
                     null
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "sync failed", e)
+            requestError = "The sync failed: ${e.message ?: e.javaClass.simpleName}"
             null
         } finally {
             connection.disconnect()

@@ -617,8 +617,25 @@ private fun WalletSettings(settingsVersion: Int) {
     } else {
         passes.forEach { pass -> WalletPassRules(pass) { tick++ } }
     }
-    OutlinedButton(onClick = { scope.launch { withContext(Dispatchers.IO) { com.ataglanceplus.wallet.WalletSource.sync(context) } } }) {
-        Text("Sync now")
+    // How the last sync went, so a failure is not mistaken for an empty Wallet.
+    val status by com.ataglanceplus.wallet.WalletSource.status.collectAsStateWithLifecycle()
+    var syncing by remember { mutableStateOf(false) }
+    OutlinedButton(enabled = !syncing, onClick = {
+        syncing = true
+        scope.launch {
+            withContext(Dispatchers.IO) { com.ataglanceplus.wallet.WalletSource.sync(context) }
+            syncing = false
+        }
+    }) {
+        Text(if (syncing) "Syncing…" else "Sync now")
+    }
+    status?.let { s ->
+        val at = java.time.Instant.ofEpochMilli(s.at).atZone(java.time.ZoneId.systemDefault()).toLocalTime().withNano(0)
+        Text(
+            "Last sync $at: ${s.message}",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (s.ok) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+        )
     }
 }
 

@@ -21,6 +21,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -146,6 +153,9 @@ class DashboardActivity : ComponentActivity() {
                     when {
                         kind?.startsWith(KIND_GAME_PREFIX) == true -> GameMatchDashboard(kind.removePrefix(KIND_GAME_PREFIX))
                         kind?.startsWith(KIND_RACE_PREFIX) == true -> F1EventDashboard(kind.removePrefix(KIND_RACE_PREFIX))
+                        // Stocks and eToro share the sports dashboards' dark look.
+                        kind?.startsWith(KIND_STOCK_PREFIX) == true -> FinanceScreen { StockDashboard(kind.removePrefix(KIND_STOCK_PREFIX)) }
+                        kind == KIND_ETORO -> FinanceScreen { EtoroDashboard() }
                         else -> Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -157,9 +167,7 @@ class DashboardActivity : ComponentActivity() {
                                 KIND_STEPS -> StepsDashboard()
                                 KIND_SLEEP -> SleepDashboard()
                                 KIND_SCREEN -> ScreenDashboard()
-                                KIND_ETORO -> EtoroDashboard()
                                 else -> when {
-                                    kind?.startsWith(KIND_STOCK_PREFIX) == true -> StockDashboard(kind.removePrefix(KIND_STOCK_PREFIX))
                                     else -> HealthMetric.fromId(kind?.removePrefix(KIND_HEALTH_PREFIX))?.let { MetricDashboard(it) } ?: Text("Nothing to show.")
                                 }
                             }
@@ -611,20 +619,25 @@ private fun ReadingsDashboard(metric: HealthMetric, readings: List<Reading>) {
 }
 
 /**
- * Readings over time as one 2dp line, scaled to their own low and high (marked at the left), with
- * markers when there are few. A tap picks the nearest reading and describes it above the chart.
+ * Readings over time as one 2dp line, scaled to the low and high of those on screen (marked at the
+ * left), with markers when there are few. Tap or drag along it to read the nearest reading above
+ * the chart; with [zoomable], pinch to zoom and two fingers to move along.
  */
 @Composable
-private fun LineChart(points: List<Reading>, describe: (Reading) -> String, format: (Double) -> String, markers: Boolean) {
+private fun LineChart(points: List<Reading>, describe: (Reading) -> String, format: (Double) -> String, markers: Boolean, zoomable: Boolean = false) {
     if (points.isEmpty()) return
     var selected by remember(points) { mutableIntStateOf(points.lastIndex) }
     val line = MaterialTheme.colorScheme.primary
     val surface = MaterialTheme.colorScheme.surfaceContainerHighest
     val grid = MaterialTheme.colorScheme.outlineVariant
-    val low = points.minOf { it.value }
-    val high = points.maxOf { it.value }.let { if (it == low) low + 1 else it }
     val t0 = points.first().time.toEpochMilli()
     val span = (points.last().time.toEpochMilli() - t0).coerceAtLeast(1).toFloat()
+    // Zoom works on the share of the time span on screen; at least about six readings stay in view.
+    val window = remember(points.size, t0) { ChartWindow(1f, (6f / points.size).coerceIn(0.01f, 1f)) }
+    fun share(r: Reading) = (r.time.toEpochMilli() - t0) / span
+    val inView = points.filter { share(it) >= window.start - 0.001f && share(it) <= window.start + window.count + 0.001f }.ifEmpty { points }
+    val low = inView.minOf { it.value }
+    val high = inView.maxOf { it.value }.let { if (it == low) low + 1 else it }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(describe(points[selected]), style = MaterialTheme.typography.bodyMedium)
         Row {
@@ -636,15 +649,14 @@ private fun LineChart(points: List<Reading>, describe: (Reading) -> String, form
                 modifier = Modifier
                     .weight(1f)
                     .height(120.dp)
-                    .pointerInput(points) {
-                        detectTapGestures { at ->
-                            val time = t0 + at.x / size.width * span
-                            selected = points.indices.minByOrNull { kotlin.math.abs(points[it].time.toEpochMilli() - time) } ?: selected
-                        }
+                    .clipToBounds()
+                    .chartGestures(points, if (zoomable) window else null) { fraction ->
+                        val time = t0 + window.at(fraction) * span
+                        selected = points.indices.minByOrNull { kotlin.math.abs(points[it].time.toEpochMilli() - time) } ?: selected
                     }
             ) {
                 val pad = 6.dp.toPx()
-                fun x(r: Reading) = if (points.size == 1) size.width / 2 else (r.time.toEpochMilli() - t0) / span * size.width
+                fun x(r: Reading) = if (points.size == 1) size.width / 2 else (share(r) - window.start) / window.count * size.width
                 fun y(r: Reading) = pad + (1 - ((r.value - low) / (high - low)).toFloat()) * (size.height - 2 * pad)
                 drawLine(grid, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
                 val path = Path()
@@ -658,6 +670,7 @@ private fun LineChart(points: List<Reading>, describe: (Reading) -> String, form
                 drawCircle(line, 5.dp.toPx(), Offset(x(chosen), y(chosen)))
             }
         }
+        if (zoomable) ZoomHint(window)
     }
 }
 
@@ -744,55 +757,48 @@ private fun StockDashboard(initial: String) {
         }
         refresh.loaded = refresh.generation
     }
-    Title("Stocks")
-    if (tickers.size > 1) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            tickers.forEach { t -> FilterChip(selected = t == symbol, onClick = { symbol = t }, label = { Text(t) }) }
-        }
-    }
+    ScreenTitle("Stocks")
+    if (tickers.size > 1) PillRow(tickers, tickers.indexOf(symbol)) { symbol = tickers[it] }
     when (val state = load) {
-        Load.Loading -> Text("Loading…")
-        is Load.Missing -> Text(state.why)
+        Load.Loading -> Text("Loading…", color = SportSub)
+        is Load.Missing -> Text(state.why, color = SportSub)
         is Load.Ready -> {
             val h = state.data
             val q = h.quote
             // The screen's locale, read so prices redraw if the phone's language changes.
             val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
             fun money(v: Double) = String.format(locale, "%,.2f", v)
-            Column {
-                Text(q.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${q.symbol} · ${h.exchangeName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
             val change = h.rangeChange
             val base = q.price - change
             val percent = if (base != 0.0) 100 * change / base else 0.0
             // Outside regular hours the latest price leads, with its move from the close (as eToro
             // shows it); the regular session's figures follow.
             val extended = q.extended
-            Column {
-                Text("${money(extended?.price ?: q.price)} ${q.currency}", style = MaterialTheme.typography.displaySmall)
+            FinanceHero(
+                name = q.name,
+                detail = "${q.symbol} · ${h.exchangeName}",
+                value = "${money(extended?.price ?: q.price)} ${q.currency}",
+                rising = (extended?.change ?: change) >= 0,
+            ) {
                 if (extended != null) {
                     Text(
                         (if (extended.change >= 0) "▲ +" else "▼ −") + money(kotlin.math.abs(extended.change)) +
                             String.format(locale, " (%+.2f%%) ", extended.changePercent) + extended.session.label.lowercase(locale),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (extended.change >= 0) UP else DOWN,
+                        fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                        color = if (extended.change >= 0) UP_TEXT else DOWN_TEXT,
                     )
                 }
                 Text(
                     (if (extended != null) "At the close ${money(q.price)}: " else "") +
                         (if (change >= 0) "▲ +" else "▼ −") + money(kotlin.math.abs(change)) +
                         String.format(locale, " (%+.2f%%) ", percent) + if (range == com.ataglanceplus.live.FinanceSource.Range.DAY) "today" else "over ${range.label}",
-                    style = if (extended != null) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
-                    color = if (change >= 0) UP else DOWN,
+                    fontSize = if (extended != null) 13.sp else 15.sp, fontWeight = FontWeight.Medium,
+                    color = if (change >= 0) UP_TEXT else DOWN_TEXT,
                 )
             }
-            ChartCard("Price") {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    com.ataglanceplus.live.FinanceSource.Range.entries.forEach { r ->
-                        FilterChip(selected = r == range, onClick = { range = r }, label = { Text(r.label) })
-                    }
-                }
+            FinancePanel("Price") {
+                val ranges = com.ataglanceplus.live.FinanceSource.Range.entries
+                SegmentedPills(ranges.map { it.label }, range.ordinal) { range = ranges[it] }
                 if (h.candles.size >= 2) {
                     val zone = ZoneId.systemDefault()
                     val intraday = range.ordinal <= com.ataglanceplus.live.FinanceSource.Range.WEEK.ordinal
@@ -808,11 +814,6 @@ private fun StockDashboard(initial: String) {
                         com.ataglanceplus.live.FinanceSource.Range.YEAR -> "MMM"
                         else -> "dMMM"
                     }?.let { DateTimeFormatter.ofPattern(android.text.format.DateFormat.getBestDateTimePattern(locale, it), locale) }
-                    val last = h.candles.lastIndex
-                    val axis = listOf(0, last / 3, 2 * last / 3, last).distinct().map { i ->
-                        val at = Instant.ofEpochMilli(h.candles[i].time)
-                        i to (labelPattern?.format(at.atZone(zone)) ?: clock(context, at))
-                    }
                     CandleChart(
                         candles = h.candles,
                         vwap = h.vwap,
@@ -823,7 +824,10 @@ private fun StockDashboard(initial: String) {
                                 (h.vwap.getOrNull(i)?.let { " · VWAP ${money(it)}" } ?: "")
                         },
                         format = { money(it) },
-                        axis = axis,
+                        label = { i ->
+                            val at = Instant.ofEpochMilli(h.candles[i].time)
+                            labelPattern?.format(at.atZone(zone)) ?: clock(context, at)
+                        },
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -839,7 +843,7 @@ private fun StockDashboard(initial: String) {
                     Text("No prices for this range yet.", style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            ChartCard("Today") {
+            FinancePanel("Today") {
                 Stat("Previous close", money(q.previousClose))
                 if (h.dayLow != null && h.dayHigh != null) Stat("Day's range", "${money(h.dayLow)} – ${money(h.dayHigh)}")
                 if (h.yearLow != null && h.yearHigh != null) Stat("52-week range", "${money(h.yearLow)} – ${money(h.yearHigh)}")
@@ -901,15 +905,93 @@ private fun VwapDialog(
     )
 }
 
-/** VWAP's line: the first categorical blue, in its dark-theme and light-theme steps. */
+/** Up and down as text on the dark screen: the same hues, lifted to read on it. */
+private val UP_TEXT = Color(0xFF5BD35B)
+private val DOWN_TEXT = Color(0xFFFF7B72)
+
+/**
+ * The stock and eToro dashboards' frame: the sports dashboards' dark screen and type, with
+ * Material parts (dialogs, buttons, the charts' greys) taking the same colours.
+ */
+@Composable
+private fun FinanceScreen(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val scheme = androidx.compose.material3.darkColorScheme(
+        primary = SportAccent, onPrimary = Color(0xFF0A2A5C), secondaryContainer = SportHigh, onSecondaryContainer = Color.White,
+        background = SportBg, onBackground = SportText, surface = SportBg, onSurface = SportText, onSurfaceVariant = SportSub,
+        surfaceContainerLowest = SportBg, surfaceContainerLow = SportCard, surfaceContainer = SportCard,
+        surfaceContainerHigh = SportHigh, surfaceContainerHighest = SportHigh,
+        outline = Color(0x40FFFFFF), outlineVariant = Color(0x24FFFFFF), error = Color(0xFFFF8A80),
+    )
+    MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography) {
+        CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides SportText) {
+            Column(
+                modifier = Modifier.fillMaxSize().background(SportBg).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                content = content,
+            )
+        }
+    }
+}
+
+/** The headline: what it is, the value large, then its moves, on a wash of green or red. */
+@Composable
+private fun FinanceHero(name: String, detail: String, value: String, rising: Boolean, moves: @Composable () -> Unit) {
+    val tone = if (rising) UP else DOWN
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+            .background(Brush.verticalGradient(listOf(tone.copy(alpha = 0.22f), SportHigh)))
+            .border(1.dp, SportBorder, RoundedCornerShape(20.dp))
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(detail, color = SportSub, fontSize = 12.5.sp)
+        Text(value, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp, bottom = 2.dp))
+        moves()
+    }
+}
+
+/** A titled panel, as the sports dashboards draw theirs. */
+@Composable
+private fun FinancePanel(title: String, content: @Composable () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(SportHigh).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        content()
+    }
+}
+
+/** Pills to choose one of many (the user's stocks): equal pills while four fit, else a row that scrolls. */
+@Composable
+private fun PillRow(items: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    if (items.size <= 4) {
+        SegmentedPills(items, selected, onSelect)
+        return
+    }
+    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEachIndexed { index, item ->
+            val on = index == selected
+            Text(
+                item, color = if (on) Color.White else SportSub, fontSize = 13.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) SportHigh else SportCard)
+                    .border(1.dp, if (on) Color(0x33FFFFFF) else SportBorder, RoundedCornerShape(12.dp))
+                    .clickable { onSelect(index) }.padding(horizontal = 14.dp, vertical = 9.dp),
+            )
+        }
+    }
+}
+
+/** VWAP's line: the first categorical blue, in its dark-theme step (the stock screen is always dark). */
 private val VWAP_DARK = Color(0xFF3987E5)
-private val VWAP_LIGHT = Color(0xFF2A78D6)
 
 /**
  * Candles over time, filled green for a rise (close at or above open) and red for a fall, with
  * wicks from low to high, and the VWAP as a 2dp blue line (broken where it starts again). Scaled
- * to the range's own low and high (marked at the left). A legend names the three marks; a tap
- * picks a candle and describes its open, high, low, close and VWAP above the chart.
+ * to the low and high of the candles on screen (marked at the left). A legend names the three
+ * marks. Touch: tap or drag along the chart to read a candle (its open, high, low, close and VWAP
+ * show above); pinch to zoom in and out, two fingers to move along; "Reset zoom" shows it all.
  */
 @Composable
 private fun CandleChart(
@@ -918,24 +1000,29 @@ private fun CandleChart(
     vwapStarts: Set<Int>,
     describe: (Int) -> String,
     format: (Double) -> String,
-    axis: List<Pair<Int, String>>,
+    label: (Int) -> String,
 ) {
     if (candles.isEmpty()) return
     var selected by remember(candles) { mutableIntStateOf(candles.lastIndex) }
-    val vwapColour = if (isSystemInDarkTheme()) VWAP_DARK else VWAP_LIGHT
+    val window = remember(candles.size, candles.firstOrNull()?.time) { ChartWindow(candles.size.toFloat(), minOf(12f, candles.size.toFloat())) }
+    val vwapColour = VWAP_DARK
     val grid = MaterialTheme.colorScheme.outlineVariant
-    val averages = vwap.filterNotNull()
-    val low = minOf(candles.minOf { it.low }, averages.minOrNull() ?: Double.MAX_VALUE)
-    val high = maxOf(candles.maxOf { it.high }, averages.maxOrNull() ?: -Double.MAX_VALUE).let { if (it == low) low + 1 else it }
+    // The candles on screen, and their scale.
+    val first = window.start.toInt().coerceIn(0, candles.lastIndex)
+    val last = kotlin.math.ceil(window.start + window.count - 1).toInt().coerceIn(first, candles.lastIndex)
+    val shown = candles.subList(first, last + 1)
+    val averages = vwap.subList(first, minOf(last + 1, vwap.size)).filterNotNull()
+    val low = minOf(shown.minOf { it.low }, averages.minOrNull() ?: Double.MAX_VALUE)
+    val high = maxOf(shown.maxOf { it.high }, averages.maxOrNull() ?: -Double.MAX_VALUE).let { if (it == low) low + 1 else it }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             LegendKey(UP, "Up", line = false)
             LegendKey(DOWN, "Down", line = false)
             LegendKey(vwapColour, "VWAP", line = true)
         }
-        Text(describe(selected), style = MaterialTheme.typography.bodyMedium)
+        Text(describe(selected), style = MaterialTheme.typography.bodyMedium, minLines = 2)
         Row {
-            Column(modifier = Modifier.height(180.dp).width(52.dp), verticalArrangement = Arrangement.SpaceBetween) {
+            Column(modifier = Modifier.height(200.dp).width(52.dp), verticalArrangement = Arrangement.SpaceBetween) {
                 Text(format(high), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(format(low), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -943,21 +1030,19 @@ private fun CandleChart(
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
-                        .pointerInput(candles) {
-                            detectTapGestures { at -> selected = (at.x / size.width * candles.size).toInt().coerceIn(0, candles.lastIndex) }
-                        }
+                        .height(200.dp)
+                        .clipToBounds()
+                        .chartGestures(candles, window) { fraction -> selected = window.at(fraction).toInt().coerceIn(0, candles.lastIndex) }
                 ) {
                     val pad = 4.dp.toPx()
-                    val slot = size.width / candles.size
+                    val slot = size.width / window.count
                     val body = (slot * 0.7f).coerceAtLeast(1f)
                     val wick = 1.dp.toPx().coerceAtMost(body)
-                    fun x(i: Int) = (i + 0.5f) * slot
+                    fun x(i: Int) = (i + 0.5f - window.start) * slot
                     fun y(v: Double) = pad + (1 - ((v - low) / (high - low)).toFloat()) * (size.height - 2 * pad)
                     drawLine(grid, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
-                    // The chosen candle's faint guide, behind the marks.
-                    drawLine(grid, Offset(x(selected), 0f), Offset(x(selected), size.height), strokeWidth = 1.dp.toPx())
-                    candles.forEachIndexed { i, c ->
+                    for (i in first..last) {
+                        val c = candles[i]
                         val colour = if (c.close >= c.open) UP else DOWN
                         drawLine(colour, Offset(x(i), y(c.high)), Offset(x(i), y(c.low)), strokeWidth = wick)
                         val top = y(maxOf(c.open, c.close))
@@ -966,17 +1051,32 @@ private fun CandleChart(
                     }
                     val path = Path()
                     var drawing = false
-                    vwap.forEachIndexed { i, v ->
+                    for (i in (first - 1).coerceAtLeast(0)..minOf(last + 1, vwap.lastIndex)) {
+                        val v = vwap[i]
                         if (v == null || i in vwapStarts) drawing = false
-                        if (v == null) return@forEachIndexed
+                        if (v == null) continue
                         if (drawing) path.lineTo(x(i), y(v)) else path.moveTo(x(i), y(v))
                         drawing = true
                     }
                     drawPath(path, vwapColour, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                    // The chosen candle: a guide through it and a ring at its close.
+                    if (selected in first..last) {
+                        val c = candles[selected]
+                        drawLine(Color.White.copy(alpha = 0.45f), Offset(x(selected), 0f), Offset(x(selected), size.height), strokeWidth = 1.dp.toPx())
+                        drawLine(Color.White.copy(alpha = 0.25f), Offset(0f, y(c.close)), Offset(size.width, y(c.close)), strokeWidth = 1.dp.toPx())
+                        drawCircle(Color.White, 4.dp.toPx(), Offset(x(selected), y(c.close)))
+                        drawCircle(if (c.close >= c.open) UP else DOWN, 2.5.dp.toPx(), Offset(x(selected), y(c.close)))
+                    }
                 }
-                AxisLabels(axis, candles.size)
+                // Four labels along the bottom, for the part on screen.
+                val visible = (last - first).coerceAtLeast(1)
+                AxisLabelsAt(listOf(0, visible / 3, 2 * visible / 3, visible).distinct().map { k ->
+                    val i = first + k
+                    ((i + 0.5f - window.start) / window.count).coerceIn(0f, 1f) to label(i)
+                })
             }
         }
+        ZoomHint(window)
     }
 }
 
@@ -1031,28 +1131,27 @@ private fun EtoroDashboard() {
         refresh.loaded = refresh.generation
     }
     var sort by remember { mutableStateOf(EtoroSort.VALUE) }
-    Title("eToro")
+    ScreenTitle("eToro")
     when (val state = load) {
-        Load.Loading -> Text("Loading…")
-        is Load.Missing -> Text(state.why)
+        Load.Loading -> Text("Loading…", color = SportSub)
+        is Load.Missing -> Text(state.why, color = SportSub)
         is Load.Ready -> {
             val (p, history) = state.data
             val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
             fun money(v: Double) = (if (v < 0) "−" else "") + "$" + String.format(locale, "%,.2f", kotlin.math.abs(v))
             fun change(amount: Double, percent: Double) =
                 (if (amount >= 0) "▲ +" else "▼ −") + "$" + String.format(locale, "%,.2f", kotlin.math.abs(amount)) + String.format(locale, " (%+.2f%%)", percent)
-            Column {
-                Text(money(p.equity), style = MaterialTheme.typography.displaySmall)
-                Text("${change(p.pnl, p.pnlPercent)} on open positions", style = MaterialTheme.typography.bodyLarge, color = if (p.pnl >= 0) UP else DOWN)
+            FinanceHero(name = "Portfolio", detail = "Updated ${clock(context, Instant.ofEpochMilli(p.at))}", value = money(p.equity), rising = p.pnl >= 0) {
+                Text("${change(p.pnl, p.pnlPercent)} on open positions", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = if (p.pnl >= 0) UP_TEXT else DOWN_TEXT)
             }
-            ChartCard("Summary") {
+            FinancePanel("Summary") {
                 Stat("Invested", money(p.invested))
                 Stat("Profit/loss", (if (p.pnl >= 0) "+" else "") + money(p.pnl))
                 Stat("Available cash", money(p.cash))
                 Stat("Updated", clock(context, Instant.ofEpochMilli(p.at)))
             }
 
-            ChartCard("Value over time") {
+            FinancePanel("Value over time") {
                 val points = history.map { Reading(Instant.ofEpochMilli(it.at), it.equity) }
                 if (points.size >= 2) {
                     LineChart(
@@ -1063,6 +1162,7 @@ private fun EtoroDashboard() {
                         },
                         format = { "$" + String.format(locale, "%,.0f", it) },
                         markers = points.size <= 12,
+                        zoomable = true,
                     )
                 } else {
                     Text("Nothing to draw yet.", style = MaterialTheme.typography.bodyMedium)
@@ -1078,15 +1178,13 @@ private fun EtoroDashboard() {
 
             val rows = p.holdings.map { EtoroRow(it.name, it.symbol?.takeIf { s -> s != it.name }?.let { s -> if (it.positions > 1) "$s · ${it.positions} positions" else s }, it.invested, it.pnl) } +
                 p.copies.map { EtoroRow(it.username, "Copying", it.invested, it.pnl) }
-            ChartCard("Allocation") {
+            FinancePanel("Allocation") {
                 val cash = EtoroRow("Cash", null, p.cash.coerceAtLeast(0.0), 0.0, isCash = true)
                 AllocationBars((rows + cash).filter { it.value > 0 }.sortedByDescending { it.value }, locale)
             }
 
-            ChartCard("Positions") {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    EtoroSort.entries.forEach { s -> FilterChip(selected = s == sort, onClick = { sort = s }, label = { Text(s.label) }) }
-                }
+            FinancePanel("Positions") {
+                SegmentedPills(EtoroSort.entries.map { it.label }, sort.ordinal) { sort = EtoroSort.entries[it] }
                 val ordered = when (sort) {
                     EtoroSort.VALUE -> rows.sortedByDescending { it.value }
                     EtoroSort.PNL -> rows.sortedByDescending { it.pnl }
@@ -1306,6 +1404,93 @@ private fun BarChart(values: List<Long>, describe: (Int, Long) -> String, axis: 
 /** Axis labels centred under their bars (kept inside the chart at the ends). */
 @Composable
 private fun AxisLabels(axis: List<Pair<Int, String>>, count: Int) {
+    AxisLabelsAt(axis.map { (i, label) -> (i + 0.5f) / count to label })
+}
+
+/**
+ * The part of a chart on screen, for pinch-to-zoom: [start] and [count] in the chart's own units
+ * (candles, or a 0–1 share of the time span), never fewer than [minVisible] or more than [total].
+ */
+private class ChartWindow(val total: Float, private val minVisible: Float) {
+    var start by androidx.compose.runtime.mutableFloatStateOf(0f)
+    var count by androidx.compose.runtime.mutableFloatStateOf(total)
+    val zoomed: Boolean get() = count < total * 0.999f
+
+    /** Zooms by [factor] around [at] (a 0–1 share of the width), then moves by [pan] widths. */
+    fun transform(factor: Float, at: Float, pan: Float) {
+        val anchor = start + at * count
+        val next = (count / factor).coerceIn(minOf(minVisible, total), total)
+        count = next
+        start = (anchor - at * next - pan * next).coerceIn(0f, (total - next).coerceAtLeast(0f))
+    }
+
+    fun reset() {
+        start = 0f
+        count = total
+    }
+
+    /** Where [fraction] of the width falls, in the chart's units. */
+    fun at(fraction: Float): Float = start + fraction * count
+}
+
+/**
+ * A chart's touch (restarting when [data] changes): one finger picks (a tap, or a drag along the chart, which keeps the page from
+ * scrolling once it is sideways); two fingers pinch to zoom and slide to pan when [window] is given.
+ * A mostly up-and-down drag is left to the page, so it still scrolls.
+ */
+private fun Modifier.chartGestures(data: Any, window: ChartWindow?, onPick: (Float) -> Unit): Modifier = pointerInput(data, window) {
+    val slop = viewConfiguration.touchSlop
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        onPick((down.position.x / size.width).coerceIn(0f, 1f))
+        var dx = 0f
+        var dy = 0f
+        var scrubbing = false
+        var scrolling = false
+        while (true) {
+            val event = awaitPointerEvent()
+            val pressed = event.changes.filter { it.pressed }
+            if (pressed.isEmpty()) break
+            if (window != null && pressed.size >= 2) {
+                window.transform(event.calculateZoom(), event.calculateCentroid(useCurrent = true).x / size.width, event.calculatePan().x / size.width)
+                event.changes.forEach { it.consume() }
+                // After a pinch, the finger left behind goes on picking.
+                scrubbing = true
+                scrolling = false
+                continue
+            }
+            if (scrolling) continue
+            val change = pressed.first()
+            if (!scrubbing) {
+                val d = change.positionChange()
+                dx += d.x
+                dy += d.y
+                if (kotlin.math.abs(dx) > slop && kotlin.math.abs(dx) >= kotlin.math.abs(dy)) scrubbing = true
+                else if (kotlin.math.abs(dy) > slop) scrolling = true
+            }
+            if (scrubbing) {
+                onPick((change.position.x / size.width).coerceIn(0f, 1f))
+                change.consume()
+            }
+        }
+    }
+}
+
+/** "Pinch to zoom" until zoomed, then a way back to the whole range. */
+@Composable
+private fun ZoomHint(window: ChartWindow) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            if (window.zoomed) "Zoomed in · two fingers to move along" else "Drag to read prices · pinch to zoom",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
+        )
+        if (window.zoomed) TextButton(onClick = { window.reset() }) { Text("Reset zoom") }
+    }
+}
+
+/** Axis labels at shares of the width (0 to 1), kept inside the chart at the ends. */
+@Composable
+private fun AxisLabelsAt(axis: List<Pair<Float, String>>) {
     Layout(
         content = {
             axis.forEach { (_, label) ->
@@ -1316,10 +1501,9 @@ private fun AxisLabels(axis: List<Pair<Int, String>>, count: Int) {
     ) { measurables, constraints ->
         val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0)) }
         val width = constraints.maxWidth
-        val slot = width.toFloat() / count
         layout(width, placeables.maxOfOrNull { it.height } ?: 0) {
             placeables.forEachIndexed { k, placeable ->
-                val centre = (axis[k].first + 0.5f) * slot
+                val centre = axis[k].first * width
                 placeable.place((centre - placeable.width / 2f).toInt().coerceIn(0, (width - placeable.width).coerceAtLeast(0)), 0)
             }
         }
