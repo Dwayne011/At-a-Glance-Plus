@@ -27,6 +27,7 @@ object WalletGeofences {
 
     private const val TAG = "WalletGeofences"
     const val ACTION_TRANSITION = "com.ataglanceplus.wallet.GEOFENCE"
+    private const val MAX_GEOFENCES = 95
 
     /** Bumped whenever a geofence fires or a fresh location arrives, so the service redraws. */
     private val _changed = MutableStateFlow(0L)
@@ -57,7 +58,12 @@ object WalletGeofences {
         val client = LocationServices.getGeofencingClient(context)
         client.removeGeofences(pendingIntent(context))
 
-        val places = WalletRules.allPlaces(context)
+        // Play services allows 100 geofences an app: the nearest, when chains bring many branches.
+        val here = cachedLocation
+        val places = WalletRules.allPlaces(context).let { all ->
+            if (here == null || all.size <= MAX_GEOFENCES) all.take(MAX_GEOFENCES)
+            else all.sortedBy { (_, p) -> FloatArray(1).also { Location.distanceBetween(here.latitude, here.longitude, p.lat, p.lng, it) }[0] }.take(MAX_GEOFENCES)
+        }
         if (places.isEmpty()) return
 
         // One geofence per place; its id carries the pass id so the receiver can refresh.
@@ -88,9 +94,22 @@ object WalletGeofences {
                     if (location != null) {
                         cachedLocation = location
                         _changed.value = System.currentTimeMillis()
+                        refreshChains(context.applicationContext, location)
                     }
                 }
         }.onFailure { Log.w(TAG, "location failed", it) }
+    }
+
+    /** Looks up the user's chains' branches near [location] (off the main thread) and watches them. */
+    fun refreshChains(context: Context, location: Location) {
+        val chains = WalletRules.chains(context)
+        if (chains.isEmpty()) return
+        Thread {
+            if (PlaceSearch.refreshBranches(context, chains, location)) {
+                refresh(context)
+                _changed.value = System.currentTimeMillis()
+            }
+        }.start()
     }
 
     fun note(location: Location?) {

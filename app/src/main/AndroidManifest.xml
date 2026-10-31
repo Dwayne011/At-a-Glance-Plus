@@ -165,7 +165,14 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Black.NoTitleBar" />
+            android:theme="@style/Theme.AtAGlancePlus.Frosted" />
+
+        <!-- Wallet passes: which show, and where and when. -->
+        <activity
+            android:name=".ui.WalletSettingsActivity"
+            android:exported="false"
+            android:label="Wallet passes"
+            android:theme="@style/Theme.AtAGlancePlus" />
 
         <receiver
             android:name=".wallet.WalletGeofenceReceiver"

@@ -7,10 +7,10 @@ import org.json.JSONObject
 import java.util.Calendar
 
 /**
- * When and where each Wallet pass appears on the deck. A pass carries no location, so the user
- * gives it rules: any number of places (shown within a radius of each) and time windows. Flights,
- * events and transit can also use their own times automatically. A pass with a rule but no
- * triggers at all is simply pinned (always shown).
+ * Which Wallet passes appear on the deck, and when and where. A pass shows only once the user
+ * switches it on. Boarding passes, event tickets and transit tickets then follow their own times,
+ * as in Google Wallet. Any other pass carries no location, so the user gives it places (a spot,
+ * or any branch of a chain, each within a radius) and time windows; with neither, it always shows.
  */
 object WalletRules {
 
@@ -21,7 +21,14 @@ object WalletRules {
     private const val AUTO_LEAD_MS = 3L * 60 * 60 * 1000
     private const val AUTO_TRAIL_MS = 3L * 60 * 60 * 1000
 
-    data class Place(val label: String, val lat: Double, val lng: Double, val radiusM: Int)
+    /**
+     * A spot ([lat], [lng]) or, with [chain], any branch of that chain near the user (see
+     * [PlaceSearch]); [detail] is the street and town for a spot.
+     */
+    data class Place(
+        val label: String, val lat: Double, val lng: Double, val radiusM: Int,
+        val chain: String? = null, val detail: String? = null,
+    )
 
     /** A daily window. [days] holds Calendar.DAY_OF_WEEK values (1=Sun..7=Sat); empty means every day. */
     data class Window(val days: Set<Int>, val startMin: Int, val endMin: Int)
@@ -31,9 +38,16 @@ object WalletRules {
         val places: List<Place> = emptyList(),
         val windows: List<Window> = emptyList(),
         val auto: Boolean = true,
-    ) {
-        val pinned: Boolean get() = places.isEmpty() && windows.isEmpty() && !auto
-    }
+        /** Shown on the card at all (the switch beside the pass). */
+        val enabled: Boolean = false,
+    )
+
+    /** Passes that carry their own times and need no places or times from the user. */
+    val AUTOMATIC = setOf(WalletPass.Kind.FLIGHT, WalletPass.Kind.EVENT, WalletPass.Kind.TRANSIT)
+
+    /** The chains in every switched-on rule, for looking up their branches. */
+    fun chains(context: Context): Set<String> =
+        rules(context).filter { it.enabled }.flatMap { r -> r.places.mapNotNull { it.chain } }.toSet()
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -62,9 +76,17 @@ object WalletRules {
         prefs(context).edit().putString(KEY_RULES, array.toString()).apply()
     }
 
-    /** All the places across every rule, for registering geofences. */
+    /**
+     * Every spot to watch, for geofences: each switched-on rule's spots, and each branch of its
+     * chains as last found near the user.
+     */
     fun allPlaces(context: Context): List<Pair<String, Place>> =
-        rules(context).flatMap { rule -> rule.places.map { rule.passId to it } }
+        rules(context).filter { it.enabled }.flatMap { rule ->
+            rule.places.flatMap { place ->
+                if (place.chain == null) listOf(rule.passId to place)
+                else PlaceSearch.branches(context, place.chain).map { (lat, lng) -> rule.passId to place.copy(lat = lat, lng = lng) }
+            }
+        }
 
     /**
      * The passes to show right now: every rule whose location, time window, or own time matches
@@ -74,12 +96,14 @@ object WalletRules {
         WalletSource.ensureLoaded(context)
         val passes = WalletSource.passes.value.associateBy { it.id }
         return rules(context).filter { rule ->
+            if (!rule.enabled) return@filter false
             val pass = passes[rule.passId] ?: return@filter false
             if (pass.expired(now)) return@filter false
-            rule.pinned ||
+            // Boarding passes, tickets: their own times only, as in Google Wallet.
+            if (pass.kind in AUTOMATIC) return@filter autoMatch(pass, now)
+            (rule.places.isEmpty() && rule.windows.isEmpty()) ||
                 rule.windows.any { it.matches(now) } ||
-                (rule.auto && autoMatch(pass, now)) ||
-                (location != null && rule.places.any { within(location, it) })
+                (location != null && rule.places.any { place -> near(context, location, place) })
         }.map { it.passId }.toSet()
     }
 
@@ -89,10 +113,16 @@ object WalletRules {
         return now in begins..ends
     }
 
-    private fun within(location: Location, place: Place): Boolean {
+    /** Within the place's radius: of the spot, or of any branch of its chain. */
+    private fun near(context: Context, location: Location, place: Place): Boolean {
+        val spots = if (place.chain == null) listOf(place.lat to place.lng) else PlaceSearch.branches(context, place.chain)
+        return spots.any { (lat, lng) -> within(location, lat, lng, place.radiusM) }
+    }
+
+    private fun within(location: Location, lat: Double, lng: Double, radiusM: Int): Boolean {
         val result = FloatArray(1)
-        Location.distanceBetween(location.latitude, location.longitude, place.lat, place.lng, result)
-        return result[0] <= place.radiusM
+        Location.distanceBetween(location.latitude, location.longitude, lat, lng, result)
+        return result[0] <= radiusM
     }
 
     private fun Window.matches(now: Long): Boolean {
@@ -108,19 +138,23 @@ object WalletRules {
     private fun toJson(rule: Rule): JSONObject {
         val places = JSONArray()
         rule.places.forEach {
-            places.put(JSONObject().put("label", it.label).put("lat", it.lat).put("lng", it.lng).put("r", it.radiusM))
+            places.put(JSONObject().put("label", it.label).put("lat", it.lat).put("lng", it.lng).put("r", it.radiusM)
+                .put("chain", it.chain).put("detail", it.detail))
         }
         val windows = JSONArray()
         rule.windows.forEach {
             windows.put(JSONObject().put("days", JSONArray(it.days.toList())).put("s", it.startMin).put("e", it.endMin))
         }
-        return JSONObject().put("id", rule.passId).put("places", places).put("windows", windows).put("auto", rule.auto)
+        return JSONObject().put("id", rule.passId).put("places", places).put("windows", windows).put("auto", rule.auto).put("on", rule.enabled)
     }
 
     private fun fromJson(o: JSONObject): Rule {
         val places = o.optJSONArray("places")?.let { array ->
             (0 until array.length()).map { array.getJSONObject(it) }.map {
-                Place(it.optString("label"), it.getDouble("lat"), it.getDouble("lng"), it.optInt("r", 150))
+                Place(
+                    it.optString("label"), it.optDouble("lat"), it.optDouble("lng"), it.optInt("r", 150),
+                    chain = it.optString("chain").ifEmpty { null }, detail = it.optString("detail").ifEmpty { null },
+                )
             }
         }.orEmpty()
         val windows = o.optJSONArray("windows")?.let { array ->
@@ -129,6 +163,8 @@ object WalletRules {
                 Window((0 until daysArray.length()).map { daysArray.getInt(it) }.toSet(), w.optInt("s"), w.optInt("e"))
             }
         }.orEmpty()
-        return Rule(o.getString("id"), places, windows, o.optBoolean("auto", true))
+        // Rules from before the switch was on if they had places or times set.
+        val enabled = if (o.has("on")) o.optBoolean("on") else places.isNotEmpty() || windows.isNotEmpty()
+        return Rule(o.getString("id"), places, windows, o.optBoolean("auto", true), enabled)
     }
 }

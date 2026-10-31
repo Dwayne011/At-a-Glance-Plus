@@ -41,8 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * The full-screen pass pop-up: the pass's barcode or QR code, large, black on white, with the
- * screen brightness turned up as Wallet does so a scanner can read it. Reached only after the
+ * The pass pop-up: a white card headed in the pass's colour, with its barcode or QR code large,
+ * black on white, over the screen behind blurred (frosted; see Theme.AtAGlancePlus.Frosted), and
+ * the brightness turned up as Wallet does so a scanner can read it. Reached only after the
  * unlock gate. Tap anywhere or press back to close.
  */
 class WalletPassActivity : ComponentActivity() {
@@ -66,7 +67,6 @@ class WalletPassActivity : ComponentActivity() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF0B0E14))
                 .clickable(onClick = onClose),
             contentAlignment = Alignment.Center,
         ) {
@@ -76,20 +76,33 @@ class WalletPassActivity : ComponentActivity() {
                     .safeDrawingPadding()
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text(pass.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-                pass.subtitle?.let { Text(it, color = Color(0xFF9AA0A6), fontSize = 14.sp, textAlign = TextAlign.Center) }
-
-                val barcode = pass.barcode
-                if (barcode == null) {
-                    Text("This pass has no scannable code.", color = Color(0xFF9AA0A6), fontSize = 14.sp)
-                } else {
-                    CodeCard(barcode)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(Color.White),
+                ) {
+                    // The pass's own colour across the top, with who issued it and what it is.
+                    Column(
+                        modifier = Modifier.fillMaxWidth().background(Color(pass.colour)).padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        pass.issuer?.takeIf { it != pass.title }?.let { Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp) }
+                        Text(pass.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                        pass.subtitle?.let { Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp) }
+                    }
+                    val barcode = pass.barcode
+                    if (barcode == null) {
+                        Text("This pass has no scannable code.", color = Color(0xFF5F6368), fontSize = 14.sp, modifier = Modifier.padding(24.dp))
+                    } else {
+                        CodeCard(barcode)
+                    }
                 }
                 if (pass.details.isNotEmpty()) Details(pass.details)
 
-                Text("Tap anywhere to close", color = Color(0xFF5A606C), fontSize = 12.sp)
+                Text("Screen brightened · tap anywhere to close", color = Color.White.copy(alpha = 0.8f), fontSize = 12.5.sp)
             }
         }
     }
@@ -103,9 +116,8 @@ class WalletPassActivity : ComponentActivity() {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
                 .background(Color.White)
-                .padding(20.dp),
+                .padding(horizontal = 28.dp, vertical = 22.dp),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -143,8 +155,8 @@ class WalletPassActivity : ComponentActivity() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF151922))
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0xCC151922))
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

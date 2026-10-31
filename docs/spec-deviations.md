@@ -316,3 +316,15 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | Area | Now | Why |
 |---|---|---|
 | Wallet passes | A pass counts as current only when its metadata says is_active (as SmartspacerPlugins reads it). An archived pass carries no is_active field at all (proto3 omits false), which was being read as active | User report: archived passes listed with current ones |
+
+## 0.30.0 — Wallet passes as settings screens (mockup approved)
+
+| Area | Now | Why |
+|---|---|---|
+| Wallet settings | Cards › Wallet passes, once signed in, is one row ("n of m on the card") opening its own screen, laid out per Material's settings pattern: Show Wallet passes; Account (Google account with Sign out in its menu, Sync now with the last result); "Passes on the card" and "Not on the card", each pass a row whose name opens it and whose switch shows or hides it | User: the inline layout was confusing; follow the settings guidelines |
+| Choosing passes | A pass shows only once switched on (new passes start off); rules saved before this with places or times stay on | User: select the passes to see |
+| A pass's page | The pass in its colour, "Show on the card", then **Where** (any number of places, each with its radius; tap to change it, ✕ to remove, "Add a place") and **When** (time windows with days; "Add a time"). With neither, it shows all the time while on | User: multiple locations |
+| Boarding passes, event and transit tickets | No places or times: they show by their own times only, as Google Wallet does, and their page says so | User: mirror Google Wallet |
+| Add a place | Suggestions as you type (Photon, OpenStreetMap, nearest first), "Use where I am now", and "Any <chain>" when the results share a business name (e.g. any Tesco), with how many are within about 10 km. The radius (100/150/300/500 m) is chosen on adding | User: suggestive search; a place name like Tesco, not one place |
+| Any branch of a chain | Its branches within about 11 km are looked up and kept on the phone, again after a move of 2 km or a day, and watched with geofences (nearest 95, the Play services limit is 100) | As above |
+| Pass pop-up | A white card headed in the pass's colour with the code, over the screen behind blurred and dimmed (window blur), brightness up; "tap anywhere to close" | User: frosted background |
