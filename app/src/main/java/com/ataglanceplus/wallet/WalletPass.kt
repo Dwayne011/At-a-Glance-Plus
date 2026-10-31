@@ -66,7 +66,9 @@ data class WalletPass(
             val issuer = body.msg(base + 1)
             val redemption = body.msg(base + 2)
 
-            val active = metadata?.let { !it.has(5) || it.bool(5) } ?: true
+            // Metadata.is_active (5): proto3 leaves a false bool out, so an archived pass simply has
+            // no field 5. As the plugin does, only passes without metadata at all count as active by default.
+            val active = metadata?.bool(5) ?: true
 
             // IssuerInfo: title 2, issuer_name 3, logo 9 {url 1}, background_color 13.
             val title = issuer?.str(2) ?: id

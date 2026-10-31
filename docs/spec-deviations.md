@@ -310,3 +310,9 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | Area | Now | Why |
 |---|---|---|
 | Wallet sync | Each pass's hash is read and sent as the int64 it is (SmartspacerPlugins' SyncValuables protos); before, it was read as a string, came back empty, and every pass was taken as deleted. A hash of 0 now means deleted, as in the plugin. An empty result says how many entries Google sent | User report: synced, "no passes", though the Wallet has some |
+
+## 0.29.2 — Wallet: archived passes left out
+
+| Area | Now | Why |
+|---|---|---|
+| Wallet passes | A pass counts as current only when its metadata says is_active (as SmartspacerPlugins reads it). An archived pass carries no is_active field at all (proto3 omits false), which was being read as active | User report: archived passes listed with current ones |
