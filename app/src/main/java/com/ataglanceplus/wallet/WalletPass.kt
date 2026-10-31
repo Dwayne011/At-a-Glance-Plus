@@ -56,8 +56,21 @@ data class WalletPass(
         )
 
         fun parse(id: String, wrapper: Proto): WalletPass {
-            val (typeField, kind) = TYPES.firstOrNull { wrapper.has(it.first) } ?: (8 to Kind.GENERIC)
+            // Only the pass types Wallet shows (as the plugin lists them); anything else, such as a
+            // payment entry, and health cards (no layout known) are not passes to show.
+            val (typeField, kind) = TYPES.firstOrNull { wrapper.has(it.first) } ?: throw IllegalArgumentException("Not a pass: $id")
+            require(kind != Kind.HEALTH) { "Health card" }
             val body = wrapper.msg(typeField) ?: Proto(ByteArray(0))
+            // GroupingInfo (each type's own field): title 3, subtitle 4, background colour 6.
+            val grouping = body.msg(
+                when (kind) {
+                    Kind.LOYALTY, Kind.GIFT -> 17
+                    Kind.OFFER -> 18
+                    Kind.EVENT -> 15
+                    Kind.FLIGHT -> 13
+                    else -> 5
+                },
+            )
 
             // Field layout per type: metadata, issuer, redemption. Loyalty/gift/offer start at 3;
             // everything else at 2.
@@ -71,10 +84,12 @@ data class WalletPass(
             val active = metadata?.bool(5) ?: true
 
             // IssuerInfo: title 2, issuer_name 3, logo 9 {url 1}, background_color 13.
-            val title = issuer?.str(2) ?: id
+            // The name Wallet lists it under, as the plugin does; then the issuer's title or name.
+            // A pass with none of them is not one to show (its id is no name).
             val issuerName = issuer?.str(3)
+            val title = grouping?.str(3) ?: issuer?.str(2) ?: issuerName ?: throw IllegalArgumentException("No name: $id")
             val logoUrl = issuer?.msg(9)?.str(1)
-            val colour = parseColour(issuer?.msg(13)) ?: DEFAULT_COLOUR
+            val colour = parseColour(issuer?.msg(13)) ?: parseColour(grouping?.msg(6)) ?: DEFAULT_COLOUR
 
             val barcode = parseBarcode(redemption)
 
@@ -134,13 +149,9 @@ data class WalletPass(
                 else -> Unit
             }
 
-            // GroupingInfo (loyalty/gift/offer 17/18, else 5): title 3, subtitle 4.
-            val groupingField = when (kind) {
-                Kind.LOYALTY, Kind.GIFT -> 17
-                Kind.OFFER -> 18
-                else -> 5
-            }
-            body.msg(groupingField)?.str(4)?.let { if (subtitle == null) subtitle = it }
+            grouping?.str(4)?.let { if (subtitle == null) subtitle = it }
+            // The issuer is the subtitle unless it only repeats the name.
+            if (subtitle == title) subtitle = null
 
             return WalletPass(
                 id = id, kind = kind, active = active, title = title, subtitle = subtitle,

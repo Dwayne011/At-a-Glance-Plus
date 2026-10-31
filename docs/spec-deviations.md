@@ -328,3 +328,10 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | Add a place | Suggestions as you type (Photon, OpenStreetMap, nearest first), "Use where I am now", and "Any <chain>" when the results share a business name (e.g. any Tesco), with how many are within about 10 km. The radius (100/150/300/500 m) is chosen on adding | User: suggestive search; a place name like Tesco, not one place |
 | Any branch of a chain | Its branches within about 11 km are looked up and kept on the phone, again after a move of 2 km or a day, and watched with geofences (nearest 95, the Play services limit is 100) | As above |
 | Pass pop-up | A white card headed in the pass's colour with the code, over the screen behind blurred and dimmed (window blur), brightness up; "tap anywhere to close" | User: frosted background |
+
+## 0.30.1 — Wallet: real names, only passes, A–Z
+
+| Area | Now | Why |
+|---|---|---|
+| Pass names | The name Wallet lists a pass under (GroupingInfo.grouping_title, each type's own field: loyalty/gift 17, offer 18, event 15, flight 13, transit/generic 5), then the issuer's title or name, as SmartspacerPlugins does. Entries that are none of Wallet's pass types (payment entries, "UCPV2:…" ids), health cards and entries with no name are left out | User: some passes were just letters and numbers |
+| Order | Passes in alphabetical order | User request |

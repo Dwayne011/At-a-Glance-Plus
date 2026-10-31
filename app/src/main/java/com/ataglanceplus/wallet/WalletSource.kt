@@ -86,7 +86,7 @@ object WalletSource {
         val merged = merge(stored, response)
         writeStore(context, merged)
         val parsed = merged.mapNotNull { runCatching { WalletPass.parse(it.id, Proto(it.raw)) }.getOrNull() }
-        _passes.value = parsed.filter { it.active }
+        _passes.value = parsed.filter { it.active }.sortedBy { it.title.lowercase(Locale.getDefault()) }
         _status.value = SyncStatus(
             true,
             when {
@@ -95,7 +95,7 @@ object WalletSource {
                     if (sent == 0) "Synced. Google Wallet sent no passes for this account."
                     else "Synced. Google Wallet sent $sent entries, all marked deleted or archived."
                 }
-                parsed.size < merged.size -> "Synced. ${merged.size} passes from Google; ${merged.size - parsed.size} could not be read, ${_passes.value.size} shown."
+                parsed.size < merged.size -> "Synced. ${merged.size} entries from Google; ${merged.size - parsed.size} are not passes Wallet lists (payment cards and the like), ${_passes.value.size} shown."
                 _passes.value.size < parsed.size -> "Synced. ${parsed.size} passes from Google; ${parsed.size - _passes.value.size} are expired or inactive, ${_passes.value.size} shown."
                 else -> "Synced. ${parsed.size} passes."
             },
@@ -203,4 +203,6 @@ object WalletSource {
     private fun parseAll(items: List<Stored>): List<WalletPass> =
         items.mapNotNull { runCatching { WalletPass.parse(it.id, Proto(it.raw)) }.getOrNull() }
             .filter { it.active }
+            // In alphabetical order, as Wallet's own list.
+            .sortedBy { it.title.lowercase(Locale.getDefault()) }
 }
