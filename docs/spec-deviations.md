@@ -304,3 +304,9 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | eToro value chart | The same drag and zoom | User chose both |
 | Other line charts (health) | Drag along to read values (tap as before); no zoom | Shared chart code |
 | Wallet sync | "Sync now" shows "Syncing…" and then how the last sync went: Google refusing the Wallet token (its HTTP code and error), Wallet's own HTTP error, or what came back (passes received, unreadable, inactive, shown) | User report: signed in but nothing synced, with no reason shown |
+
+## 0.29.1 — Wallet sync: passes kept
+
+| Area | Now | Why |
+|---|---|---|
+| Wallet sync | Each pass's hash is read and sent as the int64 it is (SmartspacerPlugins' SyncValuables protos); before, it was read as a string, came back empty, and every pass was taken as deleted. A hash of 0 now means deleted, as in the plugin. An empty result says how many entries Google sent | User report: synced, "no passes", though the Wallet has some |

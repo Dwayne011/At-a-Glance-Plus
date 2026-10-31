@@ -90,7 +90,11 @@ object WalletSource {
         _status.value = SyncStatus(
             true,
             when {
-                merged.isEmpty() -> "Synced. Google Wallet sent no passes for this account (${response.size} bytes)."
+                merged.isEmpty() -> {
+                    val sent = runCatching { Proto(response).msg(2)?.msg(2)?.msgs(1)?.size }.getOrNull() ?: 0
+                    if (sent == 0) "Synced. Google Wallet sent no passes for this account."
+                    else "Synced. Google Wallet sent $sent entries, all marked deleted or archived."
+                }
                 parsed.size < merged.size -> "Synced. ${merged.size} passes from Google; ${merged.size - parsed.size} could not be read, ${_passes.value.size} shown."
                 _passes.value.size < parsed.size -> "Synced. ${parsed.size} passes from Google; ${parsed.size - _passes.value.size} are expired or inactive, ${_passes.value.size} shown."
                 else -> "Synced. ${parsed.size} passes."
@@ -117,7 +121,7 @@ object WalletSource {
                 stored.forEach { s ->                    // .cached { id, hash }
                     message(3) {
                         string(1, s.id)
-                        string(2, s.hash)
+                        long(2, s.hash)                  // int64, not a string
                     }
                 }
             }
@@ -155,20 +159,21 @@ object WalletSource {
 
     // --- Merge & storage -------------------------------------------------------------------------
 
-    private data class Stored(val id: String, val hash: String, val raw: ByteArray)
+    private data class Stored(val id: String, val hash: Long, val raw: ByteArray)
 
     /** Applies the server's changed/removed valuables onto what we already hold. */
     private fun merge(stored: List<Stored>, responseBytes: ByteArray): List<Stored> {
         val byId = stored.associateBy { it.id }.toMutableMap()
         val response = Proto(responseBytes)
-        // SyncValuablesResponse{2: inner{2: valuables{1: repeated valuable}}}
+        // SyncValuablesResponse{2: inner{2: valuables{1: repeated valuable{2: id, 3: int64 hash, 4: wrapper}}}}
         val valuables = response.msg(2)?.msg(2)?.msgs(1).orEmpty()
         for (v in valuables) {
             val id = v.str(2) ?: continue
             val wrapper = v.bytes(4)
-            val hash = v.str(3)
-            if (wrapper == null || hash == null || hash == "0") {
-                byId.remove(id)                          // deleted or archived away
+            val hash = v.long(3)
+            // As the plugin does: a hash of 0 means the pass was deleted or archived.
+            if (hash == 0L || wrapper == null) {
+                byId.remove(id)
             } else {
                 byId[id] = Stored(id, hash, wrapper)
             }
@@ -182,7 +187,7 @@ object WalletSource {
             val array = JSONArray(text)
             (0 until array.length()).map { i ->
                 val o = array.getJSONObject(i)
-                Stored(o.getString("id"), o.getString("hash"), SecureStore.unbase64(o.getString("raw")))
+                Stored(o.getString("id"), o.optLong("hash"), SecureStore.unbase64(o.getString("raw")))
             }
         }.getOrDefault(emptyList())
     }
