@@ -288,3 +288,9 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | Area | Now | Why |
 |---|---|---|
 | Dashboards | Each dashboard's intent carries its kind in the data, and opening one clears any dashboard left open (FLAG_ACTIVITY_CLEAR_TASK). Before, Android matched the open dashboard's task (it ignores extras) and brought the old dashboard back | User report: tapping another card's dashboard showed the previous one |
+
+## 0.28.4 — Live tower: Tyre and Laps in their own columns
+
+| Area | Now | Why |
+|---|---|---|
+| Live tower | The last column is split in two, "Tyre" and "Laps", each centred over its own figure (the ring and the laps on that set), instead of the ring and number centred together under one "Tyre · laps" title | User: the laps numbers did not line up with their heading |

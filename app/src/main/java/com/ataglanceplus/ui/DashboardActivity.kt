@@ -1799,6 +1799,21 @@ private fun TyreBadge(compound: String, laps: Int?) {
     }
 }
 
+/** A tyre column cell: the ring centred under "Tyre", the laps on that set centred under "Laps". */
+@Composable
+private fun TyreCell(compound: String, laps: Int?) {
+    val (letter, colour) = tyreLook(compound) ?: return
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(16.dp).clip(CircleShape).border(2.dp, colour, CircleShape), contentAlignment = Alignment.Center) {
+                Text(letter, color = colour, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Text(laps?.toString().orEmpty(), color = SportText, fontSize = 11.5.sp, maxLines = 1, softWrap = false, modifier = Modifier.weight(1f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
 /** A table's column titles, lined up with [F1TimingLine]'s columns (the last one centred, as its figures are). */
 @Composable
 private fun F1TableHeader(first: String, second: String, third: String) {
@@ -1807,8 +1822,14 @@ private fun F1TableHeader(first: String, second: String, third: String) {
         Text("Driver", color = SportSub, fontSize = 10.5.sp, modifier = Modifier.padding(start = 12.dp).weight(1f))
         Text(first, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.width(76.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
         Text(second, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.width(64.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
-        Text(third, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.padding(start = 8.dp).width(64.dp), maxLines = 1, softWrap = false,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        // "Tyre · Laps" splits into two halves, each over its own figure (see [TyreCell]).
+        val halves = third.split(" · ")
+        Row(Modifier.padding(start = 8.dp).width(64.dp)) {
+            halves.forEach { h ->
+                Text(h, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.weight(1f), maxLines = 1, softWrap = false,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+        }
     }
 }
 
@@ -1884,7 +1905,7 @@ private fun F1LiveSession(context: Context, session: com.ataglanceplus.live.Race
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (state.race) F1TableHeader("Interval", "Last lap", "Tyre · laps") else F1TableHeader("Best lap", "Gap", "Tyre · laps")
+        if (state.race) F1TableHeader("Interval", "Last lap", "Tyre · Laps") else F1TableHeader("Best lap", "Gap", "Tyre · Laps")
         state.cars.forEach { car ->
             val first = when {
                 car.out -> "Out"
@@ -1897,10 +1918,10 @@ private fun F1LiveSession(context: Context, session: com.ataglanceplus.live.Race
                 car.position == 1 -> "Fastest"
                 else -> car.figure
             }
-            F1TimingLine("${car.position}", car.colour, car.code, car.out, first, second) { TyreBadge(car.tyre, car.tyreAge.takeIf { car.tyre.isNotEmpty() }) }
+            F1TimingLine("${car.position}", car.colour, car.code, car.out, first, second) { TyreCell(car.tyre, car.tyreAge.takeIf { car.tyre.isNotEmpty() }) }
         }
     }
-    Text("Tyres: S soft, M medium, H hard, I intermediate, W wet; the number is laps on that set.", color = SportSub, fontSize = 11.sp)
+    Text("Tyres: S soft, M medium, H hard, I intermediate, W wet. Laps: laps on that set of tyres.", color = SportSub, fontSize = 11.sp)
 }
 
 /** After the session: a summary, then the full classification; tap a driver for sectors, speed and tyres. */
