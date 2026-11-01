@@ -407,3 +407,23 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 - Both two-panel cards' views are built apart from the target that wraps them, so they can be drawn
   off the phone. Checked by rendering the real layouts (Robolectric, not kept in the repo):
   nothing clipped or outside its tile, and rows aligned, at 100% and 130% text.
+
+## 0.34.0: the other cards' chips are tiles too
+
+- Mockup approved. The alarm, timer, calendar and navigation cards now show their chips as the
+  tiles from the weather and extra cards, in place of the outlined, colour-coded pills. The tiles
+  use the same grid, corners and text sizes. Two Normal chips stack in a 100dp column, each with
+  its second line or labelled bar. A lone Normal chip is a row high and centred. An Extended chip
+  is one tall tile in a 128dp column showing the value, its title, a note and its detail or bar.
+  The note and then the title drop out when the card is set too short for them.
+- The tiles are a light see-through layer over each card's own colour, so the per-chip tones
+  (green steps, blue sleep and so on) are gone. The always-on display shows grey outlines with
+  the tiles' 12dp corners.
+- The column sits 10dp from the card's top, bottom and right edges. At that inset a 12dp tile
+  corner stays inside the card's 24dp corner. The column reaches into the card body's 18dp end
+  padding, so these three cards no longer clip to their padding.
+- The old pill drawing code was removed, along with the 32 tonal backgrounds and their generator
+  (tools/gen_chip_tones.py), the old chip layouts and the chip text style.
+- Checked by rendering the real cards (Robolectric, not kept in the repo). Every tile's corners
+  fall inside the card's, nothing is clipped by a parent, and rows are aligned, including on the
+  always-on display and at 130% text.

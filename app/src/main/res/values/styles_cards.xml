@@ -62,17 +62,6 @@
         <item name="android:textColor">#FF93C5FD</item>
     </style>
 
-    <!-- type-chip: 12.5sp medium, line 15sp, +0.1sp, at most 6 characters -->
-    <style name="AagText.Chip">
-        <item name="android:textSize">12.5sp</item>
-        <item name="android:fontFamily">sans-serif-medium</item>
-        <!-- No extra font padding, so the text sits on the pill's true centre. -->
-        <item name="android:includeFontPadding">false</item>
-        <item name="android:lineHeight">15sp</item>
-        <item name="android:letterSpacing">0.008</item>
-        <item name="android:maxWidth">44dp</item>
-        <item name="android:ellipsize">none</item>
-    </style>
 
     <!-- Every card: the slot holding the card body, both @dimen/card_body_height. -->
     <style name="AagCardRoot">

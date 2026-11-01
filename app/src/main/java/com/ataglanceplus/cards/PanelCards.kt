@@ -65,8 +65,11 @@ object PanelCards {
     /** Space between two tiles in a row, and between the rows. */
     private const val GAP_DP = 5f
 
-    /** How a chip is drawn: half a row (Normal), a whole row (Extended, or alone), or a third (only when space is short). */
-    enum class TileSize { FULL, WIDE, COMPACT }
+    /**
+     * How a chip is drawn: half a row (Normal), a whole row (Extended, or alone), a third (only
+     * when space is short), or the whole right-hand column of the other cards (Extended there).
+     */
+    enum class TileSize { FULL, WIDE, COMPACT, TALL }
 
     class Tile(val placed: Chips.Placed, val size: TileSize) {
         val spec: ChipSpec get() = placed.spec
@@ -124,6 +127,63 @@ object PanelCards {
             return best[0].map { listOf(Tile(it.placed, TileSize.WIDE)) }
         }
         return best
+    }
+
+    /** The chips' colours on the other cards (alarm, timer, calendar, navigation): a light see-through tile over the card's own colour. */
+    private fun glass(aod: Boolean): Palette =
+        if (aod) Palette(0, 0, 0, R.drawable.chip_bg_aod, Style.AOD_TEXT, Style.AOD_TEXT, aod = true)
+        else Palette(0, 0, 0, R.drawable.weather_c_tile_scene, 0xFFFFFFFF.toInt(), 0xC0FFFFFF.toInt(), aod = false)
+
+    /** The right-hand column's width: two Normal tiles, or one Extended tile. */
+    private const val COLUMN_DP = 100f
+    private const val COLUMN_TALL_DP = 128f
+    /**
+     * Space above and below the column (and, with the column's -8dp end margin, after it): the
+     * cards' corners are 24dp, so a 12dp tile corner this far in stays inside the card's curve.
+     */
+    private const val COLUMN_INSET_DP = 10f
+
+    /**
+     * The other cards' chips as tiles in their right-hand column [container] (see [Chips.plan]:
+     * each chip at the size the user chose, two Normal or one Extended). Returns the column's width
+     * in dp, 0 with no chips (the column is hidden so the card's text gets the room).
+     */
+    fun fillColumn(context: Context, views: RemoteViews, specs: List<ChipSpec>, aod: Boolean, container: Int = R.id.complications): Float {
+        val placed = Chips.plan(context, specs, Chips.MAX_RIGHT)
+        views.removeAllViews(container)
+        views.setViewVisibility(container, if (placed.isEmpty()) View.GONE else View.VISIBLE)
+        if (placed.isEmpty()) return 0f
+        val dip = TypedValue.COMPLEX_UNIT_DIP
+        val palette = glass(aod)
+        val width = if (placed.any { it.big }) COLUMN_TALL_DP else COLUMN_DP
+        views.setViewLayoutWidth(container, width, dip)
+        val height = Prefs.cardHeightDp(context) - 2 * COLUMN_INSET_DP
+        val rowHeight = (height - GAP_DP) / 2
+        // A lone Normal tile is a row high, centred (the column's padding takes the rest).
+        val inset = if (placed.size == 1 && !placed[0].big) COLUMN_INSET_DP + (height - rowHeight) / 2 else COLUMN_INSET_DP
+        val px = (inset * context.resources.displayMetrics.density).roundToInt()
+        views.setViewPadding(container, 0, px, 0, px)
+        val tiles = placed.map { Tile(it, if (it.big) TileSize.TALL else TileSize.FULL) }
+        val texts = HashMap<Tile, String>()
+        val sizes = mutableMapOf(TileSize.FULL to FULL_SP, TileSize.TALL to WIDE_SP)
+        tiles.forEach { tile ->
+            val (cap, room) = if (tile.size == TileSize.TALL) WIDE_SP to width - 20f - ICON_DP else FULL_SP to width - PAD_DP - ICON_DP
+            val text = valueText(context, tile.placed.value, room, cap)
+            texts[tile] = text
+            sizes[tile.size] = minOf(sizes.getValue(tile.size), fitSize(context, text, room, cap))
+        }
+        tiles.forEachIndexed { i, tile ->
+            val view = tile(context, tile, texts.getValue(tile), sizes.getValue(tile.size), palette, width, rowHeight >= TWO_LINES_DP, height)
+            view.setViewLayoutWidth(R.id.chip_zone, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), TypedValue.COMPLEX_UNIT_PX)
+            if (tile.size == TileSize.TALL) {
+                view.setViewLayoutHeight(R.id.chip_zone, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), TypedValue.COMPLEX_UNIT_PX)
+            } else {
+                view.setViewLayoutHeight(R.id.chip_zone, rowHeight, dip)
+                if (i < tiles.lastIndex) view.setViewLayoutMargin(R.id.chip_zone, RemoteViews.MARGIN_BOTTOM, GAP_DP, dip)
+            }
+            views.addView(container, view)
+        }
+        return width
     }
 
     /** One chip a row, across it (the extra card beside the next hours). */
@@ -206,7 +266,7 @@ object PanelCards {
             row.forEach { tile ->
                 val (cap, room) = when (tile.size) {
                     TileSize.FULL -> FULL_SP to width - PAD_DP - ICON_DP
-                    TileSize.WIDE -> WIDE_SP to width * 0.45f - ICON_DP
+                    TileSize.WIDE, TileSize.TALL -> WIDE_SP to width * 0.45f - ICON_DP
                     TileSize.COMPACT -> COMPACT_SP to width - COMPACT_PAD_DP - COMPACT_ICON_DP
                 }
                 val text = valueText(context, tile.placed.value, room, cap)
@@ -229,13 +289,23 @@ object PanelCards {
     }
 
     /** One chip as a tile [widthDp] wide (see [fillRows]): [main] at [valueDp] on line 1, and on line 2 its detail or bar. */
-    private fun tile(context: Context, tile: Tile, main: String, valueDp: Float, palette: Palette, widthDp: Float, twoLines: Boolean): RemoteViews {
+    private fun tile(
+        context: Context, tile: Tile, main: String, valueDp: Float, palette: Palette, widthDp: Float, twoLines: Boolean,
+        /** A tall tile's height, for which of its lines fit. */
+        heightDp: Float = 0f,
+    ): RemoteViews {
         val spec = tile.placed.spec
         val value = tile.placed.value
         val dip = TypedValue.COMPLEX_UNIT_DIP
-        val wide = tile.size == TileSize.WIDE
+        val tall = tile.size == TileSize.TALL
+        val wide = tile.size == TileSize.WIDE || tall
         val compact = tile.size == TileSize.COMPACT
-        val view = RemoteViews(context.packageName, if (wide) R.layout.include_chip_tile_wide else R.layout.include_chip_tile)
+        val layout = when {
+            tall -> R.layout.include_chip_tile_tall
+            wide -> R.layout.include_chip_tile_wide
+            else -> R.layout.include_chip_tile
+        }
+        val view = RemoteViews(context.packageName, layout)
         view.setInt(R.id.chip_pill, "setBackgroundResource", palette.tile)
         val part = value.parts.singleOrNull()
         view.setImageViewResource(R.id.chip_icon, if (palette.aod) part?.aodIcon ?: spec.kind.aodIcon else part?.icon ?: spec.kind.icon)
@@ -256,10 +326,10 @@ object PanelCards {
             view.setTextViewTextSize(it, dip, if (it == R.id.chip_detail) SMALL_DP else END_DP)
         }
 
-        val inner = widthDp - (if (compact) COMPACT_PAD_DP else PAD_DP)
+        val inner = widthDp - (if (compact) COMPACT_PAD_DP else if (tall) 20f else PAD_DP)
         val valueWidth = (if (compact) COMPACT_ICON_DP else ICON_DP) + widthDp(context, main, valueDp, medium = true)
-        // Wide: the title on line 1 beside the value, line 2 under it.
-        val line2Width = if (wide) inner - valueWidth - 10f else inner
+        // Wide: the title on line 1 beside the value, line 2 under it. Tall: everything under the value.
+        val line2Width = if (wide && !tall) inner - valueWidth - 10f else inner
         var title: String? = null
         if (wide) {
             title = value.label ?: spec.kind.label
@@ -282,6 +352,19 @@ object PanelCards {
             view.setViewVisibility(R.id.chip_line2, View.GONE)
         } else if (!drewBar) {
             view.setTextViewText(R.id.chip_detail, detail)
+        }
+        if (tall) {
+            // The tall tile's lines (value 21, then title, note and line 2 at 13 with gaps, 67dp
+            // in all) with 6dp clear above and below: the note goes first, then the title, when
+            // the card is too short for them all.
+            val note = value.aside?.takeIf { drewBar && heightDp >= 79f }
+            if (note != null) {
+                view.setViewVisibility(R.id.chip_note, View.VISIBLE)
+                view.setTextViewText(R.id.chip_aside, note)
+                view.setTextViewTextSize(R.id.chip_aside, dip, SMALL_DP)
+                view.setTextColor(R.id.chip_aside, palette.secondary)
+            }
+            if (heightDp < 64f) view.setViewVisibility(R.id.chip_title_row, View.GONE)
         }
         // Beside the value on a Normal tile with a bar: a short note ("02:57–07:32"), where it fits.
         val aside = value.aside?.takeIf { drewBar && tile.size == TileSize.FULL }

@@ -10,6 +10,7 @@
     <LinearLayout
         android:id="@+id/card_body"
         style="@style/AagCardBody"
+        android:clipToPadding="false"
         android:background="@drawable/card_bg_nav"
         android:gravity="center_vertical"
         android:orientation="horizontal">
@@ -123,11 +124,14 @@
 
         <LinearLayout
             android:id="@+id/complications"
-            android:layout_width="84dp"
+            android:layout_width="100dp"
             android:layout_height="match_parent"
             android:layout_marginStart="8dp"
+            android:layout_marginEnd="-8dp"
             android:gravity="center_vertical"
             android:orientation="vertical"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
             android:visibility="gone" />
     </LinearLayout>
 

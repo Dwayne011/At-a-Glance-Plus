@@ -221,7 +221,7 @@ object LiveCards {
         then?.let { views.setTextViewText(R.id.calendar_next_text, it) }
         views.setInt(R.id.calendar_next_icon, "setColorFilter", if (aod) Style.AOD_TEXT else CALENDAR_NEXT)
         if (aod) Style.aodBody(views, R.id.calendar_title, R.id.calendar_detail, R.id.calendar_next_text)
-        Chips.add(context, views, chips, aod)
+        PanelCards.fillColumn(context, views, chips, aod)
 
         val intent = Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, event.eventId))
             .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, event.begin)
@@ -339,7 +339,7 @@ object LiveCards {
     }
 
     private fun timerChips(context: Context, views: RemoteViews, aod: Boolean, given: List<ChipSpec>?) {
-        Chips.add(context, views, given ?: listOf(ChipSpec(Complication.ALARM), ChipSpec(Complication.SLEEP)), aod)
+        PanelCards.fillColumn(context, views, given ?: listOf(ChipSpec(Complication.ALARM), ChipSpec(Complication.SLEEP)), aod)
     }
 
     private fun showFixed(views: RemoteViews, text: String) {
@@ -379,11 +379,12 @@ object LiveCards {
             Style.aodBody(views, R.id.nav_distance, R.id.nav_instruction, R.id.nav_detail, R.id.nav_trip_left, R.id.nav_trip_arrival)
             views.setInt(R.id.nav_box, "setBackgroundResource", R.drawable.aod_outline_r12)
         }
-        val chips = Chips.add(context, views, given ?: listOf(ChipSpec(Complication.BATTERY)), aod)
+        val column = PanelCards.fillColumn(context, views, given ?: listOf(ChipSpec(Complication.BATTERY)), aod)
         tripFraction(nav)?.let { fraction ->
             // The text column's width in the card's dp: the card less its padding, the arrow box
-            // and its gap, and the chip column when it has chips.
-            val width = WeatherCard.cardWidthDp(context) - 34f - 48f - 11f - if (chips > 0) 92f else 0f
+            // and its gap, and the chip column when it has chips (its 8dp gap before and its -8dp
+            // end margin cancel out).
+            val width = WeatherCard.cardWidthDp(context) - 34f - 48f - 11f - column
             views.setViewVisibility(R.id.nav_trip, View.VISIBLE)
             views.setImageViewBitmap(R.id.nav_trip, tripBar(context, width, nav, fraction, aod))
             val left = listOfNotNull(nav.distanceLeft, nav.minutesLeft?.let { minutesText(it) + " left" }).joinToString(" · ")

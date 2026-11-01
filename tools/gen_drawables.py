@@ -53,8 +53,7 @@ for key, (s, e, st) in CARD_BG.items():
     shape(f"card_bg_{key}", start=s, end=e, stroke=st, radius="24dp", comment=f"Card background: {key} (spec 4.1)")
 
 
-# Complication chips: the always-on outline (chips spec 2.3). The tonal backgrounds come from
-# tools/gen_chip_tones.py.
+# Chip tiles: the always-on outline (chips spec 2.3), with the tiles' 12dp corners.
 shape("chip_bg_aod", fill="#00000000", stroke="#FF5F6368", radius="12dp", comment="Chip: always-on display")
 
 # Card parts (spec section 8)
