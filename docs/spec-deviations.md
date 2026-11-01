@@ -383,3 +383,27 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
   left with a lone number.
 - The extra card's "Next hours" panel shows three hours, not four, because four times ran
   together in the narrow panel.
+
+## 0.33.0: chip tiles at your size, compact only when needed
+
+- Mockup approved. Each chip in the two-panel cards shows at the size the user chose: Normal
+  takes half a row, Extended a whole row. A row turns compact (three small tiles) only when the
+  chips that are switched on do not all fit. The card compacts as few chips as it can, later
+  rows first, so full-size and compact rows can sit together. A chip alone in its row spans it.
+- Every tile uses one grid: line 1 (19dp) has the icon and value, line 2 (13dp) the detail or a
+  bar. Each kind of tile (full, wide, compact) shares one text size across the card, the size its
+  longest value needs, set in dp so the fixed lines hold it at any system font size. Below 33dp a
+  row (a short card height) shows line 1 only.
+- Bars say what each end means. Steps run from 0 to the goal and battery from 0 to 100%. Sleep is
+  drawn on a 22:00 to 10:00 night, widened if needed. Screen time shows the top app's share of
+  all apps. The sun bar runs from sunrise to sunset (or sunset to sunrise), filled up to now.
+- New chip data from existing sources:
+  - the alarm's day and time left;
+  - Gmail's labels with unread mail;
+  - the notifying app's name and its count;
+  - names for countdowns, Bluetooth devices and health metrics.
+- The left weather panel's temperature is 30sp (was 34) and shrinks to fit its row; its icon is
+  22dp (was 26).
+- Both two-panel cards' views are built apart from the target that wraps them, so they can be drawn
+  off the phone. Checked by rendering the real layouts (Robolectric, not kept in the repo):
+  nothing clipped or outside its tile, and rows aligned, at 100% and 130% text.

@@ -61,6 +61,7 @@ object HealthSource {
                 wide = "${format.format(steps)} of ${format.format(goal)}",
                 detail = "$percent% of ${format.format(goal)}",
                 progress = (steps.toFloat() / goal.coerceAtLeast(1)).coerceIn(0f, 1f),
+                range = ChipValues.Range(0f, (steps.toFloat() / goal.coerceAtLeast(1)).coerceIn(0f, 1f), "0", format.format(goal), endShort = stepsText(goal.toLong())),
             )
         } catch (e: Exception) {
             Log.w(TAG, "steps read failed", e)
@@ -89,11 +90,27 @@ object HealthSource {
             fun clock(at: Instant) = android.text.format.DateFormat.format(pattern, java.util.Date(at.toEpochMilli())).toString()
             val span = "${clock(night.start)}–${clock(night.end)}"
             val text = "${minutes / 60}h ${minutes % 60}m"
-            ChipValues.Value(text, wide = "$text · $span", detail = span)
+            ChipValues.Value(text, wide = "$text · $span", detail = span, range = nightRange(night.start, night.end, ::clock), aside = span)
         } catch (e: Exception) {
             Log.w(TAG, "sleep read failed", e)
             null
         }
+    }
+
+    /**
+     * The night as a bar for a tile: 22:00 to 10:00, widened to whole hours if the sleep began
+     * earlier or ended later, with the time asleep filled in.
+     */
+    private fun nightRange(start: Instant, end: Instant, clock: (Instant) -> String): ChipValues.Range {
+        val zone = java.time.ZoneId.systemDefault()
+        val wake = end.atZone(zone)
+        var from = wake.toLocalDate().minusDays(1).atTime(22, 0).atZone(zone)
+        var to = wake.toLocalDate().atTime(10, 0).atZone(zone)
+        if (start.isBefore(from.toInstant())) from = start.atZone(zone).truncatedTo(java.time.temporal.ChronoUnit.HOURS)
+        if (end.isAfter(to.toInstant())) to = wake.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusHours(1)
+        val span = (to.toInstant().toEpochMilli() - from.toInstant().toEpochMilli()).toFloat()
+        fun at(i: Instant) = ((i.toEpochMilli() - from.toInstant().toEpochMilli()) / span).coerceIn(0f, 1f)
+        return ChipValues.Range(at(start), at(end), clock(from.toInstant()), clock(to.toInstant()))
     }
 
     /** Overlapping spans joined into one, so time recorded twice counts once. */

@@ -46,8 +46,11 @@ object GmailSource {
     /** The chip value for one account: unread conversations in the chosen labels, summed. */
     fun unread(context: Context, account: String): ChipValues.Value? {
         val chosen = Prefs.gmailLabels(context, account)
-        val total = labels(context, account)?.filter { it.canonicalName in chosen }?.sumOf { it.unread } ?: return null
-        return if (total > 0) ChipValues.Value(SimpleSources.cap(total)) else null
+        val counted = labels(context, account)?.filter { it.canonicalName in chosen } ?: return null
+        val total = counted.sumOf { it.unread }
+        // Under it on a tile: the labels with unread mail ("Inbox · Updates").
+        val detail = counted.filter { it.unread > 0 }.map { if (it.canonicalName == "^i") "Inbox" else displayName(it) }.joinToString(" · ").ifEmpty { null }
+        return if (total > 0) ChipValues.Value(SimpleSources.cap(total), detail = detail, label = "Gmail") else null
     }
 
     /** Friendly names for Gmail's system labels; user labels keep their own names. */

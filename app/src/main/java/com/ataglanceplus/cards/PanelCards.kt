@@ -9,6 +9,7 @@ import android.widget.RemoteViews
 import androidx.annotation.DrawableRes
 import com.ataglanceplus.Prefs
 import com.ataglanceplus.R
+import com.ataglanceplus.complications.ChipValues
 import com.ataglanceplus.weather.DayForecast
 import com.ataglanceplus.weather.HourForecast
 import com.ataglanceplus.weather.Weather
@@ -63,114 +64,269 @@ object PanelCards {
 
     /** Space between two tiles in a row, and between the rows. */
     private const val GAP_DP = 5f
-    /** A tile's inside: 10dp padding before, 8dp after; the icon 16dp and 6dp from the text. */
-    private const val TILE_PAD_DP = 18f
-    private const val ICON_DP = 22f
-    /** The size the value's forms are measured at to pick one; the layout then sizes it to fit the tile. */
-    private const val TEXT_SP = 14f
+
+    /** How a chip is drawn: half a row (Normal), a whole row (Extended, or alone), or a third (only when space is short). */
+    enum class TileSize { FULL, WIDE, COMPACT }
+
+    class Tile(val placed: Chips.Placed, val size: TileSize) {
+        val spec: ChipSpec get() = placed.spec
+    }
 
     /**
-     * The chips of [specs] (those with something to show) in at most [maxRows] rows of 2 slots:
-     * a normal chip takes 1, an extended one ([always]: any that can be) a whole row. An extended
-     * chip that does not fit is passed over for a later normal one, as on the old card. Two normal
-     * chips alone get a row each, so each tile has the panel's width.
+     * The chips of [specs] (those with something to show) in at most [maxRows] rows. Each chip
+     * takes the size the user chose: Normal half a row, Extended ([always]: any that can be) a
+     * whole row. Only when they do not all fit does a row turn compact (three to a row), and the
+     * card compacts as few chips as it can, later rows first. A chip alone in its row spans it, and
+     * two Normal chips alone get a row each.
      */
-    fun rows(context: Context, specs: List<ChipSpec>, maxRows: Int = 2, always: Boolean = false): List<List<Chips.Placed>> {
-        val rows = mutableListOf<MutableList<Chips.Placed>>()
-        val used = mutableListOf<Int>()
-        for ((spec, value) in Chips.withValues(specs)) {
-            val big = Chips.grows(context, spec, always)
-            val need = if (big) 2 else 1
-            if (rows.isEmpty() || used.last() + need > 2) {
-                if (rows.size >= maxRows) {
-                    if (big) continue else break
+    fun rows(context: Context, specs: List<ChipSpec>, maxRows: Int = 2, always: Boolean = false): List<List<Tile>> {
+        val items = Chips.withValues(specs).map { (spec, value) -> Chips.Placed(spec, value, Chips.grows(context, spec, always)) }
+        if (items.isEmpty()) return emptyList()
+        // Which rows are compact, fewest first; among as many, the later rows.
+        val masks = (0 until (1 shl maxRows)).sortedWith(compareBy<Int>({ Integer.bitCount(it) }, { -it }))
+        var best: List<List<Tile>> = emptyList()
+        var bestPlaced = -1
+        var bestCompact = Int.MAX_VALUE
+        for (mask in masks) {
+            val rows = List(maxRows) { mutableListOf<Chips.Placed>() }
+            var r = 0
+            var used = 0
+            for (item in items) {
+                while (true) {
+                    val compact = mask and (1 shl r) != 0
+                    val need = if (!compact && item.big) 2 else 1
+                    val room = if (compact) 3 else 2
+                    if (used + need <= room) {
+                        rows[r] += item
+                        used += need
+                        break
+                    }
+                    if (r == maxRows - 1) break // no room left: passed over, a later smaller chip may still fit
+                    r++
+                    used = 0
                 }
-                rows += mutableListOf<Chips.Placed>()
-                used += 0
             }
-            rows.last() += Chips.Placed(spec, value, big)
-            used[used.lastIndex] = used.last() + need
+            val placed = rows.sumOf { it.size }
+            val compacted = rows.withIndex().filter { mask and (1 shl it.index) != 0 }.sumOf { it.value.size }
+            if (placed > bestPlaced || (placed == bestPlaced && compacted < bestCompact)) {
+                bestPlaced = placed
+                bestCompact = compacted
+                best = rows.withIndex().filter { it.value.isNotEmpty() }.map { (i, row) ->
+                    when {
+                        mask and (1 shl i) != 0 -> row.map { Tile(it, TileSize.COMPACT) }
+                        row.size == 1 -> listOf(Tile(row[0], TileSize.WIDE))
+                        else -> row.map { Tile(it, TileSize.FULL) }
+                    }
+                }
+            }
         }
-        if (rows.size == 1 && rows[0].size == 2 && maxRows >= 2) return listOf(listOf(rows[0][0]), listOf(rows[0][1]))
-        return rows
+        if (maxRows >= 2 && best.size == 1 && best[0].size == 2 && best[0].all { it.size == TileSize.FULL }) {
+            return best[0].map { listOf(Tile(it.placed, TileSize.WIDE)) }
+        }
+        return best
+    }
+
+    /** One chip a row, across it (the extra card beside the next hours). */
+    fun eachAcross(rows: List<List<Tile>>): List<List<Tile>> = rows.flatten().map { listOf(Tile(it.placed, TileSize.WIDE)) }
+
+    // The tiles' grid (see include_chip_tile): 9dp padding each side (7dp compact), a 15dp icon
+    // 5dp from the value (14dp and 4dp compact), and line 2 in small text.
+    private const val PAD_DP = 18f
+    private const val COMPACT_PAD_DP = 14f
+    private const val ICON_DP = 20f
+    private const val COMPACT_ICON_DP = 18f
+    private const val FULL_SP = 16f
+    private const val WIDE_SP = 18f
+    private const val COMPACT_SP = 14f
+    private const val MIN_SP = 9f
+    private const val SMALL_DP = 10.5f
+    private const val END_DP = 9.5f
+    /** A row shorter than this has room for line 1 only. */
+    private const val TWO_LINES_DP = 33f
+
+    /** [text]'s width in dp at [dp] (the tiles size their text in dp, so it fits their fixed lines whatever the font size). */
+    private fun widthDp(context: Context, text: String, dp: Float, medium: Boolean = false): Float {
+        val density = context.resources.displayMetrics.density
+        val paint = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = dp * density
+            typeface = android.graphics.Typeface.create(if (medium) "sans-serif-medium" else "sans-serif", android.graphics.Typeface.NORMAL)
+        }
+        return paint.measureText(text) / density
+    }
+
+    /** The largest size up to [cap] (in half steps, at least [MIN_SP]) at which [text] fits [roomDp]. */
+    private fun fitSize(context: Context, text: String, roomDp: Float, cap: Float): Float {
+        val width = widthDp(context, text, cap, medium = true)
+        if (width <= roomDp) return cap
+        return (kotlin.math.floor(cap * roomDp / width * 2) / 2).coerceAtLeast(MIN_SP)
+    }
+
+    /** A short name for a chip's small line when its value says nothing more ("Steps"). */
+    private fun shortLabel(kind: Complication): String = when (kind) {
+        Complication.STEPS -> "Steps"
+        Complication.GMAIL -> "Gmail"
+        Complication.MISSED_CALLS -> "Missed calls"
+        Complication.TEXTS -> "Texts"
+        Complication.ALARM -> "Alarm"
+        Complication.SCREEN_TIME -> "Screen time"
+        Complication.SLEEP -> "Sleep"
+        Complication.SUNSET -> "Sun"
+        Complication.BATTERY -> "Battery"
+        Complication.BUDS -> "Bluetooth"
+        Complication.COUNTDOWN -> "Countdown"
+        Complication.HEALTH -> "Health"
+        Complication.ETORO -> "eToro"
+        Complication.APP_NOTIFICATIONS -> "Notifications"
+        Complication.RAIL_TICKET -> "Ticket"
+    }
+
+    /** The value a tile shows on line 1: several values (Bluetooth devices) side by side, else the value or its short form if that is what fits. */
+    private fun valueText(context: Context, value: ChipValues.Value, roomDp: Float, cap: Float): String {
+        value.parts.takeIf { it.size > 1 }?.let { parts -> return parts.joinToString(" · ") { it.text } }
+        val options = listOf(value.text) + listOfNotNull(value.compact)
+        return options.firstOrNull { widthDp(context, it, cap, medium = true) <= roomDp } ?: options.last()
     }
 
     /**
      * Fills the two chip rows ([R.id.chips_row1], [R.id.chips_row2]) of a panel [panelWidthDp]
-     * wide (its 6dp padding inside). [detailed]: every tile shows its second line when it has one,
-     * as on the extra card.
+     * wide (its 6dp padding inside) with [rows]. Each kind of tile shares one text size across the
+     * card (the size its longest value needs), so neighbours line up; a card too short for two
+     * lines a tile shows the values alone.
      */
-    fun fillRows(context: Context, views: RemoteViews, rows: List<List<Chips.Placed>>, palette: Palette, panelWidthDp: Float, detailed: Boolean) {
+    fun fillRows(context: Context, views: RemoteViews, rows: List<List<Tile>>, palette: Palette, panelWidthDp: Float) {
         val inner = panelWidthDp - 12f
+        val rowHeight = (Prefs.cardHeightDp(context) - 12f - 12f - GAP_DP) / 2f
+        val twoLines = rows.size == 1 || rowHeight >= TWO_LINES_DP
+        fun widthOf(row: List<Tile>) = (inner - GAP_DP * (row.size - 1)) / row.size
+        // One size per kind of tile on the card.
+        val sizes = mutableMapOf(TileSize.FULL to FULL_SP, TileSize.WIDE to WIDE_SP, TileSize.COMPACT to COMPACT_SP)
+        val texts = HashMap<Tile, String>()
+        rows.forEach { row ->
+            val width = widthOf(row)
+            row.forEach { tile ->
+                val (cap, room) = when (tile.size) {
+                    TileSize.FULL -> FULL_SP to width - PAD_DP - ICON_DP
+                    TileSize.WIDE -> WIDE_SP to width * 0.45f - ICON_DP
+                    TileSize.COMPACT -> COMPACT_SP to width - COMPACT_PAD_DP - COMPACT_ICON_DP
+                }
+                val text = valueText(context, tile.placed.value, room, cap)
+                texts[tile] = text
+                sizes[tile.size] = minOf(sizes.getValue(tile.size), fitSize(context, text, room, cap))
+            }
+        }
         listOf(R.id.chips_row1, R.id.chips_row2).forEachIndexed { i, id ->
             val row = rows.getOrNull(i)
             views.setViewVisibility(id, if (row == null) View.GONE else View.VISIBLE)
             views.removeAllViews(id)
             row ?: return@forEachIndexed
-            val width = if (row.size == 2) (inner - GAP_DP) / 2 else inner
-            row.forEachIndexed { j, placed ->
-                val tile = tile(context, placed, palette, width, detailed || placed.big || row.size == 1)
-                if (j == 0 && row.size == 2) tile.setViewLayoutMargin(R.id.chip_zone, RemoteViews.MARGIN_END, GAP_DP, TypedValue.COMPLEX_UNIT_DIP)
-                views.addView(id, tile)
+            val width = widthOf(row)
+            row.forEachIndexed { j, tile ->
+                val view = tile(context, tile, texts.getValue(tile), sizes.getValue(tile.size), palette, width, twoLines)
+                if (j < row.lastIndex) view.setViewLayoutMargin(R.id.chip_zone, RemoteViews.MARGIN_END, GAP_DP, TypedValue.COMPLEX_UNIT_DIP)
+                views.addView(id, view)
             }
         }
     }
 
-    /**
-     * One chip as a tile [widthDp] wide: its icon and value; with [twoLines], the whole story
-     * ("509 of 10,000") and a progress line, or the value over its second line ("2 unread" over
-     * "Inbox · Updates"); a value with no second line has the chip's name under it, so a wide tile
-     * is not left with a lone number. The text sizes itself to the tile (see include_chip_tile).
-     */
-    private fun tile(context: Context, placed: Chips.Placed, palette: Palette, widthDp: Float, twoLines: Boolean): RemoteViews {
-        val (spec, value) = placed
-        val view = RemoteViews(context.packageName, R.layout.include_chip_tile)
+    /** One chip as a tile [widthDp] wide (see [fillRows]): [main] at [valueDp] on line 1, and on line 2 its detail or bar. */
+    private fun tile(context: Context, tile: Tile, main: String, valueDp: Float, palette: Palette, widthDp: Float, twoLines: Boolean): RemoteViews {
+        val spec = tile.placed.spec
+        val value = tile.placed.value
+        val dip = TypedValue.COMPLEX_UNIT_DIP
+        val wide = tile.size == TileSize.WIDE
+        val compact = tile.size == TileSize.COMPACT
+        val view = RemoteViews(context.packageName, if (wide) R.layout.include_chip_tile_wide else R.layout.include_chip_tile)
         view.setInt(R.id.chip_pill, "setBackgroundResource", palette.tile)
         val part = value.parts.singleOrNull()
         view.setImageViewResource(R.id.chip_icon, if (palette.aod) part?.aodIcon ?: spec.kind.aodIcon else part?.icon ?: spec.kind.icon)
         value.appIcon?.let { view.setImageViewIcon(R.id.chip_icon, it) }
         view.setInt(R.id.chip_icon, "setColorFilter", palette.text)
-        view.setTextColor(R.id.chip_text, palette.text)
-        view.setTextColor(R.id.chip_detail, palette.secondary)
-        val room = widthDp - TILE_PAD_DP - ICON_DP
-
-        // Several values (Bluetooth devices): side by side, shortest form.
-        val parts = value.parts.takeIf { it.size > 1 }
-        val progress = value.progress?.takeIf { twoLines && !palette.aod }
-        val main: String
-        var detail: String? = null
-        when {
-            parts != null -> {
-                main = parts.joinToString(" · ") { it.text }
-                if (twoLines) detail = parts.mapNotNull { it.name }.joinToString(" · ").ifEmpty { null }
-            }
-            twoLines && progress != null -> main = fit(context, listOf(value.wide ?: value.text) + value.shorter + value.text, room)
-            twoLines -> {
-                val lines = value.lines
-                main = fit(context, listOf(lines.first()) + listOfNotNull(value.compact), room)
-                detail = lines.getOrNull(1) ?: value.wide?.takeIf { it != main } ?: spec.kind.label.takeIf { it != main }
-            }
-            else -> main = fit(context, listOf(value.text) + listOfNotNull(value.compact), room)
+        if (compact) {
+            val px = (7 * context.resources.displayMetrics.density).roundToInt()
+            view.setViewPadding(R.id.chip_pill, px, 0, px, 0)
+            view.setViewLayoutWidth(R.id.chip_icon, 14f, dip)
+            view.setViewLayoutHeight(R.id.chip_icon, 14f, dip)
+            view.setViewLayoutMargin(R.id.chip_text, RemoteViews.MARGIN_START, 4f, dip)
         }
         view.setTextViewText(R.id.chip_text, main)
-        if (detail != null) {
-            view.setViewVisibility(R.id.chip_detail, View.VISIBLE)
+        view.setTextViewTextSize(R.id.chip_text, dip, valueDp)
+        view.setTextColor(R.id.chip_text, palette.text)
+        listOf(R.id.chip_detail, R.id.chip_lo, R.id.chip_hi).forEach {
+            view.setTextColor(it, palette.secondary)
+            view.setTextViewTextSize(it, dip, if (it == R.id.chip_detail) SMALL_DP else END_DP)
+        }
+
+        val inner = widthDp - (if (compact) COMPACT_PAD_DP else PAD_DP)
+        val valueWidth = (if (compact) COMPACT_ICON_DP else ICON_DP) + widthDp(context, main, valueDp, medium = true)
+        // Wide: the title on line 1 beside the value, line 2 under it.
+        val line2Width = if (wide) inner - valueWidth - 10f else inner
+        var title: String? = null
+        if (wide) {
+            title = value.label ?: spec.kind.label
+            view.setTextViewText(R.id.chip_title, title)
+            view.setTextViewTextSize(R.id.chip_title, dip, SMALL_DP)
+            view.setTextColor(R.id.chip_title, palette.text)
+        }
+        // Line 2: a bar when the chip has one (not on the always-on display, where it would be a
+        // block of lit pixels), else a line of text.
+        val detail: String? = when {
+            compact -> value.label ?: shortLabel(spec.kind)
+            wide -> (value.parts.takeIf { it.size > 1 }?.mapNotNull { it.name }?.joinToString(" · ")
+                ?: value.detail ?: value.lines.getOrNull(1))
+                ?.let { d -> title?.let { d.removePrefix("$it · ") } ?: d }?.takeIf { it != title && it.isNotEmpty() }
+            else -> value.parts.takeIf { it.size > 1 }?.mapNotNull { it.name }?.joinToString(" · ")?.ifEmpty { null }
+                ?: value.detail ?: value.lines.getOrNull(1) ?: value.label ?: shortLabel(spec.kind)
+        }
+        val drewBar = twoLines && !compact && !palette.aod && value.range?.let { bar(context, view, it, palette, line2Width) } == true
+        if (!twoLines || (!drewBar && detail == null)) {
+            view.setViewVisibility(R.id.chip_line2, View.GONE)
+        } else if (!drewBar) {
             view.setTextViewText(R.id.chip_detail, detail)
         }
-        if (progress != null) {
-            view.setViewVisibility(R.id.chip_progress, View.VISIBLE)
-            view.setProgressBar(R.id.chip_progress, 1000, (progress * 1000).toInt().coerceIn(0, 1000), false)
-            view.setColorStateList(R.id.chip_progress, "setProgressTintList", ColorStateList.valueOf(palette.text))
-            view.setColorStateList(R.id.chip_progress, "setProgressBackgroundTintList", ColorStateList.valueOf(palette.secondary))
+        // Beside the value on a Normal tile with a bar: a short note ("02:57–07:32"), where it fits.
+        val aside = value.aside?.takeIf { drewBar && tile.size == TileSize.FULL }
+        if (aside != null && valueWidth + 6f + widthDp(context, aside, SMALL_DP) <= inner) {
+            view.setViewVisibility(R.id.chip_aside, View.VISIBLE)
+            view.setTextViewText(R.id.chip_aside, aside)
+            view.setTextViewTextSize(R.id.chip_aside, dip, SMALL_DP)
+            view.setTextColor(R.id.chip_aside, palette.secondary)
         }
         view.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
-        view.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + listOfNotNull(main, detail).joinToString(", "))
+        view.setContentDescription(R.id.chip_zone, "${spec.kind.label}: " + listOfNotNull(main, title, detail).joinToString(", "))
         return view
     }
 
-    /** The first of [options] that fits [roomDp] at the tile's size, else the first (it will shrink). */
-    private fun fit(context: Context, options: List<String>, roomDp: Float): String =
-        options.firstOrNull { Chips.textWidthDp(context, it, TEXT_SP) <= roomDp } ?: options.first()
+    /**
+     * Draws [range] on line 2 of a tile [widthDp] wide there: the start label, the track with the
+     * filled part, the end label. False when there is not room for a useful bar.
+     */
+    private fun bar(context: Context, view: RemoteViews, range: ChipValues.Range, palette: Palette, widthDp: Float): Boolean {
+        val iconDp = 13f
+        fun ends(end: String) = widthDp(context, range.start, END_DP) + widthDp(context, end, END_DP) +
+            (if (range.startIcon != null) iconDp else 0f) + (if (range.endIcon != null) iconDp else 0f) + 10f
+        var end = range.end
+        var track = widthDp - ends(end)
+        if (track < 30f && range.endShort != null) {
+            end = range.endShort
+            track = widthDp - ends(end)
+        }
+        if (track < 16f) return false
+        view.setViewVisibility(R.id.chip_detail, View.GONE)
+        view.setViewVisibility(R.id.chip_bar, View.VISIBLE)
+        view.setTextViewText(R.id.chip_lo, range.start)
+        view.setTextViewText(R.id.chip_hi, end)
+        range.startIcon?.let { view.setImageViewResource(R.id.chip_lo_icon, it); view.setViewVisibility(R.id.chip_lo_icon, View.VISIBLE) }
+        range.endIcon?.let { view.setImageViewResource(R.id.chip_hi_icon, it); view.setViewVisibility(R.id.chip_hi_icon, View.VISIBLE) }
+        listOf(R.id.chip_lo_icon, R.id.chip_hi_icon).forEach { view.setInt(it, "setColorFilter", palette.secondary) }
+        val dip = TypedValue.COMPLEX_UNIT_DIP
+        val from = range.from.coerceIn(0f, 1f) * track
+        val length = ((range.to.coerceIn(0f, 1f) - range.from.coerceIn(0f, 1f)) * track).coerceAtLeast(4f).coerceAtMost(track)
+        view.setColorStateList(R.id.chip_track, "setBackgroundTintList", ColorStateList.valueOf((palette.secondary and 0x00FFFFFF) or 0x40000000))
+        view.setColorStateList(R.id.chip_fill, "setImageTintList", ColorStateList.valueOf(palette.text))
+        view.setViewLayoutWidth(R.id.chip_fill, length, dip)
+        view.setViewLayoutMargin(R.id.chip_fill, RemoteViews.MARGIN_START, from.coerceAtMost(track - length), dip)
+        return true
+    }
 
     /** The hour in the phone's style: "14:00", or "2pm". */
     fun hourText(context: Context, time: Long): String =

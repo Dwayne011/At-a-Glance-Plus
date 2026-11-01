@@ -274,6 +274,7 @@ object HealthMetrics {
                         wide = "${full(metric, total)} today",
                         detail = "${metric.label.lowercase()} today",
                         stacked = listOf(full(metric, total), "${metric.label.lowercase()} today"),
+                        label = metric.label,
                     )
                 }
                 else -> {
@@ -286,6 +287,7 @@ object HealthMetrics {
                         wide = "${full(metric, latest.value, latest.second)} · $`when`",
                         detail = `when`,
                         stacked = listOf(full(metric, latest.value, latest.second), `when`),
+                        label = metric.label,
                     )
                 }
             }

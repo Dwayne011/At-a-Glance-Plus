@@ -14,6 +14,7 @@ import android.os.Process
 import android.provider.CallLog
 import android.text.format.DateFormat
 import com.ataglanceplus.Prefs
+import com.ataglanceplus.R
 import com.ataglanceplus.weather.WeatherRepository
 import java.time.LocalDate
 import java.time.ZoneId
@@ -27,7 +28,8 @@ object SimpleSources {
         val level = status.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         val scale = status.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
         if (level < 0 || scale <= 0) return null
-        return ChipValues.Value("${level * 100 / scale}%")
+        val percent = level * 100 / scale
+        return ChipValues.Value("$percent%", range = ChipValues.Range(0f, percent / 100f, "0", "100%"))
     }
 
     /** The next alarm's time when it is within a day, otherwise its weekday ("Fri"). */
@@ -38,7 +40,11 @@ object SimpleSources {
             DateFormat.is24HourFormat(context) -> "HH:mm"
             else -> "h:mm"
         }
-        return ChipValues.Value(DateFormat.format(pattern, Date(next.triggerTime)).toString())
+        // Under it on a tile: the day, and how long until it goes off ("Mon · in 9h 12m"), kept
+        // current by the once-a-minute refresh.
+        val left = (next.triggerTime - System.currentTimeMillis()).coerceAtLeast(0) / 60_000
+        val detail = DateFormat.format("EEE", Date(next.triggerTime)).toString() + " · in " + duration(left)
+        return ChipValues.Value(DateFormat.format(pattern, Date(next.triggerTime)).toString(), detail = detail)
     }
 
     fun hasCallLog(context: Context) =
@@ -74,10 +80,14 @@ object SimpleSources {
         if (minutes <= 0) return null
         val text = duration(minutes)
         // The busiest app, for an extended chip.
-        val top = byApp.maxByOrNull { it.value }?.takeIf { it.value >= 60_000 }?.let { (pkg, ms) ->
-            "${appName(context, pkg)} ${duration(ms / 60_000)}"
-        }
-        return ChipValues.Value(text, wide = top?.let { "$text · $it" }, detail = top)
+        val busiest = byApp.maxByOrNull { it.value }?.takeIf { it.value >= 60_000 }
+        val name = busiest?.let { appName(context, it.key) }
+        val top = busiest?.let { "$name ${duration(it.value / 60_000)}" }
+        // On a tile: the busiest app's share of all of today's screen time.
+        val range = if (busiest != null && name != null) {
+            ChipValues.Range(0f, (busiest.value.toFloat() / byApp.values.sum()).coerceIn(0f, 1f), name, "All apps")
+        } else null
+        return ChipValues.Value(text, wide = top?.let { "$text · $it" }, detail = top, range = range, aside = top)
     }
 
     /**
@@ -145,10 +155,23 @@ object SimpleSources {
         fun name(rise: Boolean) = if (rise) "Sunrise" else "Sunset"
         // The one after, for a big chip: sunset, then tomorrow's sunrise.
         val after = weather.nextSunEvent(time)?.let { (at, rise) -> "${name(rise)} ${clock(at)}" }
+        // On a tile: the day from sunrise to sunset (or the night from sunset to sunrise), filled up to now.
+        val now = System.currentTimeMillis()
+        val since = (if (sunrise) weather.sunsets else weather.sunrises).filter { it <= now }.maxOrNull()
+        val range = since?.let {
+            val day = R.drawable.ic_weather_clear_day
+            val night = R.drawable.ic_weather_clear_night
+            ChipValues.Range(
+                0f, ((now - it).toFloat() / (time - it)).coerceIn(0f, 1f), clock(it), clock(time),
+                startIcon = if (sunrise) night else day, endIcon = if (sunrise) day else night,
+            )
+        }
         return ChipValues.Value(
             clock(time),
             wide = listOfNotNull("${name(sunrise)} ${clock(time)}", after).joinToString(" · "),
             detail = after,
+            range = range,
+            label = name(sunrise),
         )
     }
 
@@ -177,7 +200,10 @@ object SimpleSources {
         val detail = listOf(name, date).filter { it.isNotEmpty() }.joinToString(" · ")
         val wide = if (name.isEmpty()) "$text · $date" else "$text · $name ($date)"
         val shorter = listOfNotNull(name.takeIf { it.isNotEmpty() }?.let { "$text · $it" }, "$text · $date".takeIf { name.isNotEmpty() })
-        return ChipValues.Value(text, wide = wide, detail = detail, stacked = listOf(text, name, date).filter { it.isNotEmpty() }, shorter = shorter)
+        return ChipValues.Value(
+            text, wide = wide, detail = detail, stacked = listOf(text, name, date).filter { it.isNotEmpty() }, shorter = shorter,
+            label = name.ifEmpty { null },
+        )
     }
 
     /** Counts above 99 show as "99+" (spec 7.3, large number state). */

@@ -182,7 +182,13 @@ class ComplicationEngine(private val context: Context) {
             val count = counts[spec.arg] ?: 0
             ChipValues.set(
                 spec.key,
-                if (count > 0) ChipValues.Value(SimpleSources.cap(count), appIcon = NotificationCounter.icons.value[spec.arg]) else null
+                if (count > 0) {
+                    ChipValues.Value(
+                        SimpleSources.cap(count), appIcon = NotificationCounter.icons.value[spec.arg],
+                        detail = if (count == 1) "1 new notification" else "${SimpleSources.cap(count)} new notifications",
+                        label = spec.arg?.let { SimpleSources.appName(context, it) },
+                    )
+                } else null
             )
         }
     }

@@ -42,10 +42,31 @@ object ChipValues {
          * ("3d · Holiday", "3d · Mon 2 Nov"), so it falls back to some of it rather than to [text].
          */
         val shorter: List<String> = emptyList(),
+        /** Where the value sits between two labelled ends, drawn as a bar on a two-panel card's tile. */
+        val range: Range? = null,
+        /** What the value is of, in a word or two ("WhatsApp", "Pixel Buds Pro", "Sunset"): a tile's title or small line. */
+        val label: String? = null,
+        /** A short note beside the value on a tile with a bar ("02:57–07:32"). */
+        val aside: String? = null,
     ) {
         /** The stacked chip's lines: [stacked], else the value with its second line. */
         val lines: List<String> get() = stacked ?: listOfNotNull(text, detail)
     }
+
+    /**
+     * A bar from [start] to [end] (labelled with what each end means), filled from [from] to [to]
+     * (0 to 1); [endShort] is a shorter end label for a narrow tile. The icons, if any, go before
+     * the start label and after the end label (the sun and the moon).
+     */
+    data class Range(
+        val from: Float,
+        val to: Float,
+        val start: String,
+        val end: String,
+        val endShort: String? = null,
+        val startIcon: Int? = null,
+        val endIcon: Int? = null,
+    )
 
     data class Part(val icon: Int, val aodIcon: Int, val text: String, val name: String? = null) {
         /** With its name, where there is room: "Pixel Buds Pro 100%". */

@@ -826,13 +826,7 @@ object LiveCards {
      * rain and the wind, and the next days.
      */
     fun chips(context: Context, aod: Boolean, specs: List<ChipSpec>, index: Int, weather: com.ataglanceplus.weather.Weather?): SmartspaceTarget {
-        val views = RemoteViews(context.packageName, R.layout.card_chips)
-        val reading = weather?.let { WeatherCard.live(it) }
-        val palette = if (reading != null) WeatherCard.surface(context, views, reading, aod)
-        else PanelCards.palette(context, com.ataglanceplus.weather.WeatherLook.STANDARD, aod).also { views.setViewVisibility(R.id.weather_scene, View.GONE) }
-        PanelCards.paint(views, palette, R.id.extra_left, R.id.extra_right)
-        listOf(R.id.extra_title, R.id.extra_text).forEach { views.setTextColor(it, palette.text) }
-        views.setTextColor(R.id.extra_detail, palette.secondary)
+        val (views, palette) = extraBase(context, aod, weather)
         Style.holdBar(views, pinned = false, aod = aod)
 
         val rows = PanelCards.rows(context, specs)
@@ -862,6 +856,28 @@ object LiveCards {
             return Style.target(context, "aagp_forecast", views, "Today", PanelCards.todayText(context, weather), R.drawable.ic_card, tap, 0.5f)
         }
 
+        fillExtra(context, views, palette, rows, weather)
+        val placed = rows.flatten()
+        val summary = placed.joinToString(" · ") { "${it.spec.kind.label} ${it.placed.value.text}" }
+        val tap = Style.gated(context, Intent(context, com.ataglanceplus.ui.MainActivity::class.java), REQUEST_BASE + 0xFF00 + index)
+        views.setOnClickPendingIntent(R.id.card_root, tap)
+        return Style.target(context, "aagp_chips:$index", views, "More", summary, R.drawable.ic_card, tap, 0.5f)
+    }
+
+    /** The extra card's views on the weather card's surface, and its palette, before anything goes in them. */
+    internal fun extraBase(context: Context, aod: Boolean, weather: com.ataglanceplus.weather.Weather?): Pair<RemoteViews, PanelCards.Palette> {
+        val views = RemoteViews(context.packageName, R.layout.card_chips)
+        val reading = weather?.let { WeatherCard.live(it) }
+        val palette = if (reading != null) WeatherCard.surface(context, views, reading, aod)
+        else PanelCards.palette(context, com.ataglanceplus.weather.WeatherLook.STANDARD, aod).also { views.setViewVisibility(R.id.weather_scene, View.GONE) }
+        PanelCards.paint(views, palette, R.id.extra_left, R.id.extra_right)
+        listOf(R.id.extra_title, R.id.extra_text).forEach { views.setTextColor(it, palette.text) }
+        views.setTextColor(R.id.extra_detail, palette.secondary)
+        return views to palette
+    }
+
+    /** The extra card's chips: one or two beside the next hours, else a full panel of tiles. */
+    internal fun fillExtra(context: Context, views: RemoteViews, palette: PanelCards.Palette, rows: List<List<PanelCards.Tile>>, weather: com.ataglanceplus.weather.Weather?) {
         val placed = rows.flatten()
         val few = placed.size <= 2 && weather != null && weather.nextHours(3).size == 3
         if (few) {
@@ -871,16 +887,12 @@ object LiveCards {
             views.setViewVisibility(R.id.extra_detail, View.GONE)
             views.setViewVisibility(R.id.extra_hours, View.VISIBLE)
             PanelCards.addHours(context, views, R.id.extra_hours, weather.nextHours(3), palette)
-            PanelCards.fillRows(context, views, placed.map { listOf(it) }, palette, WeatherCard.extraRightDp(context, alone = false), detailed = true)
+            PanelCards.fillRows(context, views, PanelCards.eachAcross(rows), palette, WeatherCard.extraRightDp(context, alone = false))
         } else {
             views.setViewVisibility(R.id.extra_left, View.GONE)
             views.setViewLayoutMargin(R.id.extra_right, RemoteViews.MARGIN_START, 0f, android.util.TypedValue.COMPLEX_UNIT_DIP)
-            PanelCards.fillRows(context, views, rows, palette, WeatherCard.extraRightDp(context, alone = true), detailed = true)
+            PanelCards.fillRows(context, views, rows, palette, WeatherCard.extraRightDp(context, alone = true))
         }
-        val summary = placed.joinToString(" · ") { "${it.spec.kind.label} ${it.value.text}" }
-        val tap = Style.gated(context, Intent(context, com.ataglanceplus.ui.MainActivity::class.java), REQUEST_BASE + 0xFF00 + index)
-        views.setOnClickPendingIntent(R.id.card_root, tap)
-        return Style.target(context, "aagp_chips:$index", views, "More", summary, R.drawable.ic_card, tap, 0.5f)
     }
 
     /** How many of [specs] one extra card takes: two rows of tiles. */

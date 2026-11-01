@@ -62,7 +62,7 @@ class BudsSource(private val context: Context, private val onChange: () -> Unit)
         val parts = levels.values.toList()
         if (parts.isEmpty()) return null
         // Extended, a lone device shows its name too.
-        return ChipValues.Value(parts.first().text, parts = parts, wide = parts.joinToString(" · ") { it.named }, detail = parts.first().name)
+        return ChipValues.Value(parts.first().text, parts = parts, wide = parts.joinToString(" · ") { it.named }, detail = parts.first().name, label = parts.first().name)
     }
 
     /** Headphones, a watch, or anything else, from the device's Bluetooth class. */

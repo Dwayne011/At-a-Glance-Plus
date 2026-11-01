@@ -226,21 +226,25 @@
 
                 <ImageView
                     android:id="@+id/weather_icon"
-                    android:layout_width="26dp"
-                    android:layout_height="26dp"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
                     android:contentDescription="@null" />
 
                 <TextView
-                    android:id="@+id/weather_temp"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:fontFamily="sans-serif"
-                    android:includeFontPadding="false"
-                    android:letterSpacing="-0.03"
-                    android:singleLine="true"
-                    android:textColor="#FFFFFFFF"
-                    android:textSize="34sp" />
+                android:id="@+id/weather_temp"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:autoSizeMaxTextSize="30sp"
+                android:autoSizeMinTextSize="18sp"
+                android:autoSizeStepGranularity="0.5sp"
+                android:autoSizeTextType="uniform"
+                android:fontFamily="sans-serif"
+                android:gravity="start|center_vertical"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="#FFFFFFFF"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1" />
             </LinearLayout>
 
             <TextView

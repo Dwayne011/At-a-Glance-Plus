@@ -57,7 +57,11 @@ object WeatherCard {
     fun build(context: Context, surface: String, aod: Boolean, weather: Weather?, status: String, chips: List<ChipSpec>? = null): SmartspaceTarget {
         val reading = weather?.let { live(it) }
             ?: return needed(context, aod, !WeatherRepository.hasLocationPermission(context), status)
+        return finish(context, views(context, surface, aod, weather, reading, chips), reading, aod)
+    }
 
+    /** The card's views with the weather [reading] and its chips, before they are wrapped in a target. */
+    internal fun views(context: Context, surface: String, aod: Boolean, weather: Weather, reading: Reading, chips: List<ChipSpec>?): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.card_weather_material)
         val palette = surface(context, views, reading, aod)
         PanelCards.paint(views, palette, R.id.weather_panel, R.id.chips_panel)
@@ -83,9 +87,9 @@ object WeatherCard {
             PanelCards.addHours(context, views, R.id.chips_hours, hours, palette)
             if (hours.isEmpty()) views.setViewVisibility(R.id.chips_panel, View.GONE)
         } else {
-            PanelCards.fillRows(context, views, rows, palette, chipsPanelDp(context), detailed = false)
+            PanelCards.fillRows(context, views, rows, palette, chipsPanelDp(context))
         }
-        return finish(context, views, reading, aod)
+        return views
     }
 
     /** "H12° L9°", or null without them. */
@@ -158,7 +162,7 @@ object WeatherCard {
         val chosen = Prefs.chips(context).orEmpty()
         val rows = PanelCards.rows(context, chosen)
         return "Fitting: screen ${screenDp(context).toInt()}dp, card ${cardWidthDp(context).toInt()}dp before the launcher shrinks it, " +
-            "chips panel ${chipsPanelDp(context).toInt()}dp: ${rows.joinToString(" / ") { row -> row.joinToString(", ") { it.spec.kind.id + if (it.big) " (extended)" else "" } }.ifEmpty { "no chips" }}."
+            "chips panel ${chipsPanelDp(context).toInt()}dp: ${rows.joinToString(" / ") { row -> row.joinToString(", ") { it.spec.kind.id + " (" + it.size.name.lowercase() + ")" } }.ifEmpty { "no chips" }}."
     }
 
     /** The chips of [specs] the weather card shows, in their order in [specs]. */
