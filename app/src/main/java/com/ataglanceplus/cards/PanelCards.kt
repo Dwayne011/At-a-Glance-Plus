@@ -36,6 +36,8 @@ object PanelCards {
         val text: Int,
         val secondary: Int,
         val aod: Boolean,
+        /** The tiles' colour, for highlights drawn with a tint (today's forecast row). */
+        val highlight: Int = 0,
     )
 
     /** The palette for [look]: wallpaper colours (Standard), see-through over a scene, or outlines (always-on). */
@@ -43,11 +45,12 @@ object PanelCards {
         aod -> Palette(0, R.drawable.weather_c_panel_aod, R.drawable.weather_c_panel_aod, R.drawable.chip_bg_aod, Style.AOD_TEXT, Style.AOD_TEXT, aod = true)
         look != WeatherLook.STANDARD -> Palette(
             R.drawable.weather_c_frame_scene, R.drawable.weather_c_panel_main_scene, R.drawable.weather_c_panel_chips_scene, R.drawable.weather_c_tile_scene,
-            0xFFFFFFFF.toInt(), 0xB3FFFFFF.toInt(), aod = false,
+            0xFFFFFFFF.toInt(), 0xB3FFFFFF.toInt(), aod = false, highlight = 0x2EFFFFFF,
         )
         else -> Palette(
             R.drawable.weather_c_frame, R.drawable.weather_c_panel_main, R.drawable.weather_c_panel_chips, R.drawable.weather_c_tile,
             context.getColor(android.R.color.system_accent1_900), context.getColor(android.R.color.system_accent1_700), aod = false,
+            highlight = context.getColor(android.R.color.system_accent1_50),
         )
     }
 
@@ -195,19 +198,47 @@ object PanelCards {
         }
     }
 
-    /** Adds [days] as columns (weekday, weather, high and low) into [container]. */
-    fun addDays(context: Context, views: RemoteViews, container: Int, days: List<DayForecast>, palette: Palette) {
+    /**
+     * The days as rows into [container] (a panel [panelWidthDp] wide, 6dp padding inside): each
+     * with its day, weather, chance of rain (when 10% or more), low, a bar from the low to the high
+     * on one scale shared by all the rows, and the high. [today], if given, comes first, highlighted.
+     */
+    fun addRows(context: Context, views: RemoteViews, container: Int, today: DayForecast?, days: List<DayForecast>, palette: Palette, panelWidthDp: Float) {
         views.removeAllViews(container)
+        val all = listOfNotNull(today) + days
+        if (all.isEmpty()) return
+        val low = all.minOf { it.low }
+        val high = all.maxOf { it.high }.let { if (it - low < 1) low + 1 else it }
+        // The track's width: the panel less its padding (12), the row's (12), and the fixed parts
+        // (day 40, icon 2 + 14, rain 6 + 40, low 24, the track's margins 12, high 26).
+        val track = (panelWidthDp - 12f - 12f - (40 + 16 + 46 + 24 + 12 + 26)).coerceAtLeast(16f)
         val locale = Locale.getDefault()
-        days.forEach { day ->
-            val col = RemoteViews(context.packageName, R.layout.include_forecast_day)
-            val name = java.time.LocalDate.ofEpochDay(day.day).dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, locale)
-            col.setTextViewText(R.id.day_label, name)
-            col.setImageViewResource(R.id.day_icon, if (palette.aod) day.condition.aodIcon(true) else day.condition.icon(true))
-            col.setTextViewText(R.id.day_value, "${day.high.roundToInt()}° ${day.low.roundToInt()}°")
-            col.setTextColor(R.id.day_label, palette.secondary)
-            col.setTextColor(R.id.day_value, palette.text)
-            views.addView(container, col)
+        val dip = TypedValue.COMPLEX_UNIT_DIP
+        all.forEachIndexed { i, day ->
+            val row = RemoteViews(context.packageName, R.layout.include_forecast_row)
+            val isToday = today != null && i == 0
+            val name = if (isToday) "Today" else java.time.LocalDate.ofEpochDay(day.day).dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, locale)
+            row.setTextViewText(R.id.row_day, name)
+            row.setImageViewResource(R.id.row_icon, if (palette.aod) day.condition.aodIcon(true) else day.condition.icon(true))
+            row.setTextViewText(R.id.row_rain, day.rainChance?.takeIf { it >= 10 }?.let { "\uD83D\uDCA7$it%" }.orEmpty())
+            row.setTextViewText(R.id.row_low, "${day.low.roundToInt()}°")
+            row.setTextViewText(R.id.row_high, "${day.high.roundToInt()}°")
+            listOf(R.id.row_day, R.id.row_rain, R.id.row_high).forEach { row.setTextColor(it, palette.text) }
+            row.setTextColor(R.id.row_low, palette.secondary)
+            // The bar: the track in a faint text colour, the fill from the low to the high.
+            val start = ((day.low - low) / (high - low) * track).toFloat()
+            val length = ((day.high - day.low) / (high - low) * track).toFloat().coerceAtLeast(5f)
+            row.setColorStateList(R.id.row_track, "setBackgroundTintList", ColorStateList.valueOf((palette.secondary and 0x00FFFFFF) or 0x40000000))
+            row.setColorStateList(R.id.row_fill, "setImageTintList", ColorStateList.valueOf(palette.text))
+            row.setViewLayoutWidth(R.id.row_fill, length, dip)
+            row.setViewLayoutMargin(R.id.row_fill, RemoteViews.MARGIN_START, start.coerceAtMost(track - length), dip)
+            if (isToday && !palette.aod) {
+                row.setInt(R.id.row_root, "setBackgroundResource", R.drawable.weather_c_row_now)
+                row.setColorStateList(R.id.row_root, "setBackgroundTintList", ColorStateList.valueOf(palette.highlight))
+            }
+            row.setContentDescription(R.id.row_root, "$name: ${day.condition.label}, low ${day.low.roundToInt()}°, high ${day.high.roundToInt()}°" +
+                (day.rainChance?.let { ", rain $it%" } ?: ""))
+            views.addView(container, row)
         }
     }
 
@@ -220,15 +251,6 @@ object PanelCards {
                 weather.condition.label,
                 if (weather.high != null && weather.low != null) "high ${weather.high.roundToInt()}°, low ${weather.low.roundToInt()}°" else null,
             ).joinToString(", ")
-    }
-
-    /** The chance of rain today (the most of the hours left or the day's figure) and the wind, for the extra card. */
-    fun todayDetail(weather: Weather): String {
-        val today = java.time.LocalDate.now().toEpochDay()
-        val rain = weather.days.firstOrNull { it.day == today }?.rainChance
-            ?: weather.nextHours(8).mapNotNull { it.rainChance }.maxOrNull()
-        // Short, as it shares a narrow panel: "Rain 10% · 9 mph".
-        return listOfNotNull(rain?.let { "Rain $it%" }, weather.wind?.let { "${it.roundToInt()} ${weather.windUnit}" }).joinToString(" · ")
     }
 
     /** Whether the weather card's look draws a scene behind the panels. */

@@ -1,5 +1,6 @@
 package com.ataglanceplus.cards
 
+import kotlin.math.roundToInt
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.app.smartspace.SmartspaceTarget
@@ -837,18 +838,25 @@ object LiveCards {
         val rows = PanelCards.rows(context, specs)
         if (rows.isEmpty() && weather != null) {
             // No chips: today in words, then the days after it (or the next hours, without days).
-            views.setTextViewText(R.id.extra_title, "Today")
+            // No chips: now in words on the left; today and the next three days as rows on the right.
+            views.setTextViewText(R.id.extra_title, "Now")
             views.setTextViewText(R.id.extra_text, PanelCards.todayText(context, weather))
-            val detail = PanelCards.todayDetail(weather)
-            views.setTextViewText(R.id.extra_detail, detail)
-            views.setViewVisibility(R.id.extra_detail, if (detail.isEmpty()) View.GONE else View.VISIBLE)
+            val wind = weather.wind?.let { "Wind ${it.roundToInt()} ${weather.windUnit}" }
+            views.setTextViewText(R.id.extra_detail, wind.orEmpty())
+            views.setViewVisibility(R.id.extra_detail, if (wind == null) View.GONE else View.VISIBLE)
             views.setViewVisibility(R.id.chips_row1, View.GONE)
             views.setViewVisibility(R.id.chips_row2, View.GONE)
-            views.setViewVisibility(R.id.extra_days, View.VISIBLE)
-            val today = java.time.LocalDate.now().toEpochDay()
-            val days = weather.days.filter { it.day > today }.take(4)
-            if (days.isNotEmpty()) PanelCards.addDays(context, views, R.id.extra_days, days, palette)
-            else PanelCards.addHours(context, views, R.id.extra_days, weather.nextHours(5), palette)
+            val todayDay = java.time.LocalDate.now().toEpochDay()
+            val today = weather.days.firstOrNull { it.day == todayDay }
+            val next = weather.days.filter { it.day > todayDay }.take(3)
+            if (today != null || next.isNotEmpty()) {
+                views.setViewVisibility(R.id.extra_rows, View.VISIBLE)
+                PanelCards.addRows(context, views, R.id.extra_rows, today, next, palette, WeatherCard.extraRightDp(context, alone = false))
+            } else {
+                // An old saved reading without days: the next hours instead.
+                views.setViewVisibility(R.id.extra_days, View.VISIBLE)
+                PanelCards.addHours(context, views, R.id.extra_days, weather.nextHours(5), palette)
+            }
             val tap = WeatherCard.weatherIntent(context)
             views.setOnClickPendingIntent(R.id.card_root, tap)
             return Style.target(context, "aagp_forecast", views, "Today", PanelCards.todayText(context, weather), R.drawable.ic_card, tap, 0.5f)

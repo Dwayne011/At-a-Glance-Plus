@@ -295,6 +295,14 @@
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:visibility="gone" />
+
+            <!-- The days as rows: today first (highlighted), then the next three. -->
+            <LinearLayout
+                android:id="@+id/extra_rows"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:visibility="gone" />
         </LinearLayout>
 
     </LinearLayout>

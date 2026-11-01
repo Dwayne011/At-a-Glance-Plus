@@ -364,3 +364,10 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | App icon | Adaptive icon (background, foreground in the safe zone, monochrome): round on Pixel, and themed with the wallpaper when Themed icons is on | User request |
 | Wallet places | "Add a place" also reads typed coordinates ("51.6535, -0.3965" → "Use these coordinates"), and adds Android's own geocoder's results to Photon's (duplicates within 80m dropped) | User: coordinates when a place does not come up; another free source |
 | Removed | The old layout's forecast pills, card edge, chips-card background, the Standard sky and an unused chip layout (and their generator entries) | No longer used |
+
+## 0.32.1 — Forecast as rows, today first (option E)
+
+| Area | Now | Why |
+|---|---|---|
+| Forecast card (no extra chips) | Left: "Now", what the weather does next, and the wind. Right: rows for today (highlighted, in the tiles' colour) and the next three days: day, weather, chance of rain (10% or more, with a drop), low, a bar from the low to the high on one scale shared by the four rows, and the high. Bars are native views: a tinted track and a fill whose start and length are set in dp from the panel's width | User chose E after the capsule and column mockups |
+| Removed | The day columns layout and code (the hours keep their columns) | Replaced by rows |
