@@ -91,7 +91,7 @@ object CardDeck {
         val extraChips = buildList {
             while (!pool.isNullOrEmpty()) {
                 // At least one, so a chip whose value just went away cannot stall the loop.
-                add(take(Chips.overflowTaken(context, pool).coerceAtLeast(1)).orEmpty())
+                add(take(LiveCards.extraTaken(context, pool).coerceAtLeast(1)).orEmpty())
             }
         }
 
@@ -125,7 +125,11 @@ object CardDeck {
             finance?.takeIf { !it.forward }?.let { card("finance") { LiveCards.finance(context, aod, data.quotes, it) } }
         }
         val weatherCard = WeatherCard.build(context, surface, aod, data.weather, data.weatherStatus, weatherChips)
-        val extras = buildList { extraChips.forEachIndexed { i, chips -> card("extra chips") { LiveCards.chips(context, aod, chips, i) } } }
+        // The extra card: the chips that did not fit, or, with none, today and the next days.
+        val extras = buildList {
+            extraChips.forEachIndexed { i, chips -> card("extra chips") { LiveCards.chips(context, aod, chips, i, data.weather) } }
+            if (extraChips.isEmpty() && data.weather != null) card("forecast") { LiveCards.chips(context, aod, emptyList(), 0, data.weather) }
+        }
         // No count asked for, or the user chose to show them all: send everything.
         if (maxCards <= 0 || Prefs.showAllCards(context)) return contextual + weatherCard + extras
         // Out of room: the weather card always stays; the least urgent cards go first.

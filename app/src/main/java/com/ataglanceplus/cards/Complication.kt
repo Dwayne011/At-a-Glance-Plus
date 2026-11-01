@@ -262,9 +262,6 @@ object Chips {
     /** [RIGHT_COLUMN] with its stacked chip filling a card body [cardHeightDp] tall (5dp padding above and below, 4dp clear inside). */
     fun forCardHeight(cardHeightDp: Int): ChipStyle = RIGHT_COLUMN.copy(stackZoneHDp = cardHeightDp - 10, stackPillHDp = cardHeightDp - 14)
 
-    /** Room kept spare when choosing text for the extra chips card, whose real width is estimated. */
-    private const val TEXT_SPARE_DP = 12
-
     /** Space between devices on a 2-slot Bluetooth chip. */
     private const val PART_GAP_DP = 8
 
@@ -309,26 +306,6 @@ object Chips {
         return placed
     }
 
-    /**
-     * The extra chips card's two rows from [specs] (all of which it takes): every chip that can be
-     * is extended, and the chips are shared between both rows rather than filling the first.
-     */
-    fun overflowRows(context: Context, specs: List<ChipSpec>): Pair<List<Placed>, List<Placed>> {
-        val all = plan(context, specs, 2 * MAX_BOTTOM, DEFAULT_STRIP, always = true)
-        fun cost(row: List<Placed>) = row.sumOf { if (it.big) 2 else 1 }
-        // The most even split whose rows both fit; failing that, fill the first row.
-        for (split in (all.size + 1) / 2 until all.size) {
-            val first = all.take(split)
-            val second = all.drop(split)
-            if (cost(first) <= MAX_BOTTOM && cost(second) <= MAX_BOTTOM) return first to second
-        }
-        val first = plan(context, specs, MAX_BOTTOM, DEFAULT_STRIP, always = true)
-        return first to all.drop(first.size)
-    }
-
-    /** How many of [specs] one extra chips card takes. */
-    fun overflowTaken(context: Context, specs: List<ChipSpec>): Int =
-        plan(context, specs, 2 * MAX_BOTTOM, DEFAULT_STRIP, always = true).size
 
     /**
      * Adds the chips that have something to show, up to 2 on the right of the card. A chip with no
@@ -551,127 +528,7 @@ object Chips {
         }
     }
 
-    /**
-     * A row of the extra chips card: the chips share the row's whole width, and each shows the
-     * most it can in its share: its name and the whole story ("Screen time · 1h 20m · YouTube
-     * 35m"), else the whole story, else the value. Bluetooth devices sit side by side.
-     */
-    fun addOverflowRow(context: Context, views: RemoteViews, placed: List<Placed>, rowWidthDp: Float, aod: Boolean, container: Int) {
-        views.setViewVisibility(container, if (placed.isEmpty()) View.GONE else View.VISIBLE)
-        if (placed.isEmpty()) return
-        val dip = android.util.TypedValue.COMPLEX_UNIT_DIP
-        val px = android.util.TypedValue.COMPLEX_UNIT_PX
-        val style = DEFAULT_STRIP
-        val gap = style.gapDp
-        // The chips share the row by weight (include_chip_big_fill), so they always fit it; the
-        // width here only decides how much text to try, with a little to spare in case the card
-        // is narrower than estimated.
-        val width = (rowWidthDp - gap * (placed.size - 1)) / placed.size - TEXT_SPARE_DP
-        val inner = width - 2 * style.padDp
-        placed.forEachIndexed { i, (spec, value, big) ->
-            val child = RemoteViews(context.packageName, R.layout.include_chip_big_fill)
-            child.setViewLayoutHeight(R.id.chip_zone, style.zoneHDp.toFloat(), dip)
-            if (i < placed.lastIndex) child.setViewLayoutMargin(R.id.chip_zone, RemoteViews.MARGIN_END, gap.toFloat(), dip)
-            child.setViewLayoutWidth(R.id.chip_pill, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), px)
-            child.setViewLayoutHeight(R.id.chip_pill, style.pillHDp.toFloat(), dip)
-            child.setViewPadding(R.id.chip_pill, dp(context, style.padDp), 0, dp(context, style.padDp), 0)
-            val tone = ChipTones.of(spec, value)
-            child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else tone.pill)
-            child.setViewLayoutWidth(R.id.chip_icon, style.iconDp.toFloat(), dip)
-            child.setViewLayoutHeight(R.id.chip_icon, style.iconDp.toFloat(), dip)
-            child.setTextViewTextSize(R.id.chip_text, android.util.TypedValue.COMPLEX_UNIT_SP, style.textSp)
-            if (value.parts.size > 1) {
-                child.setViewVisibility(R.id.chip_icon, View.GONE)
-                child.setViewVisibility(R.id.chip_text, View.GONE)
-                var used = 0f
-                value.parts.forEachIndexed { k, part ->
-                    val w = 16 + 4 + textWidthDp(context, part.named, 12.5f) + if (k > 0) PART_GAP_DP else 0
-                    if (k > 0 && used + w > inner) return@forEachIndexed
-                    used += w
-                    child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0, named = true, tone = tone))
-                }
-            } else {
-                val name = label(context, spec)
-                val story = if (big) value.wide ?: value.text else value.text
-                val room = inner - style.iconDp - 4
-                // The sun chip's story names itself ("Sunset 16:38 · Sunrise 07:05").
-                val named = if (spec.kind == Complication.SUNSET) null else "$name · $story"
-                // Longest first: with its name, the whole story, shorter forms of it, the name and value, the value.
-                val candidates = listOfNotNull(named, story) + (if (big) value.shorter else emptyList()) +
-                    listOfNotNull(if (spec.kind == Complication.SUNSET) null else "$name · ${value.text}", value.text)
-                val text = candidates.firstOrNull { textWidthDp(context, it, style.textSp) <= room } ?: value.text
-                child.setTextViewText(R.id.chip_text, text)
-                look(child, spec, value, aod)
-                shrink(context, child, R.id.chip_text, text, style.textSp, room, 9f)
-            }
-            child.setContentDescription(R.id.chip_zone, "${label(context, spec)}: ${value.wide ?: value.text}")
-            child.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
-            views.addView(container, child)
-        }
-    }
 
-    /**
-     * The extra chips card's only chip: one pill across the full width and the height of both
-     * rows. Line 1 is its name and value, larger; line 2 the whole story (or the second line it
-     * would show when stacked). Bluetooth devices fill the two lines side by side.
-     */
-    fun addOverflowSingle(context: Context, views: RemoteViews, placed: Placed, widthDp: Float, heightDp: Float, aod: Boolean, container: Int) {
-        val (spec, value, _) = placed
-        val dip = android.util.TypedValue.COMPLEX_UNIT_DIP
-        val px = android.util.TypedValue.COMPLEX_UNIT_PX
-        val tone = ChipTones.of(spec, value)
-        views.setViewVisibility(container, View.VISIBLE)
-        val child = RemoteViews(context.packageName, R.layout.include_chip_big_fill)
-        child.setViewLayoutHeight(R.id.chip_zone, heightDp, dip)
-        child.setViewLayoutWidth(R.id.chip_pill, android.view.ViewGroup.LayoutParams.MATCH_PARENT.toFloat(), px)
-        child.setViewLayoutHeight(R.id.chip_pill, heightDp - 8, dip)
-        child.setViewPadding(R.id.chip_pill, dp(context, 16), 0, dp(context, 16), 0)
-        child.setInt(R.id.chip_pill, "setBackgroundResource", if (aod) R.drawable.chip_bg_aod else tone.pill)
-        child.setViewLayoutWidth(R.id.chip_icon, 20f, dip)
-        child.setViewLayoutHeight(R.id.chip_icon, 20f, dip)
-        val inner = widthDp - 32 - TEXT_SPARE_DP
-        if (value.parts.size > 1) {
-            child.setViewVisibility(R.id.chip_icon, View.GONE)
-            child.setViewVisibility(R.id.chip_text, View.GONE)
-            val rows = List(2) { mutableListOf<ChipValues.Part>() }
-            var row = 0
-            var used = 0f
-            for (part in value.parts) {
-                val w = 16 + 4 + textWidthDp(context, part.named, 12.5f) + if (rows[row].isEmpty()) 0 else PART_GAP_DP
-                if (rows[row].isNotEmpty() && used + w > inner) {
-                    if (row == 1) break
-                    row = 1
-                    used = 0f
-                }
-                used += if (rows[row].isEmpty()) 16 + 4 + textWidthDp(context, part.named, 12.5f) else w
-                rows[row] += part
-            }
-            rows[0].forEachIndexed { k, part -> child.addView(R.id.chip_row, partView(context, part, aod, gap = k > 0, named = true, tone = tone)) }
-            if (rows[1].isNotEmpty()) {
-                child.setViewVisibility(R.id.chip_row2, View.VISIBLE)
-                rows[1].forEachIndexed { k, part -> child.addView(R.id.chip_row2, partView(context, part, aod, gap = k > 0, named = true, tone = tone)) }
-            }
-        } else {
-            val name = label(context, spec)
-            val headline = if (spec.kind == Complication.SUNSET) value.text else "$name · ${value.text}"
-            child.setTextViewText(R.id.chip_text, headline)
-            child.setTextViewTextSize(R.id.chip_text, android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
-            look(child, spec, value, aod)
-            shrink(context, child, R.id.chip_text, headline, 16f, inner - 24, 11f)
-            // The second line: the whole story when it says more than the value, else the stacked second line.
-            val more = value.wide?.takeIf { it != value.text } ?: value.detail
-            if (more != null) {
-                child.setViewVisibility(R.id.chip_detail, View.VISIBLE)
-                child.setTextViewText(R.id.chip_detail, more)
-                child.setTextViewTextSize(R.id.chip_detail, android.util.TypedValue.COMPLEX_UNIT_SP, 12.5f)
-                child.setTextColor(R.id.chip_detail, if (aod) Style.AOD_TEXT else tone.secondary)
-                shrink(context, child, R.id.chip_detail, more, 12.5f, inner, 9f)
-            }
-        }
-        child.setContentDescription(R.id.chip_zone, "${label(context, spec)}: ${value.wide ?: value.text}")
-        child.setOnClickPendingIntent(R.id.chip_zone, spec.tapIntent(context))
-        views.addView(container, child)
-    }
 
     /** A chip's name as a reader would say it: "Screen time", "Heart rate", "Gmail", an app's name. */
     private fun label(context: Context, spec: ChipSpec): String = when (spec.kind) {

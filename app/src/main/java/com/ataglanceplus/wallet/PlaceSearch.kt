@@ -12,8 +12,10 @@ import java.net.URLEncoder
 import java.util.Locale
 
 /**
- * Places for Wallet passes, from Photon (photon.komoot.io): a free search over OpenStreetMap
- * made for typing ahead, nearest first when a location is given. Also finds every branch of a
+ * Places for Wallet passes, from two free sources so one's gaps are covered by the other: Photon
+ * (photon.komoot.io), a search over OpenStreetMap made for typing ahead, nearest first when a
+ * location is given; and Android's own geocoder (Google's, on the phone). Typed coordinates
+ * ("51.6535, -0.3965") are read as a place too. Also finds every branch of a
  * chain ("any Tesco") around the user, kept on the phone and looked up again after a move of a
  * couple of kilometres or a day, so the pass can follow the user anywhere.
  */
@@ -45,11 +47,43 @@ object PlaceSearch {
         val distanceM: Float?,
     )
 
-    /** Places matching [query] as typed, nearest first when [near] is known. Blocking. */
-    fun suggest(query: String, near: Location?): List<Suggestion> {
+    /**
+     * Places matching [query] as typed: Photon's, then the phone geocoder's that Photon did not
+     * find (anything within 80m of one already listed is the same place). Blocking.
+     */
+    fun suggest(context: Context, query: String, near: Location?): List<Suggestion> {
         val url = BASE + "?q=" + URLEncoder.encode(query, "UTF-8") + "&limit=15&lang=en" +
             (near?.let { "&lat=${it.latitude}&lon=${it.longitude}&location_bias_scale=0.1&zoom=12" } ?: "")
-        return features(url).mapNotNull { suggestion(it, near) }.filter { it.business || it.detail.isNotEmpty() }
+        val photon = features(url).mapNotNull { suggestion(it, near) }.filter { it.business || it.detail.isNotEmpty() }
+        val phone = geocode(context, query, near).filter { g ->
+            photon.none { p -> FloatArray(1).also { Location.distanceBetween(p.lat, p.lng, g.lat, g.lng, it) }[0] < 80f }
+        }
+        return photon + phone
+    }
+
+    /** The phone's geocoder for [query], near the user when known (about 50km round). Empty when it has nothing or no service. */
+    private fun geocode(context: Context, query: String, near: Location?): List<Suggestion> = runCatching {
+        val geocoder = android.location.Geocoder(context, Locale.getDefault())
+        @Suppress("DEPRECATION")
+        val found = if (near != null) {
+            geocoder.getFromLocationName(query, 5, near.latitude - 0.45, near.longitude - 0.7, near.latitude + 0.45, near.longitude + 0.7)
+                ?.takeIf { it.isNotEmpty() } ?: geocoder.getFromLocationName(query, 5)
+        } else geocoder.getFromLocationName(query, 5)
+        found.orEmpty().map { a ->
+            val name = a.featureName?.takeIf { it.isNotBlank() && !it.all { c -> c.isDigit() } } ?: a.thoroughfare ?: a.getAddressLine(0) ?: query
+            val detail = listOfNotNull(a.thoroughfare?.let { t -> a.subThoroughfare?.let { "$it $t" } ?: t }, a.locality ?: a.subAdminArea)
+                .filter { it != name }.joinToString(", ")
+            val distance = near?.let { FloatArray(1).also { d -> Location.distanceBetween(it.latitude, it.longitude, a.latitude, a.longitude, d) }[0] }
+            Suggestion(name, detail, a.latitude, a.longitude, business = a.featureName != null && a.thoroughfare != null && a.featureName != a.thoroughfare, distanceM = distance)
+        }
+    }.getOrDefault(emptyList())
+
+    /** Coordinates typed as "51.6535, -0.3965" (or with a space), when in range; else null. */
+    fun coordinates(text: String): Pair<Double, Double>? {
+        val match = Regex("""^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$""").find(text) ?: return null
+        val lat = match.groupValues[1].toDoubleOrNull() ?: return null
+        val lng = match.groupValues[2].toDoubleOrNull() ?: return null
+        return if (lat in -90.0..90.0 && lng in -180.0..180.0) lat to lng else null
     }
 
     /**

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed icon: the card's outline and lines in one colour (Android tints it from the wallpaper). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M34,42h40a7,7 0 0 1 7,7v10a7,7 0 0 1 -7,7h-40a7,7 0 0 1 -7,-7v-10a7,7 0 0 1 7,-7z M38.5,50.5v3.5h24v-3.5z M38.5,57.5v3h15v-3z" />
+</vector>

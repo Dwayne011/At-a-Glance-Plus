@@ -7,6 +7,6 @@
     android:viewportWidth="420"
     android:viewportHeight="104">
     <group android:name="drift">
-        <path android:fillColor="#FFCFD8DC" android:fillAlpha="0.14" android:pathData="M200,26 h220 a5,5 0 0 1 0,10 h-220 a5,5 0 0 1 0,-10 ZM250,46 h240 a5,5 0 0 1 0,10 h-240 a5,5 0 0 1 0,-10 ZM210,66 h230 a5,5 0 0 1 0,10 h-230 a5,5 0 0 1 0,-10 Z" />
+        <path android:fillColor="#FFCFD8DC" android:fillAlpha="0.14" android:pathData="M-60,26 h520 a5,5 0 0 1 0,10 h-520 a5,5 0 0 1 0,-10 ZM-90,46 h560 a5,5 0 0 1 0,10 h-560 a5,5 0 0 1 0,-10 ZM-40,66 h530 a5,5 0 0 1 0,10 h-530 a5,5 0 0 1 0,-10 Z" />
     </group>
 </vector>

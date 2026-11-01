@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app icon's mark: an At a Glance card with two lines, inside the 66dp safe zone so a round
+     (or any) mask never cuts it. Also the themed (monochrome) icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#00CCBC"
+        android:pathData="M34,42h40a7,7 0 0 1 7,7v10a7,7 0 0 1 -7,7h-40a7,7 0 0 1 -7,-7v-10a7,7 0 0 1 7,-7z" />
+    <path
+        android:fillColor="#0F2A2E"
+        android:pathData="M38.5,50.5h24v3.5h-24zM38.5,57.5h15v3h-15z" />
+</vector>

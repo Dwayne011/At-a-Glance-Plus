@@ -816,33 +816,67 @@ object LiveCards {
         return Style.target(context, targetId("torch"), views, "Torch on", detail, R.drawable.ic_torch, off, 2f)
     }
 
-    // --- Extra chips ---
+    // --- Extra card ---
 
     /**
-     * A card of chips that did not fit on the other cards: two rows of up to 4 slots, shared
-     * between the rows, every chip that can be extended shown extended, and each row's chips
-     * stretched to fill it.
+     * The extra card, two panels like the weather card on the same surface: the chips that did
+     * not fit on the other cards (beside the next hours when there are only one or two; a full
+     * panel of tiles otherwise), or, with none ([specs] empty), today in words with its chance of
+     * rain and the wind, and the next days.
      */
-    fun chips(context: Context, aod: Boolean, specs: List<ChipSpec>, index: Int): SmartspaceTarget {
+    fun chips(context: Context, aod: Boolean, specs: List<ChipSpec>, index: Int, weather: com.ataglanceplus.weather.Weather?): SmartspaceTarget {
         val views = RemoteViews(context.packageName, R.layout.card_chips)
-        if (aod) Style.aodBody(views)
-        val (first, second) = Chips.overflowRows(context, specs)
-        // The card's inside width: its own width less the body's padding (16 + 18dp).
-        val row = WeatherCard.cardWidthDp(context) - 34f
-        val only = (first + second).singleOrNull()
-        if (only != null) {
-            // One chip: the first row grows to both rows' height and the chip fills it.
-            views.setViewLayoutHeight(R.id.complications, 2 * 34f, android.util.TypedValue.COMPLEX_UNIT_DIP)
-            views.setViewVisibility(R.id.complications_2, View.GONE)
-            Chips.addOverflowSingle(context, views, only, row, 2 * 34f, aod, R.id.complications)
-        } else {
-            Chips.addOverflowRow(context, views, first, row, aod, R.id.complications)
-            Chips.addOverflowRow(context, views, second, row, aod, R.id.complications_2)
+        val reading = weather?.let { WeatherCard.live(it) }
+        val palette = if (reading != null) WeatherCard.surface(context, views, reading, aod)
+        else PanelCards.palette(context, com.ataglanceplus.weather.WeatherLook.STANDARD, aod).also { views.setViewVisibility(R.id.weather_scene, View.GONE) }
+        PanelCards.paint(views, palette, R.id.extra_left, R.id.extra_right)
+        listOf(R.id.extra_title, R.id.extra_text).forEach { views.setTextColor(it, palette.text) }
+        views.setTextColor(R.id.extra_detail, palette.secondary)
+        Style.holdBar(views, pinned = false, aod = aod)
+
+        val rows = PanelCards.rows(context, specs)
+        if (rows.isEmpty() && weather != null) {
+            // No chips: today in words, then the days after it (or the next hours, without days).
+            views.setTextViewText(R.id.extra_title, "Today")
+            views.setTextViewText(R.id.extra_text, PanelCards.todayText(context, weather))
+            val detail = PanelCards.todayDetail(weather)
+            views.setTextViewText(R.id.extra_detail, detail)
+            views.setViewVisibility(R.id.extra_detail, if (detail.isEmpty()) View.GONE else View.VISIBLE)
+            views.setViewVisibility(R.id.chips_row1, View.GONE)
+            views.setViewVisibility(R.id.chips_row2, View.GONE)
+            views.setViewVisibility(R.id.extra_days, View.VISIBLE)
+            val today = java.time.LocalDate.now().toEpochDay()
+            val days = weather.days.filter { it.day > today }.take(4)
+            if (days.isNotEmpty()) PanelCards.addDays(context, views, R.id.extra_days, days, palette)
+            else PanelCards.addHours(context, views, R.id.extra_days, weather.nextHours(5), palette)
+            val tap = WeatherCard.weatherIntent(context)
+            views.setOnClickPendingIntent(R.id.card_root, tap)
+            return Style.target(context, "aagp_forecast", views, "Today", PanelCards.todayText(context, weather), R.drawable.ic_card, tap, 0.5f)
         }
-        val summary = Chips.withValues(specs).joinToString(" · ") { (spec, value) -> "${spec.kind.label} ${value.text}" }
+
+        val placed = rows.flatten()
+        val few = placed.size <= 2 && weather != null && weather.nextHours(4).size == 4
+        if (few) {
+            // One or two chips: each across its own row, the next hours beside them.
+            views.setTextViewText(R.id.extra_title, "Next hours")
+            views.setViewVisibility(R.id.extra_text, View.GONE)
+            views.setViewVisibility(R.id.extra_detail, View.GONE)
+            views.setViewVisibility(R.id.extra_hours, View.VISIBLE)
+            PanelCards.addHours(context, views, R.id.extra_hours, weather.nextHours(4), palette)
+            PanelCards.fillRows(context, views, placed.map { listOf(it) }, palette, WeatherCard.extraRightDp(context, alone = false), detailed = true)
+        } else {
+            views.setViewVisibility(R.id.extra_left, View.GONE)
+            views.setViewLayoutMargin(R.id.extra_right, RemoteViews.MARGIN_START, 0f, android.util.TypedValue.COMPLEX_UNIT_DIP)
+            PanelCards.fillRows(context, views, rows, palette, WeatherCard.extraRightDp(context, alone = true), detailed = true)
+        }
+        val summary = placed.joinToString(" · ") { "${it.spec.kind.label} ${it.value.text}" }
         val tap = Style.gated(context, Intent(context, com.ataglanceplus.ui.MainActivity::class.java), REQUEST_BASE + 0xFF00 + index)
+        views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, "aagp_chips:$index", views, "More", summary, R.drawable.ic_card, tap, 0.5f)
     }
+
+    /** How many of [specs] one extra card takes: two rows of tiles. */
+    fun extraTaken(context: Context, specs: List<ChipSpec>): Int = PanelCards.rows(context, specs).flatten().size
 
     // --- Finance ---
 

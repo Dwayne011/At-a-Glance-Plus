@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two-panel cards, Standard look: a chip tile, the wallpaper's lightest tone. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@android:color/system_accent1_50" />
+    <corners android:radius="12dp" />
+</shape>

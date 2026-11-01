@@ -79,8 +79,8 @@ object Style {
         if (height == CARD_HEIGHT_DEFAULT_DP) return
         val layout = views.layoutId
         val ids = mutableListOf(R.id.card_root, R.id.card_body)
-        if (layout != R.layout.card_chips && layout != R.layout.include_island_message_toast) ids += R.id.hold_bar
-        if (layout == R.layout.card_weather_material) ids += R.id.weather_scene
+        if (layout != R.layout.include_island_message_toast) ids += R.id.hold_bar
+        if (layout == R.layout.card_weather_material || layout == R.layout.card_chips) ids += R.id.weather_scene
         if (layout == R.layout.card_sports) ids += R.id.sports_surface
         ids.forEach { views.setViewLayoutHeight(it, height.toFloat(), android.util.TypedValue.COMPLEX_UNIT_DIP) }
     }

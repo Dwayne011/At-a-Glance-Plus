@@ -351,3 +351,16 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | Area | Now | Why |
 |---|---|---|
 | Hide results | Every followed team and Formula 1 has "Hide results" (Sports › tap it). For F1 it now also hides the standings on the weekend dashboard, and the weekend and each finished or live session show a "Reveal" bar (as the match screen does) instead of pointing to settings. The race card's podium was already hidden | User: all sports/teams, F1 included, should have the option to hide results |
+
+## 0.32.0 — Weather card in two panels (layout C), scenes redrawn, forecast card, round icon, coordinates
+
+| Area | Now | Why |
+|---|---|---|
+| Weather card | Two panels (mockups approved): the weather on the left (icon, temperature, "Cloudy · H12° L9°", and the date on the home screen or "Feels 9°" on the lock screen); the chips on the right as tiles in two rows, two normal chips side by side or an extended chip across a row (its whole story with a progress line, or its value over a second line). No chips: the next 4 hours fill the right panel. The hourly row and summary line under the old layout are gone from this card (the hours are on the extra card) | User: the old card looked messy; chose C |
+| Colours | Standard: the wallpaper's colours (Material You system palette: neutral frame, light accent panel, tiles), like the calendar widget. Scenes and Animated scenes: the weather scene behind see-through panels, the chips on a deeper panel. Always-on: outlines. Every chip is one style (no per-chip colours on these cards) | User: wallpaper colours unless using the scenes |
+| Scenes | Redrawn for two panels by tools/gen_weather_scenes.py: sun, moon glow and lightning over the weather panel; clouds, fog, rain, snow and the snow bank wider than the card so nothing shows an end; puffy cloud bottoms (no straight edge); clouds drift much further (light ±60, heavy ±30/±45); about a quarter less snow; the sun's rays sway ±8° and pulse more. Long paths are split (lint VectorPath) | User feedback on the animated mockups |
+| Extra card | Same two panels: the chips that did not fit (one or two beside the next 4 hours; otherwise a full panel of tiles with their second lines); with none, a forecast card: "Today" in a few words with rain chance and wind, and the next four days | User: today with a summary and the following days |
+| Forecast data | Open-Meteo now gives 6 days with each day's weather and chance of rain; kept in the saved reading | For the next days |
+| App icon | Adaptive icon (background, foreground in the safe zone, monochrome): round on Pixel, and themed with the wallpaper when Themed icons is on | User request |
+| Wallet places | "Add a place" also reads typed coordinates ("51.6535, -0.3965" → "Use these coordinates"), and adds Android's own geocoder's results to Photon's (duplicates within 80m dropped) | User: coordinates when a place does not come up; another free source |
+| Removed | The old layout's forecast pills, card edge, chips-card background, the Standard sky and an unused chip layout (and their generator entries) | No longer used |

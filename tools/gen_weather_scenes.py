@@ -2,22 +2,25 @@
 """Generates the weather card's surfaces: the Standard look and the scenes (the "Scenes" looks).
 
 Drawn in the Material You weather spec's style (section 1.1): a deep tonal gradient at 95% from the
-top left to the bottom right, with an organic wave rising in the bottom right corner behind the
-chip column. Standard is the spec's own slate-navy surface and sky-blue wave; each scene tints the
-gradient and wave for the conditions and time of day. Weather layers go on top: sun glow, stars,
-light or heavy clouds, fog, rain, snow and lightning, kept clear of the temperature and date on
-the left (the left 190 of 420). Every layer comes as a still vector (the Scenes look) and
-an animated vector (Animated scenes): clouds drift in two rows at different speeds, fog drifts,
-rain and snow fall, stars twinkle under thin wisps of cloud, the sun's rays turn slowly as it
-glows, and lightning flashes now and then. Falling layers repeat with the same step they move
-by, so the loop has no seam. All drawn for the 420 x 104dp card; the card stretches them to fit.
-Run from the repository root; the output is committed.
+top left to the bottom right, with an organic wave rising in the bottom right corner. Standard is
+the spec's own slate-navy surface (used where wallpaper colours are not); each scene tints the
+gradient and wave for the conditions and time of day. Weather layers go on top, placed for the
+two-panel card (the weather panel on the left, the chips panel on the right): the sun, the moon's
+glow and lightning over the weather panel; stars, wisps, clouds, fog, rain and snow across the whole
+card. Rows of cloud, fog bands, rain, snow and the snow bank are drawn wider than the card, so
+however far they drift no end comes into view; clouds have soft, puffy bottoms so a row never
+shows a straight edge. Every layer comes as a still vector (the Scenes look) and an animated vector
+(Animated scenes): clouds drift in two rows at different speeds and far, fog drifts, rain and snow
+fall, stars twinkle under thin wisps of cloud, the sun's rays sway and pulse as it glows, and
+lightning flashes now and then. Falling layers repeat with the same step they move by, so the loop
+has no seam. All drawn for the 420 x 104dp card; the card stretches them to fit.
+Run from the repository root (SCENE_OUT overrides the output folder); the output is committed.
 """
 import math
 import os
 import random
 
-OUT = "app/src/main/res/drawable"
+OUT = os.environ.get("SCENE_OUT", "app/src/main/res/drawable")
 W, H = 420, 104
 HDR = '<?xml version="1.0" encoding="utf-8"?>\n'
 
@@ -40,8 +43,6 @@ SKIES = {
     ("thunder", "night"): ("#F219172A", "#F2151323", "#F2100E1B", "#1FB39DDB"),
 }
 
-# The Standard look: the spec's surface exactly (weather spec 1.1).
-STANDARD = ("#F21E293B", "#F2172030", "#F20F172A", "#1F64B5F6")
 
 # The organic wave (weather spec 1.1): about 110 x 68 in the bottom right, behind the chip column.
 WAVE = "M300,104 C318,102 326,86 344,77 C364,67 380,70 396,56 C408,46 414,36 420,27 L420,104 Z"
@@ -88,24 +89,40 @@ def sky(start, center, end, wave):
     <path android:fillColor="{wave}" android:pathData="{WAVE}" />'''
 
 
+def split(data, limit=700):
+    """Path data cut at its subpaths into pieces of at most [limit] characters (long paths draw slowly)."""
+    pieces, current = [], ""
+    for sub in ["M" + p for p in data.split("M") if p.strip()]:
+        if current and len(current) + len(sub) > limit:
+            pieces.append(current)
+            current = ""
+        current += sub
+    return pieces + ([current] if current else [])
+
+
+def paths(attrs, data, indent="    "):
+    """One path per piece of [data], each with [attrs]."""
+    return "\n".join(f'{indent}<path {attrs} android:pathData="{d}" />' for d in split(data))
+
+
 def circle(cx, cy, r):
     return f"M{cx - r:.1f},{cy:.1f} a{r:.1f},{r:.1f} 0 1,0 {2 * r:.1f},0 a{r:.1f},{r:.1f} 0 1,0 {-2 * r:.1f},0 Z"
 
 
 def cloud(x, y, s):
     """A small cloud as one path of overlapping puffs, all drawn the same way round so they merge."""
-    puffs = [(0, 0, 9), (10, -5, 11), (22, -2, 9), (31, 2, 7), (-8, 3, 6)]
-    body = "".join(circle(x + dx * s, y + dy * s, r * s) for dx, dy, r in puffs)
-    # The flat base, anticlockwise like the puffs, so nothing cancels out.
-    base = f"M{x - 8 * s:.1f},{y + 3 * s:.1f} V{y + 9 * s:.1f} H{x + 31 * s:.1f} V{y + 3 * s:.1f} Z"
-    return body + base
+    # Puffs on top and smaller ones underneath, so the bottom is soft too: with clouds across the
+    # whole card, flat bases would line up into one hard edge.
+    puffs = [(0, 0, 9), (10, -5, 11), (22, -2, 9), (31, 2, 7), (-8, 3, 6),
+             (-2, 5, 6), (9, 6, 7), (20, 6, 6.5), (29, 5, 5)]
+    return "".join(circle(x + dx * s, y + dy * s, r * s) for dx, dy, r in puffs)
 
 
 rng = random.Random(7)  # Fixed, so the output is the same on every run.
 
 # --- Layers: (still body, animated targets) ---
 
-SUN_X, SUN_Y = 300, 6
+SUN_X, SUN_Y = 92, 4
 
 
 def sun():
@@ -114,9 +131,9 @@ def sun():
     the glow. The leftmost ray stops short of the text."""
     glow = f'''    <path android:name="glow" android:pathData="M0,0 H{W} V{H} H0 Z">{radial_fill(SUN_X, SUN_Y, 96, "#80FFD54F", "#00FFD54F")}
     </path>'''
-    length, half = 118, 3.2
+    length, half = 130, 3.4
     wedges = ""
-    for i, angle in enumerate(range(22, 160, 15)):
+    for i, angle in enumerate(range(8, 175, 14)):
         reach = length * (0.82 if i % 2 else 1.0)
         a, b = math.radians(angle - half), math.radians(angle + half)
         wedges += (f"M{SUN_X},{SUN_Y} L{SUN_X + reach * math.cos(a):.1f},{SUN_Y + reach * math.sin(a):.1f} "
@@ -127,8 +144,8 @@ def sun():
     </group>'''
     anim = [
         ("glow", "fillAlpha", 1.0, 0.7, 6000, "reverse"),
-        ("rays", "rotation", -3, 3, 16000, "reverse"),
-        ("ray_paths", "fillAlpha", 0.6, 0.35, 5000, "reverse"),
+        ("rays", "rotation", -8, 8, 14000, "reverse"),
+        ("ray_paths", "fillAlpha", 0.7, 0.25, 5000, "reverse"),
     ]
     return glow + "\n" + rays, anim
 
@@ -144,14 +161,14 @@ def stars():
     """A clear night: a few bright four-point stars and tiny pinpoints in the upper sky, with
     moonlight in the top right. Unlike snow: sparse, pointed, still, and twinkling in turn."""
     local = random.Random(23)
-    glow = f'''    <path android:pathData="M0,0 H{W} V{H} H0 Z">{radial_fill(392, 8, 84, "#40D0E1FD", "#00D0E1FD")}
+    glow = f'''    <path android:pathData="M0,0 H{W} V{H} H0 Z">{radial_fill(96, 6, 90, "#40D0E1FD", "#00D0E1FD")}
     </path>'''
     def points(n, y_max):
-        return [(local.uniform(LEFT_CLEAR + 10, W - 30), local.uniform(5, y_max)) for _ in range(n)]
-    bright_a = "".join(sparkle(x, y, local.uniform(3.2, 4.4)) for x, y in points(3, 50))
-    bright_b = "".join(sparkle(x, y, local.uniform(2.6, 3.4)) for x, y in points(2, 44))
-    tiny_a = "".join(circle(x, y, local.uniform(0.45, 0.7)) for x, y in points(11, 66))
-    tiny_b = "".join(circle(x, y, local.uniform(0.45, 0.7)) for x, y in points(10, 66))
+        return [(local.uniform(14, W - 14), local.uniform(5, y_max)) for _ in range(n)]
+    bright_a = "".join(sparkle(x, y, local.uniform(3.2, 4.4)) for x, y in points(5, 50))
+    bright_b = "".join(sparkle(x, y, local.uniform(2.6, 3.4)) for x, y in points(4, 44))
+    tiny_a = "".join(circle(x, y, local.uniform(0.45, 0.7)) for x, y in points(18, 70))
+    tiny_b = "".join(circle(x, y, local.uniform(0.45, 0.7)) for x, y in points(16, 70))
     path = glow + f'''
     <path android:name="bright_a" android:fillColor="#FFF4F8FF" android:fillAlpha="0.95" android:pathData="{bright_a}" />
     <path android:name="bright_b" android:fillColor="#FFD0E1FD" android:fillAlpha="0.6" android:pathData="{bright_b}" />
@@ -173,27 +190,28 @@ def clouds(heavy, night):
     colour = "#FFB7C0CC" if night else "#FFCFD8DC"
     top = "#FFD5DCE6" if night else "#FFF1F4F8"
     if heavy:
-        back = [(LEFT_CLEAR + 30, 24, 1.35), (LEFT_CLEAR + 105, 18, 1.6), (LEFT_CLEAR + 185, 22, 1.45)]
-        front = [(LEFT_CLEAR + 62, 36, 1.55), (LEFT_CLEAR + 150, 34, 1.75)]
+        back = [(x, (18, 25, 21, 28, 19, 24, 22, 27)[i % 8], 1.45 + (i % 3) * 0.12) for i, x in enumerate(range(-70, W + 80, 74))]
+        front = [(x, (36, 42, 33, 40, 38)[i % 5], 1.6 + (i % 2) * 0.18) for i, x in enumerate(range(-40, W + 80, 104))]
         shapes = lambda spots, dy=0: "".join(cloud(x, y + dy, sc) for x, y, sc in spots)
+        i8 = "        "
         path = f'''    <group android:name="back">
-        <path android:fillColor="{colour}" android:fillAlpha="0.10" android:pathData="{shapes(back)}" />
-        <path android:fillColor="{top}" android:fillAlpha="0.06" android:pathData="{shapes(back, -3)}" />
+{paths(f'android:fillColor="{colour}" android:fillAlpha="0.10"', shapes(back), i8)}
+{paths(f'android:fillColor="{top}" android:fillAlpha="0.06"', shapes(back, -3), i8)}
     </group>
     <group android:name="front">
-        <path android:fillColor="{colour}" android:fillAlpha="0.16" android:pathData="{shapes(front)}" />
-        <path android:fillColor="{top}" android:fillAlpha="0.10" android:pathData="{shapes(front, -3)}" />
+{paths(f'android:fillColor="{colour}" android:fillAlpha="0.16"', shapes(front), i8)}
+{paths(f'android:fillColor="{top}" android:fillAlpha="0.10"', shapes(front, -3), i8)}
     </group>'''
         # The rows drift at different speeds and out of step, so the sky seems to have depth.
-        anim = [("back", "translateX", 7, -7, 22000, "reverse"), ("front", "translateX", -12, 12, 16000, "reverse")]
+        anim = [("back", "translateX", 30, -30, 26000, "reverse"), ("front", "translateX", -45, 45, 20000, "reverse")]
     else:
-        spots = [(LEFT_CLEAR + 60, 26, 1.1), (LEFT_CLEAR + 180, 42, 0.85)]
+        spots = [(150, 24, 1.1), (300, 44, 0.9)]
         path = "".join(f'''    <group android:name="c{i}">
         <path android:fillColor="{colour}" android:fillAlpha="0.16" android:pathData="{cloud(x, y, sc)}" />
         <path android:fillColor="{top}" android:fillAlpha="0.10" android:pathData="{cloud(x, y - 2.5, sc)}" />
     </group>
 ''' for i, (x, y, sc) in enumerate(spots)).rstrip("\n")
-        anim = [("c0", "translateX", -12, 12, 18000, "reverse"), ("c1", "translateX", 9, -9, 14000, "reverse")]
+        anim = [("c0", "translateX", -60, 60, 24000, "reverse"), ("c1", "translateX", 50, -50, 20000, "reverse")]
     return path, anim
 
 
@@ -212,22 +230,22 @@ def wisps():
         return f'''    <group android:name="{name}">
 ''' + "".join(f'''        <path android:fillColor="#FFC5CEDA" android:fillAlpha="0.04" android:pathData="{d}" />
 ''' for d in soft(spots)) + "    </group>"
-    upper = [(LEFT_CLEAR + 40, 22, 90, 4), (LEFT_CLEAR + 150, 31, 60, 3)]
-    lower = [(LEFT_CLEAR + 80, 57, 110, 5), (LEFT_CLEAR + 10, 71, 70, 3)]
+    upper = [(40, 22, 120, 4), (230, 31, 90, 3)]
+    lower = [(120, 57, 140, 5), (320, 71, 80, 3)]
     path = group("upper", upper) + "\n" + group("lower", lower)
-    anim = [("upper", "translateX", -14, 14, 24000, "reverse"), ("lower", "translateX", 10, -10, 20000, "reverse")]
+    anim = [("upper", "translateX", -30, 30, 26000, "reverse"), ("lower", "translateX", 24, -24, 22000, "reverse")]
     return path, anim
 
 
 def fog():
     bands = "".join(
         f"M{x},{y} h{w} a5,5 0 0 1 0,10 h-{w} a5,5 0 0 1 0,-10 Z"
-        for x, y, w in [(LEFT_CLEAR + 10, 26, 220), (LEFT_CLEAR + 60, 46, 240), (LEFT_CLEAR + 20, 66, 230)]
+        for x, y, w in [(-60, 26, 520), (-90, 46, 560), (-40, 66, 530)]
     )
     path = f'''    <group android:name="drift">
         <path android:fillColor="#FFCFD8DC" android:fillAlpha="0.14" android:pathData="{bands}" />
     </group>'''
-    anim = [("drift", "translateX", -14, 14, 16000, "reverse")]
+    anim = [("drift", "translateX", -24, 24, 18000, "reverse")]
     return path, anim
 
 
@@ -236,8 +254,8 @@ RAIN_STEP_Y, RAIN_STEP_X = 19, -4
 
 def rain():
     # Rows of streaks every 19 down and 4 left: moving the group by exactly that loops seamlessly.
-    xs = [rng.uniform(LEFT_CLEAR + 8, W + 10) for _ in range(22)]
-    ys = [rng.uniform(0, RAIN_STEP_Y) for _ in range(22)]
+    xs = [rng.uniform(2, W + 14) for _ in range(38)]
+    ys = [rng.uniform(0, RAIN_STEP_Y) for _ in range(38)]
     streaks = ""
     for row in range(-2, H // RAIN_STEP_Y + 2):
         for x, y in zip(xs, ys):
@@ -266,24 +284,25 @@ def snow():
     every step it falls, so the loop has no seam."""
     local = random.Random(31)
     def tile(step, n, draw):
-        xs = [local.uniform(LEFT_CLEAR + 6, W - 4) for _ in range(n)]
+        xs = [local.uniform(4, W - 4) for _ in range(n)]
         ys = [local.uniform(0, step) for _ in range(n)]
         return "".join(draw(x, y + step * row) for row in range(-1, H // step + 2) for x, y in zip(xs, ys))
-    far = tile(SNOW_FAR, 10, lambda x, y: circle(x, y, 0.9))
-    mid = tile(SNOW_MID, 8, lambda x, y: circle(x, y, 1.5))
-    near = tile(SNOW_NEAR, 5, lambda x, y: flake(x, y, 4.4))
-    mid_flakes = tile(SNOW_MID, 4, lambda x, y: flake(x, y, 3.0))
-    bank = f"M{LEFT_CLEAR},104 C{LEFT_CLEAR + 40},96 {LEFT_CLEAR + 90},98 {LEFT_CLEAR + 130},99 C180,100 220,94 260,95 C300,96 340,92 380,94 C400,95 412,93 420,92 L420,104 Z"
+    # About three quarters of the snow there was (across the whole card now, so in proportion).
+    far = tile(SNOW_FAR, 14, lambda x, y: circle(x, y, 0.9))
+    mid = tile(SNOW_MID, 11, lambda x, y: circle(x, y, 1.5))
+    near = tile(SNOW_NEAR, 7, lambda x, y: flake(x, y, 4.4))
+    mid_flakes = tile(SNOW_MID, 5, lambda x, y: flake(x, y, 3.0))
+    bank = "M0,104 L0,95 C40,92 80,97 130,96 C180,95 220,99 260,96 C300,93 340,97 380,94 C400,93 412,93 420,92 L420,104 Z"
     path = f'''    <path android:fillColor="#FFF4F8FF" android:fillAlpha="0.16" android:pathData="{bank}" />
     <group android:name="far">
-        <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.35" android:pathData="{far}" />
+{paths('android:fillColor="#FFFFFFFF" android:fillAlpha="0.35"', far, "        ")}
     </group>
     <group android:name="mid">
-        <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.55" android:pathData="{mid}" />
-        <path android:strokeColor="#FFFFFFFF" android:strokeAlpha="0.55" android:strokeWidth="0.9" android:strokeLineCap="round" android:pathData="{mid_flakes}" />
+{paths('android:fillColor="#FFFFFFFF" android:fillAlpha="0.55"', mid, "        ")}
+{paths('android:strokeColor="#FFFFFFFF" android:strokeAlpha="0.55" android:strokeWidth="0.9" android:strokeLineCap="round"', mid_flakes, "        ")}
     </group>
     <group android:name="near">
-        <path android:strokeColor="#FFFFFFFF" android:strokeAlpha="0.8" android:strokeWidth="1.2" android:strokeLineCap="round" android:pathData="{near}" />
+{paths('android:strokeColor="#FFFFFFFF" android:strokeAlpha="0.8" android:strokeWidth="1.2" android:strokeLineCap="round"', near, "        ")}
     </group>'''
     anim = [
         ("far", "translateY", 0, SNOW_FAR, 12000, "restart"),
@@ -299,7 +318,7 @@ SNOW_FAR, SNOW_MID, SNOW_NEAR = 18, 24, 30
 
 
 def bolt():
-    path = '''    <path android:name="bolt" android:fillColor="#FFFFF4C2" android:fillAlpha="0" android:pathData="M300,18 l-14,24 h9 l-10,22 l22,-30 h-10 l9,-16 Z" />
+    path = '''    <path android:name="bolt" android:fillColor="#FFFFF4C2" android:fillAlpha="0" android:pathData="M110,14 l-14,24 h9 l-10,22 l22,-30 h-10 l9,-16 Z" />
     <path android:name="flash" android:fillColor="#FFFFFFFF" android:fillAlpha="0" android:pathData="M0,0 H420 V104 H0 Z" />'''
     # Mostly dark; two quick flashes near the end of each 8 seconds.
     keys = [(0, 0), (0.86, 0), (0.88, 0.9), (0.9, 0), (0.92, 0.7), (0.95, 0), (1, 0)]
@@ -382,7 +401,6 @@ def write(name, text):
 
 for (cond, time), stops in SKIES.items():
     write(f"scene_sky_{cond}_{time}", vector(sky(*stops), f"Weather scene sky: {cond}, {time}."))
-write("scene_sky_standard", vector(sky(*STANDARD), "The Standard look: the Material You weather surface (weather spec 1.1)."))
 for name, (body, anims) in LAYERS.items():
     write(f"scene_{name}", vector(body, f'Weather scene layer "{name}", still.'))
     write(f"avd_scene_{name}", animated(name, body, anims))

@@ -39,7 +39,6 @@ def shape(name, *, fill=None, start=None, end=None, stroke=None, stroke_w="1dp",
 
 # Card backgrounds, spec section 4.1: (start, end, 1dp stroke)
 CARD_BG = {
-    "weather_cloudy": ("#F01B2538", "#F0121926", "#24FFFFFF"),
     "weather_needed": ("#F01E222C", "#F014171E", "#33FBBF24"),
     "live": ("#F2102624", "#F20B1A19", "#422DD4BF"),
     "media": ("#F22A1924", "#F21A1017", "#40FDA4AF"),
@@ -53,10 +52,6 @@ CARD_BG = {
 for key, (s, e, st) in CARD_BG.items():
     shape(f"card_bg_{key}", start=s, end=e, stroke=st, radius="24dp", comment=f"Card background: {key} (spec 4.1)")
 
-# Weather spec 1.3: each forecast hour's time in a small pill.
-shape("forecast_hour_pill", fill="#24FFFFFF", stroke="#33FFFFFF", radius="7.5dp", comment="Weather forecast hour pill (weather spec 1.3)", stroke_w="0.8dp")
-# Weather spec 1.1: the card's soft blue edge, drawn over its surface.
-shape("card_bg_material_border", fill="#00000000", stroke="#2993C5FD", radius="24dp", comment="Weather card edge (weather spec 1.1)")
 
 # Complication chips: the always-on outline (chips spec 2.3). The tonal backgrounds come from
 # tools/gen_chip_tones.py.

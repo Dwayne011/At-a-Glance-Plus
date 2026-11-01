@@ -33,6 +33,11 @@ data class HourForecast(
     val condition: WeatherCondition get() = WeatherCondition.fromWmo(code)
 }
 
+/** One day of forecast: its date (epoch day, the location's own), high, low, weather and chance of rain or snow. */
+data class DayForecast(val day: Long, val high: Double, val low: Double, val code: Int, val rainChance: Int?) {
+    val condition: WeatherCondition get() = WeatherCondition.fromWmo(code)
+}
+
 /** Current conditions for the date line. */
 data class Weather(
     val temperature: Double,
@@ -51,6 +56,8 @@ data class Weather(
     /** Wind speed now in [windUnit] ("mph" or "km/h"); null in old cached readings. */
     val wind: Double? = null,
     val windUnit: String = "mph",
+    /** Today and the next few days; empty in old cached readings. */
+    val days: List<DayForecast> = emptyList(),
 ) {
     /**
      * One line for the card's extra row: when the weather changes ("Clear until 07:00, then
@@ -180,6 +187,12 @@ object WeatherRepository {
                 }.orEmpty(),
                 wind = json.optDoubleOrNull("w"),
                 windUnit = json.optString("wu", "mph"),
+                days = json.optJSONArray("dy")?.let { array ->
+                    (0 until array.length()).map { i ->
+                        val d = array.getJSONObject(i)
+                        DayForecast(d.getLong("t"), d.getDouble("hi"), d.getDouble("lo"), d.getInt("c"), if (d.has("r")) d.getInt("r") else null)
+                    }
+                }.orEmpty(),
             )
         }
     }
@@ -224,7 +237,7 @@ object WeatherRepository {
                 Locale.ROOT,
                 "https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f" +
                     "&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m" +
-                    "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&forecast_days=2" +
+                    "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset,weather_code,precipitation_probability_max&forecast_days=6" +
                     "&hourly=temperature_2m,weather_code,is_day,precipitation_probability&forecast_hours=12" +
                     "&temperature_unit=%s&wind_speed_unit=%s&timezone=auto",
                 lat, lon, unit.apiValue, windApiUnit()
@@ -264,6 +277,7 @@ object WeatherRepository {
                 hourly = hours(root.optJSONObject("hourly"), offset),
                 wind = current.optDoubleOrNull("wind_speed_10m"),
                 windUnit = if (windApiUnit() == "mph") "mph" else "km/h",
+                days = days(daily),
             )
         } finally {
             connection.disconnect()
@@ -319,12 +333,32 @@ object WeatherRepository {
             }))
             .put("w", weather.wind)
             .put("wu", weather.windUnit)
+            .put("dy", org.json.JSONArray(weather.days.map {
+                JSONObject().put("t", it.day).put("hi", it.high).put("lo", it.low).put("c", it.code).apply { it.rainChance?.let { r -> put("r", r) } }
+            }))
         Prefs.get(context).edit().putString(KEY_CACHE, json.toString()).apply()
     }
 }
 
 private fun JSONObject.optDoubleOrNull(name: String): Double? =
     if (has(name) && !isNull(name)) optDouble(name).takeUnless { it.isNaN() } else null
+
+/** The daily forecast: each day with a high, a low and a weather code. */
+private fun days(daily: JSONObject?): List<DayForecast> {
+    daily ?: return emptyList()
+    val dates = daily.optJSONArray("time") ?: return emptyList()
+    val highs = daily.optJSONArray("temperature_2m_max")
+    val lows = daily.optJSONArray("temperature_2m_min")
+    val codes = daily.optJSONArray("weather_code")
+    val rain = daily.optJSONArray("precipitation_probability_max")
+    return (0 until dates.length()).mapNotNull { i ->
+        val day = runCatching { java.time.LocalDate.parse(dates.getString(i)).toEpochDay() }.getOrNull() ?: return@mapNotNull null
+        val high = highs?.takeIf { !it.isNull(i) }?.optDouble(i) ?: return@mapNotNull null
+        val low = lows?.takeIf { !it.isNull(i) }?.optDouble(i) ?: return@mapNotNull null
+        val code = codes?.takeIf { !it.isNull(i) }?.optInt(i) ?: return@mapNotNull null
+        DayForecast(day, high, low, code, rain?.takeIf { !it.isNull(i) }?.optInt(i))
+    }
+}
 
 /** Hourly forecast entries; times come in the location's local time, like the sun times. */
 private fun hours(hourly: JSONObject?, offset: java.time.ZoneOffset): List<HourForecast> {

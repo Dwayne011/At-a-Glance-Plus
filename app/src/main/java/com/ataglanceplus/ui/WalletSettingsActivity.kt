@@ -478,7 +478,7 @@ private fun AddPlacePage(id: String, onBack: () -> Unit, onAdded: () -> Unit) {
         if (q.length < 2) { results = emptyList(); chain = null; return@LaunchedEffect }
         delay(250)
         searching = true
-        val found = withContext(Dispatchers.IO) { PlaceSearch.suggest(q, near) }
+        val found = if (PlaceSearch.coordinates(q) != null) emptyList() else withContext(Dispatchers.IO) { PlaceSearch.suggest(context, q, near) }
         results = found.sortedWith(compareBy({ !it.business }, { it.distanceM ?: Float.MAX_VALUE })).take(8)
         searching = false
         chain = PlaceSearch.chainFor(q, found)
@@ -510,7 +510,7 @@ private fun AddPlacePage(id: String, onBack: () -> Unit, onAdded: () -> Unit) {
         TextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Search a shop, place or address") },
+            placeholder = { Text("Shop, place, address or coordinates") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, contentDescription = "Clear") } },
             singleLine = true,
@@ -526,6 +526,13 @@ private fun AddPlacePage(id: String, onBack: () -> Unit, onAdded: () -> Unit) {
                     picked = WalletRules.Place("Here", location.latitude, location.longitude, 150, detail = "Where you added it")
                 }
             })
+            // Coordinates typed in: the place itself, for anywhere the search does not know.
+            PlaceSearch.coordinates(query)?.let { (lat, lng) ->
+                val text = String.format(Locale.ROOT, "%.5f, %.5f", lat, lng)
+                SettingRow("Use these coordinates", text, icon = Icons.Default.Place, accent = true, onClick = {
+                    picked = WalletRules.Place(text, lat, lng, 150, detail = "Coordinates")
+                })
+            }
             HorizontalDivider()
             chain?.let { c ->
                 Subheader("Every branch")
