@@ -863,14 +863,14 @@ object LiveCards {
         }
 
         val placed = rows.flatten()
-        val few = placed.size <= 2 && weather != null && weather.nextHours(4).size == 4
+        val few = placed.size <= 2 && weather != null && weather.nextHours(3).size == 3
         if (few) {
-            // One or two chips: each across its own row, the next hours beside them.
+            // One or two chips: each across its own row, the next three hours beside them (four run together in the narrow panel).
             views.setTextViewText(R.id.extra_title, "Next hours")
             views.setViewVisibility(R.id.extra_text, View.GONE)
             views.setViewVisibility(R.id.extra_detail, View.GONE)
             views.setViewVisibility(R.id.extra_hours, View.VISIBLE)
-            PanelCards.addHours(context, views, R.id.extra_hours, weather.nextHours(4), palette)
+            PanelCards.addHours(context, views, R.id.extra_hours, weather.nextHours(3), palette)
             PanelCards.fillRows(context, views, placed.map { listOf(it) }, palette, WeatherCard.extraRightDp(context, alone = false), detailed = true)
         } else {
             views.setViewVisibility(R.id.extra_left, View.GONE)

@@ -63,11 +63,11 @@ object PanelCards {
 
     /** Space between two tiles in a row, and between the rows. */
     private const val GAP_DP = 5f
-    /** A tile's inside: 10dp padding before, 8dp after; the icon 15dp and 6dp from the text. */
+    /** A tile's inside: 10dp padding before, 8dp after; the icon 16dp and 6dp from the text. */
     private const val TILE_PAD_DP = 18f
-    private const val ICON_DP = 21f
-    private const val TEXT_SP = 13f
-    private const val DETAIL_SP = 11f
+    private const val ICON_DP = 22f
+    /** The size the value's forms are measured at to pick one; the layout then sizes it to fit the tile. */
+    private const val TEXT_SP = 14f
 
     /**
      * The chips of [specs] (those with something to show) in at most [maxRows] rows of 2 slots:
@@ -119,7 +119,8 @@ object PanelCards {
     /**
      * One chip as a tile [widthDp] wide: its icon and value; with [twoLines], the whole story
      * ("509 of 10,000") and a progress line, or the value over its second line ("2 unread" over
-     * "Inbox · Updates"). Text is measured at the phone's text size and shrinks to fit the tile.
+     * "Inbox · Updates"); a value with no second line has the chip's name under it, so a wide tile
+     * is not left with a lone number. The text sizes itself to the tile (see include_chip_tile).
      */
     private fun tile(context: Context, placed: Chips.Placed, palette: Palette, widthDp: Float, twoLines: Boolean): RemoteViews {
         val (spec, value) = placed
@@ -147,16 +148,14 @@ object PanelCards {
             twoLines -> {
                 val lines = value.lines
                 main = fit(context, listOf(lines.first()) + listOfNotNull(value.compact), room)
-                detail = lines.getOrNull(1) ?: value.wide?.takeIf { it != main }
+                detail = lines.getOrNull(1) ?: value.wide?.takeIf { it != main } ?: spec.kind.label.takeIf { it != main }
             }
             else -> main = fit(context, listOf(value.text) + listOfNotNull(value.compact), room)
         }
         view.setTextViewText(R.id.chip_text, main)
-        shrink(context, view, R.id.chip_text, main, TEXT_SP, room, 9f)
         if (detail != null) {
             view.setViewVisibility(R.id.chip_detail, View.VISIBLE)
             view.setTextViewText(R.id.chip_detail, detail)
-            shrink(context, view, R.id.chip_detail, detail, DETAIL_SP, widthDp - TILE_PAD_DP, 8f)
         }
         if (progress != null) {
             view.setViewVisibility(R.id.chip_progress, View.VISIBLE)
@@ -172,13 +171,6 @@ object PanelCards {
     /** The first of [options] that fits [roomDp] at the tile's size, else the first (it will shrink). */
     private fun fit(context: Context, options: List<String>, roomDp: Float): String =
         options.firstOrNull { Chips.textWidthDp(context, it, TEXT_SP) <= roomDp } ?: options.first()
-
-    /** Shrinks [text] in [id] from [sp] until it fits [roomDp], to [minSp] at least. */
-    private fun shrink(context: Context, view: RemoteViews, id: Int, text: String, sp: Float, roomDp: Float, minSp: Float) {
-        val width = Chips.textWidthDp(context, text, sp)
-        if (width <= roomDp) return
-        view.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, (sp * roomDp / width).coerceAtLeast(minSp))
-    }
 
     /** The hour in the phone's style: "14:00", or "2pm". */
     fun hourText(context: Context, time: Long): String =

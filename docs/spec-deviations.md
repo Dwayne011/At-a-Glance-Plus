@@ -371,3 +371,15 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 |---|---|---|
 | Forecast card (no extra chips) | Left: "Now", what the weather does next, and the wind. Right: rows for today (highlighted, in the tiles' colour) and the next three days: day, weather, chance of rain (10% or more, with a drop), low, a bar from the low to the high on one scale shared by the four rows, and the high. Bars are native views: a tinted track and a fill whose start and length are set in dp from the panel's width | User chose E after the capsule and column mockups |
 | Removed | The day columns layout and code (the hours keep their columns) | Replaced by rows |
+
+## 0.32.2: chip tiles fit their space
+
+- The two-panel cards' chip tiles (weather card and extra card) no longer let text run out of
+  the tile. The value and its second line share the tile's height by weight (3:2) and size their
+  text to fit both height and width (value 16sp down to 7sp, detail 11.5sp down to 7sp), so they
+  fit at any card height or system text size. Values are left-aligned beside the icon, and the
+  icon is now 16dp.
+- A wide tile whose chip has no second line shows the chip's name under the value, so it is not
+  left with a lone number.
+- The extra card's "Next hours" panel shows three hours, not four, because four times ran
+  together in the narrow panel.
