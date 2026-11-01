@@ -345,3 +345,9 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 | Card pages | "Show the … card", then grouped rows: values open a radio dialog (lead time, refresh, big move, before/after a game, what a tap opens, weather style, media look); lists are rows with add and remove (stocks, time windows, teams, calendars). Adding a stock or a team is its own search page. Finance gains the VWAP row (the same dialog as the stock dashboard's) | As above |
 | Chips | The chosen chips with their icon in a tile, value or what they need, and the ≡ handle; "Add a chip (n of 8)". A chip's settings are a page instead of a dialog: account, size (dialog), daily goal (dialog), eToro keys, count down to (date, from the calendar, what it's for), Gmail labels, what a tap opens, remove | As above |
 | Advanced | Connection, device, wireless debugging (checks, pair again, activate now, open the setting), diagnostics (crash log, command log and errors, tap to copy; clear errors), chip fitting, adb commands (tap to copy) | Kept, out of the way |
+
+## 0.31.1 — Hide results for F1 too
+
+| Area | Now | Why |
+|---|---|---|
+| Hide results | Every followed team and Formula 1 has "Hide results" (Sports › tap it). For F1 it now also hides the standings on the weekend dashboard, and the weekend and each finished or live session show a "Reveal" bar (as the match screen does) instead of pointing to settings. The race card's podium was already hidden | User: all sports/teams, F1 included, should have the option to hide results |

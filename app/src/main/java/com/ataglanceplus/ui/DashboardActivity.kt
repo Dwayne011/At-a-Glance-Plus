@@ -1640,15 +1640,7 @@ private fun GameMatchDashboard(eventId: String) {
                 }
                 ScreenTitle(team?.name ?: game.leagueName)
                 MatchHero(game, hidden)
-                if (hidden) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("Scores are hidden for this team.", color = SportSub, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        OutlinedButton(onClick = { revealed = true }) { Text("Reveal") }
-                    }
-                }
+                if (hidden) RevealBar("Results are hidden for this team.") { revealed = true }
                 val d = detail
                 val tabs = buildList {
                     if (!hidden && d != null) {
@@ -1892,6 +1884,9 @@ private fun F1EventDashboard(eventId: String) {
     }
     // The session opened from the weekend list (by its name), or null for the weekend.
     var opened by rememberSaveable { mutableStateOf<String?>(null) }
+    // Results hidden for F1 (Sports settings) until revealed here, for this visit.
+    var revealed by rememberSaveable { mutableStateOf(false) }
+    val hidden = !revealed && com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)
     androidx.activity.compose.BackHandler(enabled = opened != null) { opened = null }
     Column(modifier = Modifier.fillMaxSize().background(SportBg).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         when (val state = load) {
@@ -1904,11 +1899,12 @@ private fun F1EventDashboard(eventId: String) {
                     .let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() }
                 val session = sessions.firstOrNull { it.session == opened }
                 if (session != null) {
-                    F1SessionScreen(context, session, raceDay, hidden = com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)) { opened = null }
+                    F1SessionScreen(context, session, raceDay, hidden = hidden, onReveal = { revealed = true }) { opened = null }
                     return@Column
                 }
                 ScreenTitle(first.eventName)
                 F1Hero(first)
+                if (hidden) RevealBar("Results are hidden for Formula 1.") { revealed = true }
                 val next = sessions.firstOrNull { it.state == "pre" } ?: sessions.firstOrNull { it.state == "in" }
                 if (next != null) F1UpNext(context, next)
                 val standings by produceState<Pair<List<com.ataglanceplus.live.JolpicaSource.DriverStanding>?, List<com.ataglanceplus.live.JolpicaSource.TeamStanding>?>?>(null, refresh.generation) {
@@ -1933,7 +1929,7 @@ private fun F1EventDashboard(eventId: String) {
                                 }
                                 Text("Tap a session: live timing while it is on, the results after, a preview before.", color = SportSub, fontSize = 11.sp)
                             }
-                            "Standings" -> F1Standings(standings)
+                            "Standings" -> if (hidden) Text("The standings are hidden with the results. Reveal them above.", color = SportSub) else F1Standings(standings)
                         }
                     }
                 }
@@ -1946,9 +1942,21 @@ private fun F1EventDashboard(eventId: String) {
     }
 }
 
+/** Results are hidden (Sports settings): says so, with a button to show them for this visit. */
+@Composable
+private fun RevealBar(text: String, onReveal: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, color = SportSub, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        OutlinedButton(onClick = onReveal) { Text("Reveal") }
+    }
+}
+
 /** One session of the weekend: live timing while it is on, the results after, a preview before. */
 @Composable
-private fun F1SessionScreen(context: Context, session: com.ataglanceplus.live.RaceSession, raceDay: java.time.LocalDate, hidden: Boolean, onBack: () -> Unit) {
+private fun F1SessionScreen(context: Context, session: com.ataglanceplus.live.RaceSession, raceDay: java.time.LocalDate, hidden: Boolean, onReveal: () -> Unit, onBack: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("‹ ${session.eventName.replace("Grand Prix", "GP").trim()}", color = F1Mint, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onBack).padding(vertical = 6.dp, horizontal = 2.dp))
@@ -1956,7 +1964,7 @@ private fun F1SessionScreen(context: Context, session: com.ataglanceplus.live.Ra
     ScreenTitle(f1SessionName(session.session))
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         when {
-            hidden && session.state != "pre" -> Text("Scores are hidden for this weekend. Turn that off in Cards › Sports to see them.", color = SportSub)
+            hidden && session.state != "pre" -> RevealBar("Results are hidden for Formula 1.", onReveal)
             session.state == "in" -> F1LiveSession(context, session)
             session.state == "post" -> F1FinishedSession(session, raceDay)
             else -> F1UpcomingSession(context, session, raceDay)

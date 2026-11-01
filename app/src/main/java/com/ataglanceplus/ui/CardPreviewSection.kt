@@ -345,7 +345,7 @@ internal fun SportsPage(version: Int, onBack: () -> Unit, open: (String) -> Unit
         Subheader("Following")
         followed.forEach { f ->
             val hidden = f.key in Prefs.sportsHidden(context)
-            LinkRow(f.name, f.leagueName + if (hidden) " · scores hidden" else " · scores shown", icon = Icons.Default.Star) { editing = f }
+            LinkRow(f.name, f.leagueName + if (hidden) " · results hidden" else " · results shown", icon = Icons.Default.Star) { editing = f }
         }
         if (followed.none { it.key == F1.key }) SettingRow("Follow Formula 1", icon = Icons.Default.Add, accent = true, onClick = { Prefs.setSportsFollowed(context, followed + F1) })
         SettingRow("Follow a team", icon = Icons.Default.Add, accent = true, onClick = { open("sports/add") })
@@ -361,7 +361,7 @@ internal fun SportsPage(version: Int, onBack: () -> Unit, open: (String) -> Unit
             Prefs.SportsOpen.GOOGLE -> "Google's results"
             Prefs.SportsOpen.ESPN -> "ESPN's page"
         }) { choosing = "open" }
-        SettingNote("Scores refresh every 30 seconds during a game. Tap a team to hide its scores (spoilers) or stop following it.")
+        SettingNote("Scores refresh every 30 seconds during a game. Tap a team or Formula 1 to hide its results (no spoilers) or stop following it.")
     }
 
     when (choosing) {
@@ -384,7 +384,12 @@ internal fun SportsPage(version: Int, onBack: () -> Unit, open: (String) -> Unit
             title = { Text(f.name) },
             text = {
                 Column {
-                    SwitchSettingRow("Hide scores", "On the cards and dashboards, until you reveal them", checked = hidden) { Prefs.setSportsHidden(context, f.key, it) }
+                    SwitchSettingRow(
+                        "Hide results",
+                        if (f.teamId == null) "Positions, podiums, standings and session results, on the cards and dashboards, until you reveal them"
+                        else "Scores and results, on the cards and dashboards, until you reveal them",
+                        checked = hidden,
+                    ) { Prefs.setSportsHidden(context, f.key, it) }
                 }
             },
             confirmButton = { TextButton(onClick = { editing = null }) { Text("Done") } },
