@@ -525,3 +525,14 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
   - 1¢ worth $365.14.
 
   The real stock screen was rendered with them (Robolectric, not kept).
+
+## 0.37.1: Finance has its own section; eToro sign-in there
+
+- The main settings page has a Finance section of its own, after Cards. It holds the stocks card
+  (the switch row, now titled "Stocks") and an eToro row. The eToro row shows whether it is
+  connected and, once it is, how many positions.
+- Finance › eToro is a page for connecting the account with a read-only key: the steps, the two
+  fields, Test connection and Remove keys. It explains that the account feeds the eToro chip, the
+  eToro dashboard and "What if" on a stock's screen, and that the app cannot trade. The Finance
+  page links to it under Accounts, and the eToro chip's settings point to it too. Back returns to
+  whichever page opened it.

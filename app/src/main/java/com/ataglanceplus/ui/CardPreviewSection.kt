@@ -240,6 +240,13 @@ internal fun FinancePage(version: Int, onBack: () -> Unit, open: (String) -> Uni
         }
         SettingNote(com.ataglanceplus.live.FinanceRules.explain(context, quotes), MaterialTheme.colorScheme.primary)
 
+        Subheader("Accounts")
+        LinkRow(
+            "eToro",
+            if (com.ataglanceplus.live.EtoroSource.hasKeys(context)) "Connected · used for \"What if\" on a stock's screen" else "Not connected · add your read-only keys",
+            iconRes = R.drawable.ic_comp_trend,
+        ) { open("finance/etoro") }
+
         Subheader("Chart")
         LinkRow("VWAP", "${vwap.source.label} · ${vwap.anchor.label}" + if (vwap.extendedHours) " · extended hours" else "") { editingVwap = true }
     }

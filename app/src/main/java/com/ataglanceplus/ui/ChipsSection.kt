@@ -107,7 +107,7 @@ private enum class Need(val text: String) {
     BLUETOOTH("Needs Nearby devices permission"),
     LOCATION("Uses the weather location: allow location in the Weather section"),
     DATE("Choose a date in its settings"),
-    ETORO_KEYS("Add your eToro keys in its settings"),
+    ETORO_KEYS("Connect eToro under Finance › eToro"),
 }
 
 private fun needs(context: Context, spec: ChipSpec, healthGranted: Set<String>): List<Need> = buildList {
@@ -577,8 +577,10 @@ private fun ChipSettingsPage(
             LinkRow("Daily goal", "$goal steps · shown when the chip is extended", iconRes = R.drawable.ic_comp_steps) { editing = "goal" }
         }
         if (spec.kind == Complication.ETORO) {
+            // The keys live with the account, under Finance; the chip uses them.
             Subheader("eToro")
             Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { EtoroKeysSection() }
+            SettingNote("Also under Finance › eToro on the main settings page.")
         }
         if (spec.kind == Complication.COUNTDOWN) {
             Subheader("Count down to")
@@ -770,12 +772,12 @@ private fun bigExample(kind: Complication): Triple<String, String, String> = whe
 }
 
 /**
- * The eToro chip's keys: how to make them (a read-only key for the real account), two fields to
- * paste them into, and a check that shows what eToro answers. The keys are kept encrypted on the
- * phone and sent only to eToro.
+ * The eToro account's keys: how to make them (a read-only key for the real account), two fields
+ * to paste them into, and a check that shows what eToro answers. The keys are kept encrypted on
+ * the phone and sent only to eToro. Shown on Finance › eToro.
  */
 @Composable
-private fun EtoroKeysSection() {
+internal fun EtoroKeysSection() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var saved by remember { mutableStateOf(com.ataglanceplus.live.EtoroSource.hasKeys(context)) }

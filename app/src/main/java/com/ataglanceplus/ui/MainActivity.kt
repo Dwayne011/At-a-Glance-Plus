@@ -114,6 +114,7 @@ class MainActivity : ComponentActivity() {
 private fun SettingsApp() {
     val context = LocalContext.current
     var page by rememberSaveable { mutableStateOf("home") }
+    var etoroFrom by rememberSaveable { mutableStateOf("home") }
     // Bumped whenever a setting changes or the app comes back, so every page reads afresh.
     var version by remember { mutableIntStateOf(0) }
     DisposableEffect(Unit) {
@@ -131,12 +132,17 @@ private fun SettingsApp() {
     fun up() {
         page = when (page) {
             "finance/add" -> "card/finance"
+            "finance/etoro" -> etoroFrom
             "sports/add" -> "card/sports"
             else -> "home"
         }
     }
     BackHandler(enabled = page != "home") { up() }
-    val open: (String) -> Unit = { page = it }
+    val open: (String) -> Unit = {
+        // The eToro page opens from home and from Finance; back returns to whichever.
+        if (it == "finance/etoro") etoroFrom = page
+        page = it
+    }
 
     when (page) {
         "home" -> HomePage(version, open)
@@ -144,6 +150,7 @@ private fun SettingsApp() {
         "card/calendar" -> CalendarPage(version, ::up)
         "card/finance" -> FinancePage(version, ::up, open)
         "finance/add" -> AddStockPage(::up)
+        "finance/etoro" -> EtoroAccountPage(::up)
         "card/sports" -> SportsPage(version, ::up, open)
         "sports/add" -> AddTeamPage(::up)
         "card/media" -> MediaPage(version, ::up)
@@ -212,7 +219,6 @@ private fun HomePage(version: Int, open: (String) -> Unit) {
         Subheader("Cards")
         LinkRow("Weather", weatherSummary(context), iconRes = R.drawable.ic_comp_sunset) { open("card/weather") }
         CardSwitchRow(CardType.CALENDAR, calendarSummary(context), icon = Icons.Default.DateRange) { open("card/calendar") }
-        CardSwitchRow(CardType.FINANCE, financeSummary(context), iconRes = R.drawable.ic_comp_trend) { open("card/finance") }
         CardSwitchRow(CardType.SPORTS, sportsSummary(context), icon = Icons.Default.Star) { open("card/sports") }
         CardSwitchRow(CardType.WALLET, walletSummary(context), iconRes = R.drawable.ic_comp_ticket) {
             if (com.ataglanceplus.wallet.GoogleAccount.isSignedIn(context)) context.startActivity(Intent(context, WalletSettingsActivity::class.java))
@@ -220,6 +226,11 @@ private fun HomePage(version: Int, open: (String) -> Unit) {
         }
         CardSwitchRow(CardType.MEDIA, if (Prefs.mediaWave(context)) "Equaliser · stays 5 min after pausing" else "Progress bar · stays 5 min after pausing", icon = Icons.Default.PlayArrow) { open("card/media") }
         LinkRow("More cards", MORE_CARDS.joinToString(", ") { it.label }, icon = Icons.AutoMirrored.Filled.List) { open("more") }
+
+        // Finance on its own: the stocks card, and the accounts the stock screens and the eToro chip read.
+        Subheader("Finance")
+        CardSwitchRow(CardType.FINANCE, financeSummary(context), iconRes = R.drawable.ic_comp_trend, title = "Stocks") { open("card/finance") }
+        LinkRow("eToro", etoroSummary(context), icon = Icons.Default.AccountBox) { open("finance/etoro") }
 
         Subheader("Chips")
         val chips = remember(version) { Prefs.chips(context).orEmpty() }
@@ -259,11 +270,12 @@ private fun CardSwitchRow(
     summary: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     iconRes: Int? = null,
+    title: String = type.label,
     onOpen: () -> Unit,
 ) {
     val context = LocalContext.current
     val on = Prefs.cardEnabled(context, type)
-    SplitSwitchRow(type.label, if (on) summary else "Off", checked = on, onOpen = onOpen, icon = icon, iconRes = iconRes) { Prefs.setCardEnabled(context, type, it) }
+    SplitSwitchRow(title, if (on) summary else "Off", checked = on, onOpen = onOpen, icon = icon, iconRes = iconRes) { Prefs.setCardEnabled(context, type, it) }
 }
 
 private fun weatherSummary(context: Context): String {
@@ -280,6 +292,26 @@ private fun calendarSummary(context: Context): String {
 }
 
 internal fun leadText(minutes: Int) = if (minutes < 60) "$minutes min" else "${minutes / 60} h"
+
+/** The eToro account in a line: connected (with its positions) or how to connect it. */
+private fun etoroSummary(context: Context): String {
+    if (!com.ataglanceplus.live.EtoroSource.hasKeys(context)) return "Not connected · add your read-only keys"
+    val p = com.ataglanceplus.live.EtoroSource.portfolio.value ?: return "Connected"
+    val positions = p.holdings.sumOf { it.open.size.takeIf { n -> n > 0 } ?: it.positions }
+    return "Connected · $positions position${if (positions == 1) "" else "s"} in ${p.holdings.size} holding${if (p.holdings.size == 1) "" else "s"}"
+}
+
+/**
+ * Finance › eToro: connect the user's eToro account with a read-only key. The stock screens'
+ * "What if", the eToro chip and the eToro dashboard read it.
+ */
+@Composable
+internal fun EtoroAccountPage(onBack: () -> Unit) {
+    SettingsPage("eToro", onBack) {
+        SettingNote("Your real eToro account, read only: your portfolio for the eToro chip and dashboard, and your positions for \"What if\" on a stock's screen. The app can't trade.")
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { EtoroKeysSection() }
+    }
+}
 
 private fun financeSummary(context: Context): String {
     val tickers = Prefs.financeTickers(context)
