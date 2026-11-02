@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -754,6 +755,8 @@ private fun StockDashboard(initial: String) {
     var editingVwap by remember { mutableStateOf(false) }
     // The candles' size on the intraday ranges: null for Auto (grouped to fit), else 5, 30 or 60 minutes.
     var candleSize by remember { mutableStateOf<Int?>(null) }
+    // The stock screen's tab: 0 Overview (price, chart, the day), 1 What if (eToro positions).
+    var stockTab by rememberSaveable { mutableIntStateOf(0) }
     // Live while the screen is open and in front: a new reading every 15 seconds. Nothing runs
     // once the user leaves it, switches app or turns the screen off.
     var tick by remember { mutableIntStateOf(0) }
@@ -832,6 +835,16 @@ private fun StockDashboard(initial: String) {
                     color = if (change >= 0) UP_TEXT else DOWN_TEXT,
                 )
             }
+            // "What if" has a tab of its own, beside the chart, once there are eToro positions in
+            // this (US dollar) stock.
+            val holding = etoro?.takeIf { it.open.isNotEmpty() && q.currency == "USD" }
+            if (holding != null) SegmentedPills(listOf("Overview", "What if"), stockTab) { stockTab = it }
+            if (holding != null && stockTab == 1) {
+                WhatIfPanels(
+                    symbol = q.symbol, holding = holding, now = extended?.price ?: q.price,
+                    close = q.price.takeIf { extended != null } ?: q.previousClose, dayHigh = h.dayHigh, money = ::money,
+                )
+            } else {
             FinancePanel("Price") {
                 val ranges = com.ataglanceplus.live.FinanceSource.Range.entries
                 SegmentedPills(ranges.map { it.label }, range.ordinal) { range = ranges[it] }
@@ -844,7 +857,7 @@ private fun StockDashboard(initial: String) {
                 // only in the VWAP dialog, so it was easy to miss that it was off).
                 if (range.minutes != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                             Text("Extended hours", style = MaterialTheme.typography.bodyMedium)
                             Text("Pre-market, after hours and overnight", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -892,14 +905,6 @@ private fun StockDashboard(initial: String) {
                     Text("No prices for this range yet.", style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            etoro?.let { holding ->
-                if (q.currency == "USD") {
-                    WhatIfPanels(
-                        symbol = q.symbol, holding = holding, now = extended?.price ?: q.price,
-                        close = q.price.takeIf { extended != null } ?: q.previousClose, dayHigh = h.dayHigh, money = ::money,
-                    )
-                }
-            }
             FinancePanel("Today") {
                 Stat("Previous close", money(q.previousClose))
                 if (h.dayLow != null && h.dayHigh != null) Stat("Day's range", "${money(h.dayLow)} – ${money(h.dayHigh)}")
@@ -907,6 +912,7 @@ private fun StockDashboard(initial: String) {
                 h.volume?.let { Stat("Volume", numbers.format(it)) }
             }
             OpenButton("Open in Google Finance", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(com.ataglanceplus.live.FinanceSource.googleFinanceUrl(q))))
+            }
         }
     }
     if (editingVwap) {
@@ -1024,20 +1030,21 @@ private fun WhatIfPanels(
 
     FinancePanel("What if") {
         Text(
-            "Your ${positions.size} eToro position${if (positions.size == 1) "" else "s"} in ${holding.symbol ?: symbol} · drag or tap a price",
-            color = SportSub, fontSize = 12.5.sp,
+            "Your ${positions.size} eToro position${if (positions.size == 1) "" else "s"} in ${holding.symbol ?: symbol}. Drag, step or tap a price.",
+            color = SportSub, fontSize = 12.5.sp, lineHeight = 17.sp,
         )
-        Row(verticalAlignment = Alignment.Bottom) {
+        Row {
             Text(
-                "$" + money(price), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { typing = true },
+                "$" + money(price), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                modifier = Modifier.alignByBaseline().clickable { typing = true },
             )
-            Text(if (chosen == null) " now" else " if", color = SportSub, fontSize = 13.sp, modifier = Modifier.padding(bottom = 5.dp).weight(1f))
+            Text(if (chosen == null) " now" else " if", color = SportSub, fontSize = 13.sp, modifier = Modifier.alignByBaseline().weight(1f))
             val move = price - now
             if (chosen != null && price != now) {
                 Text(
-                    (if (move >= 0) "▲ " else "▼ ") + money(kotlin.math.abs(move)) + String.format(locale, " (%+.2f%%) from now", 100 * move / now),
-                    color = if (move >= 0) UP_TEXT else DOWN_TEXT, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 5.dp),
+                    (if (move >= 0) "▲ " else "▼ ") + money(kotlin.math.abs(move)) + String.format(locale, " (%+.2f%%)", 100 * move / now),
+                    color = if (move >= 0) UP_TEXT else DOWN_TEXT, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                    modifier = Modifier.alignByBaseline(),
                 )
             }
         }
@@ -1057,17 +1064,16 @@ private fun WhatIfPanels(
             valueRange = low.toFloat()..high.toFloat(),
             colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = SportAccent, activeTrackColor = SportAccent, inactiveTrackColor = Color(0xFF2A303D)),
         )
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            (0..4).forEach { k -> Text("$" + money(low + (high - low) * k / 4), color = SportSub, fontSize = 10.5.sp) }
-        }
+        val wholeSteps = kotlin.math.abs(step - kotlin.math.round(step)) < 1e-9 && kotlin.math.abs(low - kotlin.math.round(low)) < 1e-9
+        SliderScale((0..4).map { k -> val v = low + (high - low) * k / 4; if (wholeSteps) String.format(locale, "$%,.0f", v) else "$" + money(v) })
         // Presets, four to a row, then a place to add a target. A long press removes a target.
         (presets.map<WhatIfPreset, WhatIfPreset?> { it } + null).chunked(4).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
                 row.forEach { preset ->
                     val on = preset != null && kotlin.math.abs(preset.price - price) < 0.005
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp)).background(SportCard)
+                        modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 52.dp).clip(RoundedCornerShape(12.dp)).background(SportCard)
                             .then(if (on) Modifier.border(1.5.dp, SportAccent, RoundedCornerShape(12.dp)) else Modifier)
                             .then(Modifier.combinedClickable(
                                 onClick = { if (preset == null) adding = true else chosen = if (preset.label == "Now") null else cents(preset.price) },
@@ -1078,14 +1084,21 @@ private fun WhatIfPanels(
                                     }
                                 },
                             )),
-                        verticalArrangement = Arrangement.Center,
+                        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
                     ) {
-                        if (preset == null) {
-                            Text("+ Target", color = SportAccent, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
-                        } else {
-                            Text(preset.label, color = SportSub, fontSize = 10.5.sp, maxLines = 1)
-                            Text("$" + money(preset.price), color = preset.colour, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                        }
+                        // Label over price, each kept to one line and shrunk to fit the tile.
+                        val (label, value, colour) = if (preset == null) Triple("Target", "+ Add", SportAccent)
+                            else Triple(preset.label, "$" + money(preset.price), preset.colour)
+                        Text(
+                            label, color = SportSub, maxLines = 1, textAlign = TextAlign.Center,
+                            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = 10.5.sp, stepSize = 0.5.sp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        )
+                        Text(
+                            value, color = colour, fontWeight = FontWeight.Medium, maxLines = 1, textAlign = TextAlign.Center,
+                            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 13.sp, stepSize = 0.5.sp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        )
                     }
                 }
                 repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -1106,7 +1119,7 @@ private fun WhatIfPanels(
         }
     }
     FinancePanel("Your positions") {
-        Text("Value and P/L at the price above", color = SportSub, fontSize = 12.5.sp)
+        Text("Units @ open price, and value and P/L at the price above", color = SportSub, fontSize = 12.5.sp, lineHeight = 17.sp)
         val dates = DateTimeFormatter.ofPattern(android.text.format.DateFormat.getBestDateTimePattern(locale, "dMMM"), locale)
         result.legs.sortedByDescending { it.position.openedAt ?: 0L }.forEachIndexed { i, leg ->
             val p = leg.position
@@ -1126,10 +1139,12 @@ private fun WhatIfPanels(
                     Text("$" + money(leg.value), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
                 Row {
-                    Text(String.format(locale, "%,.2f units @ %s", p.units, p.openRate.toBigDecimal().stripTrailingZeros().toPlainString()),
-                        color = SportSub, fontSize = 12.5.sp, modifier = Modifier.weight(1f))
+                    // Units at the open price, the same size on every row (one line; "…" only if it cannot fit).
+                    Text(String.format(locale, "%,.2f @ %s", p.units, p.openRate.toBigDecimal().stripTrailingZeros().toPlainString()),
+                        color = SportSub, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp).alignByBaseline())
                     Text((if (leg.pnl >= 0) "▲ " else "▼ ") + money(kotlin.math.abs(leg.pnl)) + String.format(locale, " (%+.2f%%)", leg.percent),
-                        color = if (leg.pnl >= 0) UP_TEXT else DOWN_TEXT, fontSize = 12.5.sp)
+                        color = if (leg.pnl >= 0) UP_TEXT else DOWN_TEXT, fontSize = 12.5.sp, maxLines = 1, modifier = Modifier.alignByBaseline())
                 }
             }
         }
@@ -1147,6 +1162,30 @@ private fun WhatIfPanels(
             chosen = cents(value)
             adding = false
             typing = false
+        }
+    }
+}
+
+/**
+ * The prices under the slider, each centred under its place on the track (the ends kept inside
+ * the panel), rather than spread evenly, which put the middle ones off their marks.
+ */
+@Composable
+private fun SliderScale(labels: List<String>) {
+    androidx.compose.ui.layout.Layout(
+        content = { labels.forEach { Text(it, color = SportSub, fontSize = 10.5.sp, maxLines = 1) } },
+        modifier = Modifier.fillMaxWidth(),
+    ) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0)) }
+        // The track runs between the centres of the thumb at its ends (the thumb is 4dp wide).
+        val inset = 2.dp.roundToPx()
+        val height = placeables.maxOfOrNull { it.height } ?: 0
+        layout(width, height) {
+            placeables.forEachIndexed { k, p ->
+                val centre = inset + (width - 2 * inset) * k / (labels.size - 1).coerceAtLeast(1)
+                p.placeRelative((centre - p.width / 2).coerceIn(0, (width - p.width).coerceAtLeast(0)), 0)
+            }
         }
     }
 }
@@ -1569,7 +1608,11 @@ private fun Readout(
     Surface(color = READOUT_BG, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(time, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                Text(
+                    time, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = MaterialTheme.typography.labelMedium.fontSize, stepSize = 0.5.sp),
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                )
                 if (intraday) {
                     val night = bar.session == com.ataglanceplus.live.FinanceSource.Session.OVERNIGHT
                     Text(

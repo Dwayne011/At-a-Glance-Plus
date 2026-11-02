@@ -608,3 +608,31 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
   6. Copy the Public Key, which is also shown at the top of API Key Management.
 - No change to how the keys are stored (encrypted with the Android Keystore) or used (sent only to
   eToro, read-only requests).
+
+## 0.39.0: "What if" on its own tab; alignment at large text sizes
+
+- The stock screen has two tabs under the headline: **Overview** (price chart and the day's
+  figures) and **What if** (the What if and Your positions panels). They appear only when the user
+  has eToro positions in the stock and it is priced in US dollars; otherwise the screen is as
+  before. The chosen tab survives rotation.
+- Fixes from the user's screenshot, at a large text size:
+  - **Price tiles** (Now, Break-even, Biggest B/E, targets, Close, Day high):
+    - Prices were cut off at the bottom; the tiles now grow to fit (at least 52dp) and every tile
+      in a row is the same height.
+    - Each label and price stays on one line and shrinks to fit ("Biggest B/E" ran over the edge).
+    - "+ Target" is laid out like the others: "Target" over "+ Add".
+  - **Slider scale:**
+    - Each price sits under its place on the track; spread evenly, the middle ones were off their
+      marks.
+    - Whole-dollar steps are shown without cents ($0, $5…), so the labels fit.
+  - **Chosen price:** "now"/"if" and the move sit on the price's baseline.
+  - **Your positions:**
+    - "units @ price" became "3,828.48 @ 6.53" (explained in the panel's subtitle), so each row
+      fits on one line at the same size.
+    - The P/L shares the baseline.
+  - **Overview:**
+    - The Extended hours text no longer runs into its switch.
+    - The candle readout's time stays on one line, shrinking if needed.
+- Checked:
+  - Both tabs were rendered at 1.3× text on a 384dp-wide screen (Robolectric, with Compose's test
+    tools to tap the tab, not kept), using the ONDS positions from the user's calculator.
