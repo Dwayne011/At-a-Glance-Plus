@@ -13,9 +13,16 @@ import com.ataglanceplus.service.AtAGlanceService
  *
  * How it works: the system keeps one cached binding to the active Smartspace service. A temporary
  * override lasts at most two minutes, but clients that open a session while it is active stay
- * bound to our service until our process dies. So: set the override, then restart SystemUI and
- * the launcher, and open the home screen so the launcher starts again at once, and both open
- * fresh sessions while it is in force.
+ * bound to our service until our process dies. So: set the override, restart the launcher and
+ * open the home screen so it starts again at once, then restart SystemUI, and both open fresh
+ * sessions while it is in force.
+ *
+ * The two restarts never overlap. On current Android the code that animates switches between
+ * apps (WM Shell) runs inside SystemUI. Stopping the launcher and opening the home screen while
+ * SystemUI was still starting again could leave the system waiting for an animation that never
+ * finished, with every touch ignored until a reboot. So the launcher goes first, while SystemUI
+ * is running, and the steps wait for the home screen to settle before SystemUI is restarted, and
+ * for SystemUI to be back before activation reports done.
  */
 object Commands {
 
@@ -38,6 +45,21 @@ object Commands {
      * override is in force, rather than whenever the user next goes home, which may be too late.
      */
     private const val OPEN_HOME = "am start -W -a android.intent.action.MAIN -c android.intent.category.HOME"
+
+    /**
+     * Waits for the launcher to be running again (up to 10 s), then 2 s more for the switch to
+     * the home screen to finish, so nothing is moving when SystemUI is restarted.
+     */
+    private const val SETTLE_HOME =
+        "for i in \$(seq 1 40); do pidof $PIXEL_LAUNCHER >/dev/null && break; sleep 0.25; done; sleep 2"
+
+    /**
+     * Restarts SystemUI (see [RESTART_SYSTEM_UI]) and waits up to 15 s for its new main process,
+     * then 2 s more for it to start, so activation is not reported done while it is still down.
+     */
+    private const val RESTART_SYSTEM_UI_AND_WAIT =
+        "old=\$(pidof $SYSTEM_UI); $RESTART_SYSTEM_UI; " +
+            "for i in \$(seq 1 60); do new=\$(pidof $SYSTEM_UI); [ -n \"\$new\" ] && [ \"\$new\" != \"\$old\" ] && break; sleep 0.25; done; sleep 2"
 
     fun serviceComponent(context: Context): String =
         ComponentName(context, AtAGlanceService::class.java).flattenToString()
@@ -79,8 +101,9 @@ object Commands {
 
     /**
      * The activation as separate steps, so each one's output can be shown. Order matters: the
-     * override first, then restart SystemUI (lock screen, always-on display) and the launcher so
-     * both open fresh sessions while the override is in force.
+     * override first, then the launcher (restarted and settled on the home screen), and SystemUI
+     * (lock screen, always-on display) last, one at a time, so both open fresh sessions while the
+     * override is in force without the restarts overlapping (see the class comment).
      */
     fun activateSteps(context: Context): List<String> = overrideSteps(serviceComponent(context))
 
@@ -89,9 +112,10 @@ object Commands {
 
     private fun overrideSteps(component: String): List<String> = listOf(
         "cmd smartspace set temporary-service ${userId()} $component $OVERRIDE_MS",
-        RESTART_SYSTEM_UI,
         "am force-stop $PIXEL_LAUNCHER",
         OPEN_HOME,
+        SETTLE_HOME,
+        RESTART_SYSTEM_UI_AND_WAIT,
     )
 
     /** Shell command that makes this app the At a Glance provider. */
@@ -123,5 +147,5 @@ object Commands {
 
     private fun overrideShell(component: String): String =
         "cmd smartspace set temporary-service ${userId()} $component $OVERRIDE_MS" +
-            " && $RESTART_SYSTEM_UI && am force-stop $PIXEL_LAUNCHER && $OPEN_HOME"
+            " && am force-stop $PIXEL_LAUNCHER && $OPEN_HOME; $SETTLE_HOME; $RESTART_SYSTEM_UI_AND_WAIT"
 }

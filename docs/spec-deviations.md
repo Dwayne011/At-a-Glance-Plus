@@ -567,3 +567,29 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 
   Yahoo reports no volume for most pre-market and after-hours candles, so those read "None
   reported".
+
+## 0.38.1: activation no longer overlaps the SystemUI and launcher restarts
+
+- Reported: sometimes after Activate (in the app or on the after-update notification) the whole
+  screen ignored every touch. The home screen, swipe-up and the notification shade all stopped
+  responding, with gesture navigation, until the phone was restarted.
+- Likely cause, not reproduced here:
+  - Activation crashed SystemUI and then, at once, force-stopped the Pixel Launcher and opened the
+    home screen.
+  - On current Android, the code that animates switches between apps (WM Shell) runs inside
+    SystemUI. So the launcher's restart and the switch to home could begin while SystemUI was still
+    starting again.
+  - The system could then be left waiting for an animation that never finished, holding back all
+    input.
+- New order, one at a time:
+  1. Set the override.
+  2. Force-stop the launcher.
+  3. Open the home screen.
+  4. Wait for the launcher to be running (up to 10 s), plus 2 s for the switch to finish.
+  5. Crash SystemUI's main process.
+  6. Wait for its new process (up to 15 s), plus 2 s.
+
+  Both still connect within the two-minute override. Activation takes about 5 to 20 seconds
+  longer, and the "adb shell" command shown for a computer follows the same order.
+- The wait loops were checked in a POSIX shell with stand-ins for pidof and am. The real check is
+  on the phone.
