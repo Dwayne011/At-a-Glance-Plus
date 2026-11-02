@@ -805,22 +805,25 @@ internal fun EtoroKeysSection() {
         if (!saved) {
             Text(
                 "1. Sign in at etoro.com (the website is easiest).\n" +
-                    "2. Open Settings, then Trading, then API Key Management, and choose Create New Key.\n" +
-                    "3. Give it any name. Environment: Real. Permissions: Read only. Then Generate Key and confirm with the SMS code.\n" +
-                    "4. Copy the Public API key and the User key into the fields below. The User key is shown only once, so copy it straight away.",
+                    "2. Open Settings, then Trading, then API Key Management.\n" +
+                    "3. Tap Create Your API Key. Give it any name and choose your Main account.\n" +
+                    "4. Under Access Permissions, tap Quick select: Read all, and leave every Write box unticked. This app only reads, so it never needs to trade.\n" +
+                    "5. Finish creating the key, entering the code eToro sends by SMS if it asks.\n" +
+                    "6. eToro shows your new Private key once. Copy it into the Private key field below straight away, as it cannot be shown again.\n" +
+                    "7. Copy the Public Key into the Public Key field. It is on the same screen, and also at the top of API Key Management.",
                 style = MaterialTheme.typography.bodySmall,
             )
             OutlinedTextField(
                 value = apiKey,
                 onValueChange = { apiKey = it.trim() },
-                label = { Text("Public API key (x-api-key)") },
+                label = { Text("Public Key") },
                 singleLine = true,
                 visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
             )
             OutlinedTextField(
                 value = userKey,
                 onValueChange = { userKey = it.trim() },
-                label = { Text("User key (x-user-key)") },
+                label = { Text("Private key (User key)") },
                 singleLine = true,
                 visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
             )

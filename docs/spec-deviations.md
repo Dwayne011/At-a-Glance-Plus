@@ -593,3 +593,18 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
   longer, and the "adb shell" command shown for a computer follows the same order.
 - The wait loops were checked in a POSIX shell with stand-ins for pidof and am. The real check is
   on the phone.
+
+## 0.38.2: eToro key guide matches eToro's current screens
+
+- eToro now labels the two keys Public Key and Private key. Its documentation calls them the Public
+  API Key and the User Key. The guide and the fields on Finance › eToro now use the screen's
+  labels: "Public Key" (sent as x-api-key) and "Private key (User key)" (sent as x-user-key).
+- The steps follow eToro's current pages:
+  1. Open API Key Management and tap Create Your API Key.
+  2. Choose a name and the Main account.
+  3. Tap Quick select: Read all, and leave every Write box unticked.
+  4. Confirm by SMS if asked.
+  5. Copy the Private key, which is shown once.
+  6. Copy the Public Key, which is also shown at the top of API Key Management.
+- No change to how the keys are stored (encrypted with the Android Keystore) or used (sent only to
+  eToro, read-only requests).
