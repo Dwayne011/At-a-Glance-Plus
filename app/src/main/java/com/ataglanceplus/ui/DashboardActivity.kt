@@ -15,6 +15,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -759,6 +760,16 @@ private fun StockDashboard(initial: String) {
         }
         refresh.loaded = refresh.generation
     }
+    // The user's eToro positions in this stock, for "What if" (refreshed when over a minute old).
+    val etoro by produceState<com.ataglanceplus.live.EtoroSource.Holding?>(null, symbol, refresh.generation) {
+        value = withContext(Dispatchers.IO) {
+            val source = com.ataglanceplus.live.EtoroSource
+            val current = source.portfolio.value
+            if (source.hasKeys(context) && (current == null || System.currentTimeMillis() - current.at > 60_000)) source.refresh(context)
+            val wanted = setOf(symbol.uppercase(), symbol.uppercase().replace('-', '.'))
+            source.portfolio.value?.holdings?.firstOrNull { it.symbol?.uppercase() in wanted && it.open.isNotEmpty() }
+        }
+    }
     ScreenTitle("Stocks")
     if (tickers.size > 1) PillRow(tickers, tickers.indexOf(symbol)) { symbol = tickers[it] }
     when (val state = load) {
@@ -851,6 +862,14 @@ private fun StockDashboard(initial: String) {
                     Text("No prices for this range yet.", style = MaterialTheme.typography.bodyMedium)
                 }
             }
+            etoro?.let { holding ->
+                if (q.currency == "USD") {
+                    WhatIfPanels(
+                        symbol = q.symbol, holding = holding, now = extended?.price ?: q.price,
+                        close = q.price.takeIf { extended != null } ?: q.previousClose, dayHigh = h.dayHigh, money = ::money,
+                    )
+                }
+            }
             FinancePanel("Today") {
                 Stat("Previous close", money(q.previousClose))
                 if (h.dayLow != null && h.dayHigh != null) Stat("Day's range", "${money(h.dayLow)} – ${money(h.dayHigh)}")
@@ -910,6 +929,220 @@ internal fun VwapDialog(
                 }
             }
         },
+    )
+}
+
+// --- What if (the user's eToro positions in this stock, at a chosen price) ---
+
+/** A preset price on the "What if" panel: its label, price and colour, and whether it is one of the user's targets. */
+private class WhatIfPreset(val label: String, val price: Double, val colour: Color, val target: Boolean = false)
+
+private val TARGET_BLUE = Color(0xFF8AB4F8)
+
+/**
+ * The user's eToro positions in this stock at a price they choose (see [com.ataglanceplus.live.WhatIf]):
+ * a slider and ±1¢/±10¢ steps, presets (now, break-even, the biggest position's break-even, the
+ * close, the day's high and the user's own targets, kept per stock), the totals with what each
+ * cent and dollar is worth, and each position. [now] is the price eToro's figures belong to.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun WhatIfPanels(
+    symbol: String,
+    holding: com.ataglanceplus.live.EtoroSource.Holding,
+    now: Double,
+    close: Double?,
+    dayHigh: Double?,
+    money: (Double) -> String,
+) {
+    val context = LocalContext.current
+    val positions = holding.open
+    if (positions.isEmpty()) return
+    val WhatIf = com.ataglanceplus.live.WhatIf
+    var targets by remember(symbol) { mutableStateOf(Prefs.financeTargets(context, symbol)) }
+    var price by remember(symbol, now) { androidx.compose.runtime.mutableDoubleStateOf(now) }
+    var adding by remember { mutableStateOf(false) }
+    var typing by remember { mutableStateOf(false) }
+    val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+    fun cents(v: Double) = kotlin.math.round(v * 100) / 100
+
+    val breakEven = WhatIf.breakEven(positions, now)
+    val biggest = positions.maxByOrNull { it.amount }?.takeIf { positions.size > 1 }?.let { WhatIf.breakEven(listOf(it), now) }
+    val presets = buildList {
+        add(WhatIfPreset("Now", now, Color.White))
+        breakEven?.let { add(WhatIfPreset("Break-even", it, UP_TEXT)) }
+        biggest?.let { add(WhatIfPreset("Biggest B/E", it, Color.White)) }
+        targets.forEach { add(WhatIfPreset("My target", it, TARGET_BLUE, target = true)) }
+        close?.takeIf { kotlin.math.abs(it - now) >= 0.005 }?.let { add(WhatIfPreset("Close", it, Color.White)) }
+        dayHigh?.let { add(WhatIfPreset("Day high", it, Color.White)) }
+    }
+    // The slider spans the presets with room either side, its ends on a round step (1, 2, 2.5
+    // or 5 times a power of ten) so the scale under it reads in round prices.
+    val rawLow = (presets.minOf { it.price } * 0.7).coerceAtLeast(0.01)
+    val rawHigh = presets.maxOf { it.price } * 1.3
+    val step = run {
+        val rough = (rawHigh - rawLow) / 4
+        val power = Math.pow(10.0, kotlin.math.floor(kotlin.math.log10(rough)))
+        listOf(1.0, 2.0, 2.5, 5.0, 10.0).map { it * power }.first { it >= rough }
+    }
+    val low = (kotlin.math.floor(rawLow / step) * step).coerceAtLeast(0.0)
+    val high = low + 4 * step
+    val result = WhatIf.at(positions, now, price)
+    val exposure = WhatIf.exposure(positions)
+
+    FinancePanel("What if") {
+        Text(
+            "Your ${positions.size} eToro position${if (positions.size == 1) "" else "s"} in ${holding.symbol ?: symbol} · drag or tap a price",
+            color = SportSub, fontSize = 12.5.sp,
+        )
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                "$" + money(price), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { typing = true },
+            )
+            Text(if (price == now) " now" else " if", color = SportSub, fontSize = 13.sp, modifier = Modifier.padding(bottom = 5.dp).weight(1f))
+            val move = price - now
+            if (price != now) {
+                Text(
+                    (if (move >= 0) "▲ " else "▼ ") + money(kotlin.math.abs(move)) + String.format(locale, " (%+.2f%%) from now", 100 * move / now),
+                    color = if (move >= 0) UP_TEXT else DOWN_TEXT, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 5.dp),
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(-0.10 to "−10¢", -0.01 to "−1¢", 0.01 to "+1¢", 0.10 to "+10¢").forEach { (step, label) ->
+                Text(
+                    label, textAlign = TextAlign.Center, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                    color = when { step <= -0.1 -> DOWN_TEXT; step >= 0.1 -> UP_TEXT; else -> Color.White },
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(SportCard)
+                        .clickable { price = cents((price + step).coerceAtLeast(0.01)) }.padding(vertical = 8.dp),
+                )
+            }
+        }
+        androidx.compose.material3.Slider(
+            value = price.coerceIn(low, high).toFloat(),
+            onValueChange = { price = cents(it.toDouble()) },
+            valueRange = low.toFloat()..high.toFloat(),
+            colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = SportAccent, activeTrackColor = SportAccent, inactiveTrackColor = Color(0xFF2A303D)),
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            (0..4).forEach { k -> Text("$" + money(low + (high - low) * k / 4), color = SportSub, fontSize = 10.5.sp) }
+        }
+        // Presets, four to a row, then a place to add a target. A long press removes a target.
+        (presets.map<WhatIfPreset, WhatIfPreset?> { it } + null).chunked(4).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { preset ->
+                    val on = preset != null && kotlin.math.abs(preset.price - price) < 0.005
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp)).background(SportCard)
+                            .then(if (on) Modifier.border(1.5.dp, SportAccent, RoundedCornerShape(12.dp)) else Modifier)
+                            .then(Modifier.combinedClickable(
+                                onClick = { if (preset == null) adding = true else price = cents(preset.price) },
+                                onLongClick = {
+                                    if (preset?.target == true) {
+                                        targets = targets - preset.price
+                                        Prefs.setFinanceTargets(context, symbol, targets)
+                                    }
+                                },
+                            )),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        if (preset == null) {
+                            Text("+ Target", color = SportAccent, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+                        } else {
+                            Text(preset.label, color = SportSub, fontSize = 10.5.sp, maxLines = 1)
+                            Text("$" + money(preset.price), color = preset.colour, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                        }
+                    }
+                }
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportCard).padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            WhatIfRow("Value", "$" + money(result.value), Color.White, big = true)
+            WhatIfRow("Profit/loss", (if (result.pnl >= 0) "▲ " else "▼ ") + money(kotlin.math.abs(result.pnl)) + String.format(locale, " (%+.2f%%)", result.percent),
+                if (result.pnl >= 0) UP_TEXT else DOWN_TEXT)
+            WhatIfRow("Units", String.format(locale, "%,.2f", positions.sumOf { it.units }), Color.White)
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                Text("Each 1¢: ±$" + money(kotlin.math.abs(exposure) / 100), color = SportSub, fontSize = 11.5.sp, modifier = Modifier.weight(1f))
+                Text("Each $1: ±$" + money(kotlin.math.abs(exposure)), color = SportSub, fontSize = 11.5.sp)
+            }
+        }
+    }
+    FinancePanel("Your positions") {
+        Text("Value and P/L at the price above", color = SportSub, fontSize = 12.5.sp)
+        val dates = DateTimeFormatter.ofPattern(android.text.format.DateFormat.getBestDateTimePattern(locale, "dMMM"), locale)
+        result.legs.sortedByDescending { it.position.openedAt ?: 0L }.forEachIndexed { i, leg ->
+            val p = leg.position
+            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(SportBorder))
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (p.isBuy) "BUY" else "SELL", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    listOfNotNull(
+                        when (p.real) { true -> "Real"; false -> "CFD"; null -> null },
+                        "×${p.leverage}".takeIf { p.leverage > 1 },
+                        p.openedAt?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(dates) },
+                    ).forEach { tag ->
+                        Text(tag, color = Color(0xFFCFD6E2), fontSize = 10.5.sp, fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(start = 5.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x14FFFFFF)).padding(horizontal = 7.dp, vertical = 2.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text("$" + money(leg.value), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+                Row {
+                    Text(String.format(locale, "%,.2f units @ %s", p.units, p.openRate.toBigDecimal().stripTrailingZeros().toPlainString()),
+                        color = SportSub, fontSize = 12.5.sp, modifier = Modifier.weight(1f))
+                    Text((if (leg.pnl >= 0) "▲ " else "▼ ") + money(kotlin.math.abs(leg.pnl)) + String.format(locale, " (%+.2f%%)", leg.percent),
+                        color = if (leg.pnl >= 0) UP_TEXT else DOWN_TEXT, fontSize = 12.5.sp)
+                }
+            }
+        }
+    }
+    if (adding || typing) {
+        PriceDialog(
+            title = if (adding) "Add a target" else "Price",
+            initial = if (adding) "" else String.format(Locale.ROOT, "%.2f", price),
+            onDismiss = { adding = false; typing = false },
+        ) { value ->
+            if (adding) {
+                targets = (targets + cents(value)).distinct().sorted()
+                Prefs.setFinanceTargets(context, symbol, targets)
+            }
+            price = cents(value)
+            adding = false
+            typing = false
+        }
+    }
+}
+
+@Composable
+private fun WhatIfRow(label: String, value: String, colour: Color, big: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = SportSub, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Text(value, color = colour, fontSize = if (big) 18.sp else 14.sp, fontWeight = if (big) FontWeight.Bold else FontWeight.Medium)
+    }
+}
+
+/** Asks for a price (a target, or the "What if" price typed in). */
+@Composable
+private fun PriceDialog(title: String, initial: String, onDismiss: () -> Unit, onDone: (Double) -> Unit) {
+    var text by remember { mutableStateOf(initial) }
+    val value = text.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            androidx.compose.material3.OutlinedTextField(
+                value = text, onValueChange = { text = it }, singleLine = true, prefix = { Text("$") },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+            )
+        },
+        confirmButton = { TextButton(onClick = { value?.let(onDone) }, enabled = value != null) { Text("Done") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 

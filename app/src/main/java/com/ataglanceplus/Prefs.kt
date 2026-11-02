@@ -1,6 +1,7 @@
 package com.ataglanceplus
 
 import android.content.Context
+import androidx.core.content.edit
 import android.content.SharedPreferences
 import com.ataglanceplus.cards.ChipSpec
 import com.ataglanceplus.cards.CardType
@@ -47,6 +48,7 @@ object Prefs {
     private const val KEY_FIN_WINDOWS = "finance_windows"
     private const val KEY_FIN_VWAP_SOURCE = "finance_vwap_source"
     private const val KEY_FIN_VWAP_ANCHOR = "finance_vwap_anchor"
+    private const val KEY_FIN_TARGETS_PREFIX = "fin_targets_"
     private const val KEY_FIN_EXTENDED_HOURS = "finance_extended_hours"
 
     /** Keys that only matter to the wireless-debugging screens; changing them needs no redraw. */
@@ -397,6 +399,18 @@ object Prefs {
                 .getOrDefault(com.ataglanceplus.live.FinanceSource.VwapAnchor.SESSION),
             extendedHours = prefs.getBoolean(KEY_FIN_EXTENDED_HOURS, true),
         )
+    }
+
+    /** The user's own price targets for [symbol], for the stock screen's "What if", lowest first. */
+    fun financeTargets(context: Context, symbol: String): List<Double> =
+        get(context).getString(KEY_FIN_TARGETS_PREFIX + symbol.uppercase(), null)?.split(',')
+            ?.mapNotNull { it.toDoubleOrNull() }?.sorted().orEmpty()
+
+    fun setFinanceTargets(context: Context, symbol: String, targets: List<Double>) {
+        get(context).edit {
+            if (targets.isEmpty()) remove(KEY_FIN_TARGETS_PREFIX + symbol.uppercase())
+            else putString(KEY_FIN_TARGETS_PREFIX + symbol.uppercase(), targets.distinct().sorted().joinToString(","))
+        }
     }
 
     fun setFinanceVwap(context: Context, settings: com.ataglanceplus.live.FinanceSource.VwapSettings) {

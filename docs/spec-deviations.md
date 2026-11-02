@@ -492,3 +492,36 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 - Checked with live AAPL data during Monday's pre-market (Robolectric, not kept). The chart ran
   from Friday 04:00 New York time to 07:03 today: pre-market 104, regular 78, after hours 48 and
   overnight 94 candles, in time order, ending at the live pre-market price of 344.57.
+
+## 0.37.0: "What if" for eToro positions
+
+- Mockup approved. On a stock's screen, when the user holds that stock on eToro and it is priced
+  in US dollars, two panels follow the chart:
+  - **What if:** pick a price with a slider (its ends on round steps), the ±1¢ and ±10¢ buttons,
+    by typing (tap the price) or with presets. The presets are:
+    - now;
+    - the break-even of all the positions together;
+    - the biggest position's break-even;
+    - the close;
+    - the day's high;
+    - the user's own targets, added with "+ Target", removed with a long press, and kept per stock.
+
+    The panel then shows the value, the profit/loss (amount and percentage of the margin), the
+    units, and what each 1¢ and each $1 is worth.
+  - **Your positions:** each position with BUY/SELL, Real or CFD, its leverage and its date, its
+    units and open price, and its value and profit/loss at the chosen price.
+- The positions come from the user's eToro account (the existing read-only keys). EtoroSource now
+  keeps each position's units, open rate, leverage, margin, current P/L, open date and real or CFD
+  (eToro's isSettled flag), not only per-stock totals. They refresh when over a minute old.
+- The maths (live/WhatIf.kt): each position starts from eToro's own current P/L, so at today's
+  price it matches eToro exactly. It then moves by its units for each dollar of price, up for a
+  buy and down for a sell. A position is never worth less than nothing. Overnight fees, which
+  grow with time, are not added.
+- Analyst targets were left out because Yahoo gives them only to signed-in users. Robinhood comes
+  later: it has no official API for stocks or options.
+- Checked with the ONDS positions from the user's Gemini calculator:
+  - at $10, P/L +124,238.58 (+257.86%), each position matching the calculator;
+  - break-even $6.5975, where P/L comes back to exactly zero;
+  - 1¢ worth $365.14.
+
+  The real stock screen was rendered with them (Robolectric, not kept).

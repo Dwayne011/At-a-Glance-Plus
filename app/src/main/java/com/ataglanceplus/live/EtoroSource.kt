@@ -49,6 +49,23 @@ object EtoroSource {
     private const val WEEK_MS = 7 * 24 * 60 * 60_000L
     private const val MAX_SNAPSHOTS = 1_500
 
+    /**
+     * One open position: buy or sell, [units] at [openRate], [leverage], the margin put in
+     * ([amount]), eToro's current unrealised [pnl], when it was opened (epoch ms), and whether it
+     * is a real share or a CFD ([real] null when eToro did not say).
+     */
+    data class Position(
+        val id: Long,
+        val isBuy: Boolean,
+        val units: Double,
+        val openRate: Double,
+        val leverage: Int,
+        val amount: Double,
+        val pnl: Double,
+        val openedAt: Long?,
+        val real: Boolean?,
+    )
+
     /** One instrument held, all its positions together. */
     data class Holding(
         val instrumentId: Int,
@@ -57,6 +74,8 @@ object EtoroSource {
         val invested: Double,
         val pnl: Double,
         val positions: Int,
+        /** Each position, for the stock screen's "What if". */
+        val open: List<Position> = emptyList(),
     ) {
         val value: Double get() = invested + pnl
         val pnlPercent: Double get() = if (invested != 0.0) 100 * pnl / invested else 0.0
@@ -191,7 +210,21 @@ object EtoroSource {
         val names = names(context, byInstrument.keys.filter { it != 0 }, keys)
         val holdings = byInstrument.map { (id, list) ->
             val (name, symbol) = names[id] ?: ("Instrument $id" to null)
-            Holding(id, name, symbol, list.sumOf { it.num("amount") ?: 0.0 }, list.sumOf(::pnlOf), list.size)
+            val open = list.map { p ->
+                Position(
+                    id = p.num("positionID")?.toLong() ?: 0L,
+                    isBuy = (p.find("isBuy") as? Boolean) ?: true,
+                    units = p.num("units") ?: 0.0,
+                    openRate = p.num("openRate") ?: 0.0,
+                    leverage = p.num("leverage")?.toInt() ?: 1,
+                    amount = p.num("amount") ?: 0.0,
+                    pnl = pnlOf(p),
+                    openedAt = p.str("openDateTime")?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }
+                        .recoverCatching { _ -> java.time.LocalDateTime.parse(it.removeSuffix("Z")).toInstant(java.time.ZoneOffset.UTC).toEpochMilli() }.getOrNull() },
+                    real = p.find("isSettled") as? Boolean,
+                )
+            }
+            Holding(id, name, symbol, list.sumOf { it.num("amount") ?: 0.0 }, list.sumOf(::pnlOf), list.size, open)
         }
         return Portfolio(System.currentTimeMillis(), cash + invested + pnl, cash, invested, pnl, openInvested, holdings, copies)
     }
