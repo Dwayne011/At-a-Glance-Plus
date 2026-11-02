@@ -459,3 +459,23 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 - Checked with live AAPL data in a temporary Robolectric test (not kept). Candles are strictly
   in time order. Pre-market 66 and after hours 49 (no VWAP), regular 78 and overnight 55 candles
   (with VWAP). The dashboard was rendered with extended hours on and off.
+
+## 0.36.0: Weather wash look
+
+- Mockup approved (style 2 of four). A new weather card look, Weather wash, chosen under the
+  weather card's Style beside Standard, Scenes and Animated scenes:
+  - The whole card takes the weather's colours as a top-to-bottom gradient, one for each kind of
+    weather by day and by night. Examples: warm orange to gold for a clear day, grey for cloudy,
+    blue-grey for rain, indigo for a clear night.
+  - The animated scenes' moving weather goes over the gradient: sun, clouds, rain, snow, fog,
+    lightning, stars.
+  - The panels and tiles are frosted glass over it. Light washes (clear, partly cloudy, cloudy,
+    fog and snow by day) get lighter glass with dark text; the others get fainter glass with white
+    text, made a little more solid after a render showed stars behind the numbers.
+  - The current weather icons are kept. The extra card shares the look.
+  - The gradients and glass come from tools/gen_weather_wash.py.
+- Android has no live blur for these cards, so the glass is a plain see-through white.
+- The Standard look's description now says what it is (your wallpaper's colours) instead of the
+  old slate-navy gradient.
+- Checked by rendering the real card (Robolectric, not kept): sunny, cloudy, rain and a clear
+  night, and the extra card in rain. No text was cut off or outside its tile.

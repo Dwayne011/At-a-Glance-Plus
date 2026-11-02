@@ -41,9 +41,24 @@ object PanelCards {
         val highlight: Int = 0,
     )
 
-    /** The palette for [look]: wallpaper colours (Standard), see-through over a scene, or outlines (always-on). */
-    fun palette(context: Context, look: WeatherLook, aod: Boolean): Palette = when {
+    /**
+     * The palette for [look]: wallpaper colours (Standard), see-through over a scene, frosted
+     * glass over the Weather wash (dark text on the light washes for [condition] by day or
+     * night), or outlines (always-on).
+     */
+    fun palette(
+        context: Context, look: WeatherLook, aod: Boolean,
+        condition: com.ataglanceplus.weather.WeatherCondition? = null, isDay: Boolean = true,
+    ): Palette = when {
         aod -> Palette(0, R.drawable.weather_c_panel_aod, R.drawable.weather_c_panel_aod, R.drawable.chip_bg_aod, Style.AOD_TEXT, Style.AOD_TEXT, aod = true)
+        look == WeatherLook.WASH && condition?.washIsLight(isDay) == true -> Palette(
+            R.drawable.weather_wash_frame, R.drawable.weather_wash_panel_light, R.drawable.weather_wash_panel_light, R.drawable.weather_wash_tile_light,
+            0xFF2A2A2A.toInt(), 0xCC3D3D3D.toInt(), aod = false, highlight = 0x59FFFFFF,
+        )
+        look == WeatherLook.WASH -> Palette(
+            R.drawable.weather_wash_frame, R.drawable.weather_wash_panel_dark, R.drawable.weather_wash_panel_dark, R.drawable.weather_wash_tile_dark,
+            0xFFFFFFFF.toInt(), 0xCCFFFFFF.toInt(), aod = false, highlight = 0x2EFFFFFF,
+        )
         look != WeatherLook.STANDARD -> Palette(
             R.drawable.weather_c_frame_scene, R.drawable.weather_c_panel_main_scene, R.drawable.weather_c_panel_chips_scene, R.drawable.weather_c_tile_scene,
             0xFFFFFFFF.toInt(), 0xB3FFFFFF.toInt(), aod = false, highlight = 0x2EFFFFFF,

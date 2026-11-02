@@ -110,15 +110,17 @@ object WeatherCard {
      */
     fun surface(context: Context, views: RemoteViews, reading: Reading, aod: Boolean): PanelCards.Palette {
         val look = Prefs.weatherLook(context)
-        val palette = PanelCards.palette(context, look, aod)
+        val palette = PanelCards.palette(context, look, aod, reading.conditions, reading.isDay)
         if (aod || look == WeatherLook.STANDARD) {
             views.setViewVisibility(R.id.weather_scene, View.GONE)
             return palette
         }
         views.setViewVisibility(R.id.weather_scene, View.VISIBLE)
-        views.setImageViewResource(R.id.scene_sky, reading.conditions.sceneSky(reading.isDay))
+        // The wash: the weather's own gradient in place of the scene's sky, with the scene's
+        // moving weather over it, under frosted panels.
+        views.setImageViewResource(R.id.scene_sky, if (look == WeatherLook.WASH) reading.conditions.washSky(reading.isDay) else reading.conditions.sceneSky(reading.isDay))
         val layers = reading.conditions.sceneLayers(reading.isDay)
-        if (look == WeatherLook.ANIMATED) {
+        if (look == WeatherLook.ANIMATED || look == WeatherLook.WASH) {
             layers.forEach { views.setViewVisibility(it.animated, View.VISIBLE) }
         } else {
             val stills = layers.mapNotNull { it.still }

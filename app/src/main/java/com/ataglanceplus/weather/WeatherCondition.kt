@@ -39,6 +39,21 @@ enum class WeatherCondition(val label: String, @DrawableRes val dayIcon: Int, @D
         THUNDER -> if (isDay) R.drawable.scene_sky_thunder_day else R.drawable.scene_sky_thunder_night
     }
 
+    /** The Weather wash look's gradient for this weather by day or night (tools/gen_weather_wash.py). */
+    @DrawableRes
+    fun washSky(isDay: Boolean): Int = when (this) {
+        CLEAR -> if (isDay) R.drawable.weather_wash_clear_day else R.drawable.weather_wash_clear_night
+        PARTLY_CLOUDY -> if (isDay) R.drawable.weather_wash_partly_day else R.drawable.weather_wash_partly_night
+        CLOUDY -> if (isDay) R.drawable.weather_wash_cloudy_day else R.drawable.weather_wash_cloudy_night
+        FOG -> if (isDay) R.drawable.weather_wash_fog_day else R.drawable.weather_wash_fog_night
+        DRIZZLE, RAIN -> if (isDay) R.drawable.weather_wash_rain_day else R.drawable.weather_wash_rain_night
+        SNOW -> if (isDay) R.drawable.weather_wash_snow_day else R.drawable.weather_wash_snow_night
+        THUNDER -> if (isDay) R.drawable.weather_wash_thunder_day else R.drawable.weather_wash_thunder_night
+    }
+
+    /** Whether that wash is light (dark text on lighter glass) or dark (white text on fainter glass). */
+    fun washIsLight(isDay: Boolean): Boolean = isDay && this in setOf(CLEAR, PARTLY_CLOUDY, CLOUDY, FOG, SNOW)
+
     /** The weather drawn over the sky, back to front (Scenes looks). */
     fun sceneLayers(isDay: Boolean): List<SceneLayer> = when (this) {
         CLEAR -> if (isDay) listOf(SceneLayer.SUN) else listOf(SceneLayer.STARS, SceneLayer.WISPS)
@@ -84,5 +99,5 @@ enum class SceneLayer(@DrawableRes val still: Int?, @IdRes val animated: Int) {
 }
 
 /** The weather card's look: the plain gradient, a still scene, or a moving one. */
-enum class WeatherLook(val label: String) { STANDARD("Standard"), SCENES("Scenes"), ANIMATED("Animated scenes") }
+enum class WeatherLook(val label: String) { STANDARD("Standard"), SCENES("Scenes"), ANIMATED("Animated scenes"), WASH("Weather wash") }
 

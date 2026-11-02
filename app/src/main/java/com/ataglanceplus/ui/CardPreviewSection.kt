@@ -128,9 +128,10 @@ internal fun WeatherPage(version: Int, onBack: () -> Unit) {
             "Style", WeatherLook.entries, look, label = { it.label },
             details = {
                 when (it) {
-                    WeatherLook.STANDARD -> "A slate-navy gradient with a soft blue wave."
+                    WeatherLook.STANDARD -> "Your wallpaper's colours (Material You)."
                     WeatherLook.SCENES -> "Tinted for the weather and time of day, with the sun, stars, clouds, fog, rain or snow drawn in."
                     WeatherLook.ANIMATED -> "The scenes, moving gently. Uses more battery while the card is on screen."
+                    WeatherLook.WASH -> "The whole card in the weather's colours, moving gently, with frosted panels. Uses more battery while the card is on screen."
                 }
             },
             onDismiss = { choosingLook = false },
