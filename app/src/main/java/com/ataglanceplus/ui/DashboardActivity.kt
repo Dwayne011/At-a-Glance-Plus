@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.text.drawText
+import com.ataglanceplus.live.FinanceSource.Session
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.Image
@@ -752,7 +754,7 @@ private fun StockDashboard(initial: String) {
         if (shown != (symbol to range)) value = Load.Loading
         shown = symbol to range
         value = withContext(Dispatchers.IO) {
-            com.ataglanceplus.live.FinanceSource.history(symbol, range, vwapSettings)?.let { Load.Ready(it) }
+            com.ataglanceplus.live.FinanceSource.history(context, symbol, range, vwapSettings)?.let { Load.Ready(it) }
                 ?: Load.Missing("Yahoo Finance did not answer. Try again in a moment.")
         }
         refresh.loaded = refresh.generation
@@ -801,13 +803,7 @@ private fun StockDashboard(initial: String) {
                 SegmentedPills(ranges.map { it.label }, range.ordinal) { range = ranges[it] }
                 if (h.candles.size >= 2) {
                     val zone = ZoneId.systemDefault()
-                    val intraday = range.ordinal <= com.ataglanceplus.live.FinanceSource.Range.WEEK.ordinal
-                    fun whenText(c: com.ataglanceplus.live.FinanceSource.Candle): String {
-                        val at = Instant.ofEpochMilli(c.time)
-                        val date = dayAndDate(at.atZone(zone).toLocalDate())
-                        return if (intraday) "$date ${clock(context, at)}" else date
-                    }
-                    // Four labels along the bottom: times for one day, days for five, dates beyond.
+                    // Dates along the bottom for the longer ranges (the intraday ones label whole hours).
                     val labelPattern = when (range) {
                         com.ataglanceplus.live.FinanceSource.Range.DAY -> null
                         com.ataglanceplus.live.FinanceSource.Range.WEEK -> "EEE"
@@ -818,16 +814,11 @@ private fun StockDashboard(initial: String) {
                         candles = h.candles,
                         vwap = h.vwap,
                         vwapStarts = h.vwapStarts,
-                        describe = { i ->
-                            val c = h.candles[i]
-                            "${whenText(c)}\nOpen ${money(c.open)} · High ${money(c.high)} · Low ${money(c.low)} · Close ${money(c.close)}" +
-                                (h.vwap.getOrNull(i)?.let { " · VWAP ${money(it)}" } ?: "")
-                        },
+                        minutes = range.minutes,
+                        previousClose = q.previousClose.takeIf { range == com.ataglanceplus.live.FinanceSource.Range.DAY },
+                        latest = h.latest,
                         format = { money(it) },
-                        label = { i ->
-                            val at = Instant.ofEpochMilli(h.candles[i].time)
-                            labelPattern?.format(at.atZone(zone)) ?: clock(context, at)
-                        },
+                        dateLabel = { t -> labelPattern?.format(Instant.ofEpochMilli(t).atZone(zone)) ?: clock(context, Instant.ofEpochMilli(t)) },
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -894,7 +885,7 @@ internal fun VwapDialog(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Extended hours")
                         Text(
-                            "1D and 5D charts include pre-market and after-hours trading, as in eToro's 24/5 charts. Yahoo has no overnight candles.",
+                            "1D and 5D charts of US stocks include pre-market and after-hours trading (Yahoo's prices) and the overnight session (eToro's, as Yahoo has none), as in eToro's 24/5 charts. The VWAP leaves out candles with no reported volume.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -993,90 +984,312 @@ private val VWAP_DARK = Color(0xFF3987E5)
  * marks. Touch: tap or drag along the chart to read a candle (its open, high, low, close and VWAP
  * show above); pinch to zoom in and out, two fingers to move along; "Reset zoom" shows it all.
  */
+/** The stock chart's candles (its "Clean" look): a softer green and red than the other charts'. */
+private val CANDLE_UP = Color(0xFF2EBD85)
+private val CANDLE_DOWN = Color(0xFFF6465D)
+/** The overnight session's tint, band and price tag. */
+private val OVERNIGHT = Color(0xFF8E7CFF)
+private val READOUT_BG = Color(0xFF232836)
+private val TAG_GREY = Color(0xFF3A404D)
+
+/** Candles drawn as one: indices [from] to [to] of the chart's candles, from [time] to [end]. */
+private class Bar(
+    val from: Int, val to: Int, val time: Long, val end: Long,
+    val open: Double, val high: Double, val low: Double, val close: Double, val volume: Long,
+    val session: com.ataglanceplus.live.FinanceSource.Session,
+)
+
+/**
+ * Candles [first] to [last] as bars: each its own, or, with [stepMs], those in the same clock
+ * step (15 minutes, an hour…) and session together.
+ */
+private fun bars(candles: List<com.ataglanceplus.live.FinanceSource.Candle>, first: Int, last: Int, baseMs: Long?, stepMs: Long?): List<Bar> {
+    val out = mutableListOf<Bar>()
+    var i = first
+    while (i <= last) {
+        val c = candles[i]
+        var j = i
+        if (stepMs != null) {
+            val bucket = Math.floorDiv(c.time, stepMs)
+            while (j + 1 <= last && candles[j + 1].session == c.session && Math.floorDiv(candles[j + 1].time, stepMs) == bucket) j++
+        }
+        val group = candles.subList(i, j + 1)
+        val start = if (stepMs != null) Math.floorDiv(c.time, stepMs) * stepMs else c.time
+        out += Bar(
+            i, j, start, if (stepMs != null) start + stepMs else c.time + (baseMs ?: 0L),
+            c.open, group.maxOf { it.high }, group.minOf { it.low }, group.last().close, group.sumOf { it.volume }, c.session,
+        )
+        i = j + 1
+    }
+    return out
+}
+
+/**
+ * The stock's candle chart: candles (grouped into 15 minutes, an hour… until zoomed in far
+ * enough to show each), the VWAP, the previous close ([previousClose], one day), a tag on the
+ * latest price, volume, and for US listings with extended hours the pre-market, after-hours and
+ * overnight sessions shaded and named. Prices on a scale at the right; times along the bottom at
+ * whole hours ([minutes] is the candles' step for the intraday ranges; others show dates). A
+ * finger reads a candle (above the chart); two zoom and move along.
+ */
 @Composable
 private fun CandleChart(
     candles: List<com.ataglanceplus.live.FinanceSource.Candle>,
     vwap: List<Double?>,
     vwapStarts: Set<Int>,
-    describe: (Int) -> String,
+    minutes: Int?,
+    previousClose: Double?,
+    latest: Double,
     format: (Double) -> String,
-    label: (Int) -> String,
+    dateLabel: (Long) -> String,
 ) {
     if (candles.isEmpty()) return
+    val context = LocalContext.current
+    val zone = ZoneId.systemDefault()
+    val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
     var selected by remember(candles) { mutableIntStateOf(candles.lastIndex) }
     val window = remember(candles.size, candles.firstOrNull()?.time) { ChartWindow(candles.size.toFloat(), minOf(12f, candles.size.toFloat())) }
-    val vwapColour = VWAP_DARK
-    val grid = MaterialTheme.colorScheme.outlineVariant
-    // The candles on screen, and their scale.
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val small = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, color = muted)
     val first = window.start.toInt().coerceIn(0, candles.lastIndex)
     val last = kotlin.math.ceil(window.start + window.count - 1).toInt().coerceIn(first, candles.lastIndex)
-    val shown = candles.subList(first, last + 1)
-    val averages = vwap.subList(first, minOf(last + 1, vwap.size)).filterNotNull()
-    val low = minOf(shown.minOf { it.low }, averages.minOrNull() ?: Double.MAX_VALUE)
-    val high = maxOf(shown.maxOf { it.high }, averages.maxOrNull() ?: -Double.MAX_VALUE).let { if (it == low) low + 1 else it }
+    val hasOvernight = candles.any { it.session == Session.OVERNIGHT }
+    val axisWidth = 46.dp
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            LegendKey(UP, "Up", line = false)
-            LegendKey(DOWN, "Down", line = false)
-            LegendKey(vwapColour, "VWAP", line = true)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            LegendKey(CANDLE_UP, "Up", line = false)
+            LegendKey(CANDLE_DOWN, "Down", line = false)
+            LegendKey(VWAP_DARK, "VWAP", line = true)
+            if (previousClose != null) LegendKey(Color(0xFF9AA3B2), "Prev close", line = true)
+            if (hasOvernight) LegendKey(OVERNIGHT, "Overnight", line = false)
         }
-        Text(describe(selected), style = MaterialTheme.typography.bodyMedium, minLines = 2)
-        Row {
-            Column(modifier = Modifier.height(200.dp).width(52.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                Text(format(high), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(format(low), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            // A little room after the last candle, before the price scale.
+            val plotWidth = (maxWidth - axisWidth).value
+            val room = 14f
+            val pickScale = plotWidth / (plotWidth - room)
+            // Group the candles until each bar is at least 3.5dp wide (a whole 1D chart with
+            // extended hours shows 15-minute bars; zoomed in, the 5-minute candles).
+            val perCandle = (plotWidth - room) / window.count
+            val stepMs = minutes?.let { m ->
+                val step = listOf(5, 10, 15, 30, 60, 120, 240).filter { it >= m && it % m == 0 }.firstOrNull { perCandle * (it / m) >= 3.5f } ?: 240
+                if (step == m) null else step * 60_000L
             }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .clipToBounds()
-                        .chartGestures(candles, window) { fraction -> selected = window.at(fraction).toInt().coerceIn(0, candles.lastIndex) }
-                ) {
-                    val pad = 4.dp.toPx()
-                    val slot = size.width / window.count
-                    val body = (slot * 0.7f).coerceAtLeast(1f)
-                    val wick = 1.dp.toPx().coerceAtMost(body)
-                    fun x(i: Int) = (i + 0.5f - window.start) * slot
-                    fun y(v: Double) = pad + (1 - ((v - low) / (high - low)).toFloat()) * (size.height - 2 * pad)
-                    drawLine(grid, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
-                    for (i in first..last) {
-                        val c = candles[i]
-                        val colour = if (c.close >= c.open) UP else DOWN
-                        drawLine(colour, Offset(x(i), y(c.high)), Offset(x(i), y(c.low)), strokeWidth = wick)
-                        val top = y(maxOf(c.open, c.close))
-                        val height = (y(minOf(c.open, c.close)) - top).coerceAtLeast(1.dp.toPx())
-                        drawRect(colour, topLeft = Offset(x(i) - body / 2, top), size = Size(body, height))
+            val shown = bars(candles, first, last, minutes?.let { it * 60_000L }, stepMs)
+            val chosen = shown.firstOrNull { selected in it.from..it.to } ?: shown.last()
+            val lastBar = candles.lastIndex in first..last
+            // The scale: the bars and the VWAP on screen, the latest price, and the previous close when it is near.
+            val averages = (first..last).mapNotNull { vwap.getOrNull(it) }
+            var low = minOf(shown.minOf { it.low }, averages.minOrNull() ?: Double.MAX_VALUE)
+            var high = maxOf(shown.maxOf { it.high }, averages.maxOrNull() ?: -Double.MAX_VALUE)
+            if (lastBar) { low = minOf(low, latest); high = maxOf(high, latest) }
+            if (previousClose != null && previousClose > low - (high - low) * 0.3 && previousClose < high + (high - low) * 0.3) {
+                low = minOf(low, previousClose); high = maxOf(high, previousClose)
+            }
+            if (high - low < 1e-9) { high += 0.5; low -= 0.5 }
+            val pad = (high - low) * 0.07
+            low -= pad
+            high += pad
+            val reference = previousClose ?: candles.first().open
+            val tagColour = when {
+                candles.last().session == Session.OVERNIGHT -> OVERNIGHT
+                latest >= reference -> CANDLE_UP
+                else -> CANDLE_DOWN
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Readout(chosen, vwap.getOrNull(chosen.to), stepMs != null, minutes != null, format, zone, locale, context)
+                Row(modifier = Modifier.fillMaxWidth().height(240.dp)) {
+                    Canvas(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clipToBounds()
+                            .chartGestures(candles, window) { fraction -> selected = window.at((fraction * pickScale).coerceAtMost(1f)).toInt().coerceIn(0, candles.lastIndex) }
+                    ) {
+                        val top = 14.dp.toPx()
+                        val plot = 176.dp.toPx()
+                        val volTop = top + plot + 6.dp.toPx()
+                        val volH = 28.dp.toPx()
+                        val slot = (size.width - room.dp.toPx()) / window.count
+                        fun xi(i: Int) = (i + 0.5f - window.start) * slot
+                        fun xb(b: Bar) = (xi(b.from) + xi(b.to)) / 2
+                        fun y(v: Double) = top + (1 - ((v - low) / (high - low)).toFloat()) * plot
+                        // Sessions: shaded outside regular hours, each named above the chart.
+                        val runs = mutableListOf<Pair<Int, Int>>()
+                        shown.forEachIndexed { k, b -> if (k == 0 || b.session != shown[k - 1].session) runs += k to k else runs[runs.lastIndex] = runs.last().first to k }
+                        val banded = shown.any { it.session != Session.REGULAR }
+                        runs.forEachIndexed { r, (a, z) ->
+                            val left = xi(shown[a].from) - slot / 2
+                            val right = xi(shown[z].to) + slot / 2
+                            val session = shown[a].session
+                            if (session != Session.REGULAR) {
+                                drawRect(
+                                    if (session == Session.OVERNIGHT) OVERNIGHT.copy(alpha = 0.09f) else Color.White.copy(alpha = 0.035f),
+                                    topLeft = Offset(left, top), size = Size(right - left, volTop + volH - top),
+                                )
+                            }
+                            if (r > 0) drawLine(Color.White.copy(alpha = 0.12f), Offset(left, top), Offset(left, volTop + volH), strokeWidth = 1.dp.toPx())
+                            if (banded) {
+                                val name = measurer.measure(session.label, small.copy(color = if (session == Session.OVERNIGHT) Color(0xFFC9BFFF) else muted))
+                                if (name.size.width < right - left - 4.dp.toPx()) drawText(name, topLeft = Offset(maxOf(left, 0f) + 4.dp.toPx(), 0f))
+                            }
+                        }
+                        // Grid.
+                        for (k in 0..3) {
+                            val yy = y(low + (high - low) * (0.1 + 0.8 * k / 3))
+                            drawLine(Color.White.copy(alpha = 0.05f), Offset(0f, yy), Offset(size.width, yy), strokeWidth = 1.dp.toPx())
+                        }
+                        // The previous close, dashed, and the latest price, dotted, across the chart.
+                        val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
+                        if (previousClose != null && previousClose in low..high) {
+                            drawLine(Color(0xFF9AA3B2), Offset(0f, y(previousClose)), Offset(size.width, y(previousClose)), strokeWidth = 1.dp.toPx(), pathEffect = dash)
+                        }
+                        if (latest in low..high) {
+                            drawLine(tagColour.copy(alpha = 0.8f), Offset(0f, y(latest)), Offset(size.width, y(latest)), strokeWidth = 1.dp.toPx(),
+                                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 3.dp.toPx())))
+                        }
+                        // Volume: each feed on its own scale (eToro's overnight volume is not the exchange's).
+                        val maxDay = shown.filter { it.session != Session.OVERNIGHT }.maxOfOrNull { it.volume }?.coerceAtLeast(1) ?: 1
+                        val maxNight = shown.filter { it.session == Session.OVERNIGHT }.maxOfOrNull { it.volume }?.coerceAtLeast(1) ?: 1
+                        val bodyWidth = { b: Bar -> ((b.to - b.from + 1) * slot * 0.62f).coerceAtLeast(1.2.dp.toPx()) }
+                        shown.forEach { b ->
+                            if (b.volume <= 0) return@forEach
+                            val h = volH * b.volume / (if (b.session == Session.OVERNIGHT) maxNight else maxDay).toFloat()
+                            val w = bodyWidth(b)
+                            drawRoundRect((if (b.close >= b.open) CANDLE_UP else CANDLE_DOWN).copy(alpha = 0.35f), Offset(xb(b) - w / 2, volTop + volH - h), Size(w, h), CornerRadius(minOf(1.5.dp.toPx(), w / 4)))
+                        }
+                        // Candles: a light wick and a rounded body.
+                        shown.forEach { b ->
+                            val colour = if (b.close >= b.open) CANDLE_UP else CANDLE_DOWN
+                            val x = xb(b)
+                            drawLine(colour.copy(alpha = 0.7f), Offset(x, y(b.high)), Offset(x, y(b.low)), strokeWidth = 1.dp.toPx())
+                            val w = bodyWidth(b)
+                            val t = y(maxOf(b.open, b.close))
+                            val h = (y(minOf(b.open, b.close)) - t).coerceAtLeast(1.2.dp.toPx())
+                            drawRoundRect(colour, Offset(x - w / 2, t), Size(w, h), CornerRadius(minOf(1.6.dp.toPx(), w / 4)))
+                        }
+                        // VWAP, broken where it starts again or has no value.
+                        val path = Path()
+                        var drawing = false
+                        for (i in (first - 1).coerceAtLeast(0)..minOf(last + 1, vwap.lastIndex)) {
+                            val v = vwap[i]
+                            if (v == null || i in vwapStarts) drawing = false
+                            if (v == null) continue
+                            if (drawing) path.lineTo(xi(i), y(v)) else path.moveTo(xi(i), y(v))
+                            drawing = true
+                        }
+                        drawPath(path, VWAP_DARK, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                        // The chosen bar: a guide through it and a ring at its close.
+                        run {
+                            val x = xb(chosen)
+                            drawLine(Color.White.copy(alpha = 0.45f), Offset(x, top), Offset(x, volTop + volH), strokeWidth = 1.dp.toPx())
+                            drawCircle(Color.White, 4.dp.toPx(), Offset(x, y(chosen.close)))
+                            drawCircle(if (chosen.close >= chosen.open) CANDLE_UP else CANDLE_DOWN, 2.5.dp.toPx(), Offset(x, y(chosen.close)))
+                        }
+                        // Times along the bottom: whole hours (with the day where it changes) for the
+                        // intraday ranges, else four dates.
+                        val labelY = volTop + volH + 3.dp.toPx()
+                        val edge = 16.dp.toPx()
+                        fun label(text: String, x: Float) {
+                            val m = measurer.measure(text, small)
+                            drawText(m, topLeft = Offset((x - m.size.width / 2f).coerceIn(0f, size.width - m.size.width), labelY))
+                        }
+                        if (minutes != null) {
+                            val local = (first..last).map { java.time.Instant.ofEpochMilli(candles[it].time).atZone(zone) }
+                            val gap = 46.dp.toPx()
+                            val hourly = listOf(1, 2, 3, 4, 6).firstOrNull { step ->
+                                val xs = local.indices.filter { local[it].minute == 0 && local[it].hour % step == 0 }.map { xi(first + it) }
+                                xs.zipWithNext().all { (a, b) -> b - a >= gap }
+                            }
+                            val ticks = if (hourly != null) local.indices.filter { local[it].minute == 0 && local[it].hour % hourly == 0 }
+                            else local.indices.filter { it == 0 || local[it].toLocalDate() != local[it - 1].toLocalDate() }
+                            val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h a"
+                            var lastX = -gap
+                            var lastDate: java.time.LocalDate? = null
+                            ticks.forEach { k ->
+                                val x = xi(first + k)
+                                if (x < edge || x > size.width - edge || x - lastX < gap) return@forEach
+                                val at = local[k]
+                                val day = at.format(DateTimeFormatter.ofPattern("EEE", locale))
+                                val text = if (hourly == null) day
+                                else (if (lastDate != null && at.toLocalDate() != lastDate) "$day " else "") + at.format(DateTimeFormatter.ofPattern(pattern, locale))
+                                label(text, x)
+                                lastX = x
+                                lastDate = at.toLocalDate()
+                            }
+                        } else {
+                            val visible = (last - first).coerceAtLeast(1)
+                            listOf(0, visible / 3, 2 * visible / 3, visible).distinct().forEach { k -> label(dateLabel(candles[first + k].time), xi(first + k)) }
+                        }
                     }
-                    val path = Path()
-                    var drawing = false
-                    for (i in (first - 1).coerceAtLeast(0)..minOf(last + 1, vwap.lastIndex)) {
-                        val v = vwap[i]
-                        if (v == null || i in vwapStarts) drawing = false
-                        if (v == null) continue
-                        if (drawing) path.lineTo(x(i), y(v)) else path.moveTo(x(i), y(v))
-                        drawing = true
-                    }
-                    drawPath(path, vwapColour, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-                    // The chosen candle: a guide through it and a ring at its close.
-                    if (selected in first..last) {
-                        val c = candles[selected]
-                        drawLine(Color.White.copy(alpha = 0.45f), Offset(x(selected), 0f), Offset(x(selected), size.height), strokeWidth = 1.dp.toPx())
-                        drawLine(Color.White.copy(alpha = 0.25f), Offset(0f, y(c.close)), Offset(size.width, y(c.close)), strokeWidth = 1.dp.toPx())
-                        drawCircle(Color.White, 4.dp.toPx(), Offset(x(selected), y(c.close)))
-                        drawCircle(if (c.close >= c.open) UP else DOWN, 2.5.dp.toPx(), Offset(x(selected), y(c.close)))
+                    // The price scale, with tags for the previous close and the latest price.
+                    Canvas(modifier = Modifier.width(axisWidth).fillMaxHeight()) {
+                        val top = 14.dp.toPx()
+                        val plot = 176.dp.toPx()
+                        fun y(v: Double) = top + (1 - ((v - low) / (high - low)).toFloat()) * plot
+                        val tags = listOfNotNull(previousClose?.takeIf { it in low..high }?.let { y(it) }, latest.takeIf { it in low..high }?.let { y(it) })
+                        for (k in 0..3) {
+                            val v = low + (high - low) * (0.1 + 0.8 * k / 3)
+                            val yy = y(v)
+                            if (tags.all { kotlin.math.abs(it - yy) > 14.dp.toPx() }) {
+                                val m = measurer.measure(format(v), small)
+                                drawText(m, topLeft = Offset(6.dp.toPx(), yy - m.size.height / 2f))
+                            }
+                        }
+                        fun tag(v: Double, colour: Color, bold: Boolean) {
+                            val m = measurer.measure(format(v), small.copy(color = Color.White, fontWeight = if (bold) FontWeight.Medium else FontWeight.Normal))
+                            val h = 16.dp.toPx()
+                            drawRoundRect(colour, Offset(2.dp.toPx(), y(v) - h / 2), Size(size.width - 2.dp.toPx(), h), CornerRadius(5.dp.toPx()))
+                            drawText(m, topLeft = Offset(6.dp.toPx(), y(v) - m.size.height / 2f))
+                        }
+                        if (previousClose != null && previousClose in low..high) tag(previousClose, TAG_GREY, bold = false)
+                        if (latest in low..high) tag(latest, tagColour, bold = true)
                     }
                 }
-                // Four labels along the bottom, for the part on screen.
-                val visible = (last - first).coerceAtLeast(1)
-                AxisLabelsAt(listOf(0, visible / 3, 2 * visible / 3, visible).distinct().map { k ->
-                    val i = first + k
-                    ((i + 0.5f - window.start) / window.count).coerceIn(0f, 1f) to label(i)
-                })
             }
         }
         ZoomHint(window)
+    }
+}
+
+/** The chosen bar's figures, above the chart: when, its session, and open, high, low, close and VWAP. */
+@Composable
+private fun Readout(
+    bar: Bar, vwap: Double?, grouped: Boolean, intraday: Boolean, format: (Double) -> String,
+    zone: ZoneId, locale: Locale, context: Context,
+) {
+    val start = Instant.ofEpochMilli(bar.time)
+    val time = when {
+        !intraday -> dayAndDate(start.atZone(zone).toLocalDate())
+        grouped -> "${dayAndDate(start.atZone(zone).toLocalDate())} ${clock(context, start)}–${clock(context, Instant.ofEpochMilli(bar.end))}"
+        else -> "${dayAndDate(start.atZone(zone).toLocalDate())} ${clock(context, start)}"
+    }
+    Surface(color = READOUT_BG, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(time, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                if (intraday) {
+                    val night = bar.session == com.ataglanceplus.live.FinanceSource.Session.OVERNIGHT
+                    Text(
+                        bar.session.label, fontSize = 10.5.sp,
+                        color = if (night) Color(0xFFC9BFFF) else Color(0xFFCFD6E2),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (night) OVERNIGHT.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.08f))
+                            .padding(horizontal = 7.dp, vertical = 1.dp),
+                    )
+                }
+            }
+            Row {
+                listOfNotNull("Open" to bar.open, "High" to bar.high, "Low" to bar.low, "Close" to bar.close, vwap?.let { "VWAP" to it }).forEach { (name, value) ->
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(name, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        Text(format(value), fontSize = 13.5.sp, fontWeight = FontWeight.Medium, maxLines = 1, softWrap = false)
+                    }
+                }
+            }
+        }
     }
 }
 

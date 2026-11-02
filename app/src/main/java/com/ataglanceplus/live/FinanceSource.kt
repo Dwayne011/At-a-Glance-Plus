@@ -190,8 +190,11 @@ object FinanceSource {
     data class VwapSettings(val source: VwapSource, val anchor: VwapAnchor, val extendedHours: Boolean)
 
     /**
-     * Volume-weighted average price at each of [candles] (null before any volume), and the
-     * indices where it starts again. [offsetMs] is the exchange's offset from UTC.
+     * Volume-weighted average price at each of [candles], and the indices where it starts again.
+     * [offsetMs] is the exchange's offset from UTC. A candle the feed reports no volume for (Yahoo
+     * gives none outside regular hours) has no average, so the line is not drawn flat through it.
+     * The overnight candles come from another feed, whose volume cannot be added to Yahoo's, so
+     * the average starts again where they begin and end.
      */
     fun vwap(candles: List<Candle>, offsetMs: Long, source: VwapSource, anchor: VwapAnchor): Pair<List<Double?>, Set<Int>> {
         var period = Long.MIN_VALUE
@@ -199,28 +202,55 @@ object FinanceSource {
         var volume = 0L
         val starts = mutableSetOf(0)
         val values = candles.mapIndexed { i, c ->
-            val date = java.time.LocalDate.ofEpochDay(Math.floorDiv(c.time + offsetMs, 86_400_000L))
+            // The overnight session from 20:00 belongs to the next trading day, so its average
+            // does not start again at midnight.
+            val local = c.time + offsetMs
+            val lateEvening = c.session == Session.OVERNIGHT && Math.floorMod(local, 86_400_000L) >= 20 * 3_600_000L
+            val date = java.time.LocalDate.ofEpochDay(Math.floorDiv(local, 86_400_000L) + if (lateEvening) 1 else 0)
             val current = anchor.period(date)
-            if (current != period) {
+            val feedChanged = i > 0 && (c.session == Session.OVERNIGHT) != (candles[i - 1].session == Session.OVERNIGHT)
+            if (current != period || feedChanged) {
                 if (period != Long.MIN_VALUE) starts += i
                 period = current
                 priceVolume = 0.0
                 volume = 0L
             }
+            if (c.volume <= 0) return@mapIndexed null
             priceVolume += source.of(c) * c.volume
             volume += c.volume
-            if (volume > 0) priceVolume / volume else null
+            priceVolume / volume
         }
         return values to starts
     }
 
-    /** A chart range for the dashboard, and the step between its prices. */
-    enum class Range(val label: String, val range: String, val interval: String) {
-        DAY("1D", "1d", "5m"), WEEK("5D", "5d", "30m"), MONTH("1M", "1mo", "1d"), HALF_YEAR("6M", "6mo", "1d"), YEAR("1Y", "1y", "1wk"),
+    /** A chart range for the dashboard, and the step between its prices ([minutes] for the intraday ones, with eToro's name for it). */
+    enum class Range(val label: String, val range: String, val interval: String, val minutes: Int?, val etoroInterval: String?) {
+        DAY("1D", "1d", "5m", 5, "FiveMinutes"), WEEK("5D", "5d", "30m", 30, "ThirtyMinutes"),
+        MONTH("1M", "1mo", "1d", null, null), HALF_YEAR("6M", "6mo", "1d", null, null), YEAR("1Y", "1y", "1wk", null, null),
     }
 
-    /** One candle: its start (epoch ms), open, high, low, close and volume. */
-    data class Candle(val time: Long, val open: Double, val high: Double, val low: Double, val close: Double, val volume: Long)
+    /** Which part of the trading day a candle is from (US listings; elsewhere every candle is [REGULAR]). */
+    enum class Session(val label: String) { PRE("Pre-market"), REGULAR("Regular"), POST("After hours"), OVERNIGHT("Overnight") }
+
+    /** One candle: its start (epoch ms), open, high, low, close and volume (0 where the feed reports none), and its session. */
+    data class Candle(
+        val time: Long, val open: Double, val high: Double, val low: Double, val close: Double, val volume: Long,
+        val session: Session = Session.REGULAR,
+    )
+
+    private val NEW_YORK: java.time.ZoneId = java.time.ZoneId.of("America/New_York")
+
+    /** The US session at [time]: pre-market 04:00, regular 09:30, after hours 16:00, overnight 20:00 to 04:00, New York time. */
+    fun usSession(time: Long): Session {
+        val at = java.time.Instant.ofEpochMilli(time).atZone(NEW_YORK)
+        val minutes = at.hour * 60 + at.minute
+        return when {
+            minutes < 4 * 60 || minutes >= 20 * 60 -> Session.OVERNIGHT
+            minutes < 9 * 60 + 30 -> Session.PRE
+            minutes < 16 * 60 -> Session.REGULAR
+            else -> Session.POST
+        }
+    }
 
     /** A stock over a [Range], with the day's figures, for the dashboard. */
     data class History(
@@ -238,6 +268,12 @@ object FinanceSource {
         val yearHigh: Double?,
         val volume: Long?,
         val exchangeName: String,
+        /** The price the chart's tag shows: the latest (overnight or after hours) with extended hours on, else the official close or live price. */
+        val latest: Double,
+        /** Whether [latest] is from outside regular hours. */
+        val latestExtended: Boolean,
+        /** Whether the chart has overnight candles (from eToro). */
+        val hasOvernight: Boolean,
     ) {
         /** The change over the range: from the day's previous close for one day, else from the first price. */
         val rangeChange: Double get() = quote.price - (points.firstOrNull()?.second ?: quote.previousClose)
@@ -245,10 +281,10 @@ object FinanceSource {
 
     /**
      * [symbol] over [range], or null if the feed did not answer. With extended hours in [settings],
-     * the intraday ranges include pre-market and after-hours candles (the feed has none for the
-     * overnight session).
+     * the intraday ranges of a US listing include pre-market and after-hours candles (Yahoo's) and
+     * the overnight session's (eToro's, see [EtoroCandles]), from the range's start until now.
      */
-    fun history(symbol: String, range: Range, settings: VwapSettings): History? {
+    fun history(context: android.content.Context, symbol: String, range: Range, settings: VwapSettings): History? {
         val quote = fetch(symbol) ?: return null
         val prePost = settings.extendedHours && range.interval.endsWith("m")
         val url = URL(
@@ -277,11 +313,25 @@ object FinanceSource {
             val highs = column("high")
             val lows = column("low")
             val volumes = column("volume")
-            val candles = (0 until minOf(times?.length() ?: 0, closes?.length() ?: 0)).mapNotNull { i ->
+            val us = meta.optString("exchangeTimezoneName") == "America/New_York"
+            val yahoo = (0 until minOf(times?.length() ?: 0, closes?.length() ?: 0)).mapNotNull { i ->
                 if (listOf(opens, highs, lows, closes).any { it == null || it.isNull(i) }) return@mapNotNull null
-                Candle(times!!.getLong(i) * 1000, opens!!.getDouble(i), highs!!.getDouble(i), lows!!.getDouble(i), closes!!.getDouble(i),
-                    volumes?.takeUnless { it.isNull(i) }?.getLong(i) ?: 0L)
+                val time = times!!.getLong(i) * 1000
+                Candle(time, opens!!.getDouble(i), highs!!.getDouble(i), lows!!.getDouble(i), closes!!.getDouble(i),
+                    volumes?.takeUnless { it.isNull(i) }?.getLong(i) ?: 0L,
+                    // Without extended hours every candle is the regular session's, the last one
+                    // being the 16:00 closing print (the official close), not after hours.
+                    if (us && prePost) usSession(time) else Session.REGULAR)
             }
+            // The overnight session, which Yahoo does not carry, from eToro: its candles in the
+            // overnight hours from the range's first candle on.
+            val overnight = if (prePost && us && range.etoroInterval != null && yahoo.isNotEmpty()) {
+                val count = if (range == Range.DAY) 600 else 1000
+                EtoroCandles.instrumentId(context, symbol)?.let { id -> EtoroCandles.candles(id, range.etoroInterval, count) }.orEmpty()
+                    .filter { it.time >= yahoo.first().time && usSession(it.time) == Session.OVERNIGHT }
+            } else emptyList()
+            val taken = yahoo.map { it.time }.toHashSet()
+            val candles = (yahoo + overnight.filter { it.time !in taken }).sortedBy { it.time }
             val (average, starts) = vwap(candles, meta.optLong("gmtoffset") * 1000, settings.source, settings.anchor)
             fun number(key: String) = meta.optDouble(key).takeUnless { it.isNaN() }
             History(
@@ -297,6 +347,11 @@ object FinanceSource {
                 yearHigh = number("fiftyTwoWeekHigh"),
                 volume = meta.optLong("regularMarketVolume").takeIf { it > 0 },
                 exchangeName = meta.optString("fullExchangeName").ifEmpty { quote.exchange },
+                // The tag matches the price at the top of the screen; with extended hours off, the
+                // official close (not the last 5-minute candle's, which misses the closing auction).
+                latest = if (prePost) quote.extended?.price ?: quote.price else quote.price,
+                latestExtended = prePost && quote.extended != null,
+                hasOvernight = overnight.isNotEmpty(),
             )
         } catch (e: Exception) {
             Log.w(TAG, "history failed for $symbol", e)

@@ -427,3 +427,35 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 - Checked by rendering the real cards (Robolectric, not kept in the repo). Every tile's corners
   fall inside the card's, nothing is clipped by a parent, and rows are aligned, including on the
   always-on display and at 130% text.
+
+## 0.35.0: stock chart redrawn, with the overnight session
+
+- Mockups approved (the Clean style). The stock dashboard's candle chart was redrawn:
+  - Candles are grouped by the clock (15 minutes, an hour…) until each bar is at least 3.5dp
+    wide, so the whole 1D chart with extended hours shows 15-minute candles. Zooming in brings
+    back the 5-minute ones.
+  - Softer green and red, rounded bodies and lighter wicks.
+  - The pre-market, after-hours and overnight sessions are shaded and named.
+  - A price scale on the right, the previous close dashed (1D), and a tag on the latest price
+    (the price at the top of the screen; purple overnight).
+  - Volume bars, with each feed on its own scale.
+  - Times at whole hours, with the day where it changes; 5D shows days.
+  - A small gap after the last candle, and the readout as a compact box (time, session, open,
+    high, low, close, VWAP).
+- The overnight session (20:00–04:00 New York time), which Yahoo's feed does not carry, comes
+  from eToro's public candle feed (the one its web charts use; no keys). It applies to US
+  listings with extended hours on. The ticker is matched through eToro's public instrument
+  list, read once a month into a small index on the phone. eToro's prices are its own quotes:
+  on AAPL they were within 3¢ of Yahoo's in regular hours on average (wider in pre-market).
+- Data fixes:
+  - Yahoo reports no volume outside regular hours, so the VWAP used to run flat through
+    pre-market and after hours. It now leaves out candles with no reported volume. It also
+    starts again where the overnight candles (another feed) begin and end, and the overnight
+    session from 20:00 counts as the next trading day, so the VWAP does not restart at midnight.
+  - The price tag shows the official close (or the latest extended-hours price), not the last
+    5-minute candle's close, which misses the closing auction (344.80 against 344.63 on AAPL).
+  - With extended hours off, Yahoo's final 16:00 closing-print candle counts as the regular
+    session, not after hours.
+- Checked with live AAPL data in a temporary Robolectric test (not kept). Candles are strictly
+  in time order. Pre-market 66 and after hours 49 (no VWAP), regular 78 and overnight 55 candles
+  (with VWAP). The dashboard was rendered with extended hours on and off.
