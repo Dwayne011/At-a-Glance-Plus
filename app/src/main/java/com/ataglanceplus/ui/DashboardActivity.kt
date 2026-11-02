@@ -64,9 +64,11 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -747,25 +749,46 @@ private fun StockDashboard(initial: String) {
     var symbol by remember { mutableStateOf(initial) }
     var range by remember { mutableStateOf(com.ataglanceplus.live.FinanceSource.Range.DAY) }
     val refresh = LocalRefresh.current
-    var shown by remember { mutableStateOf<Pair<String, Any>?>(null) }
+    var shown by remember { mutableStateOf<Triple<String, Any, Int?>?>(null) }
     var vwapSettings by remember { mutableStateOf(Prefs.financeVwap(context)) }
     var editingVwap by remember { mutableStateOf(false) }
-    val load by produceState<Load<com.ataglanceplus.live.FinanceSource.History>>(Load.Loading, symbol, range, vwapSettings, refresh.generation) {
-        // A new stock or range starts from "Loading…"; a refresh keeps the chart until the new one is in.
-        if (shown != (symbol to range)) value = Load.Loading
-        shown = symbol to range
-        value = withContext(Dispatchers.IO) {
-            com.ataglanceplus.live.FinanceSource.history(context, symbol, range, vwapSettings)?.let { Load.Ready(it) }
-                ?: Load.Missing("Yahoo Finance did not answer. Try again in a moment.")
+    // The candles' size on the intraday ranges: null for Auto (grouped to fit), else 5, 30 or 60 minutes.
+    var candleSize by remember { mutableStateOf<Int?>(null) }
+    // Live while the screen is open and in front: a new reading every 15 seconds. Nothing runs
+    // once the user leaves it, switches app or turns the screen off.
+    var tick by remember { mutableIntStateOf(0) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        var returning = false
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            // Back on the screen after leaving it: read the price at once rather than in 15 seconds.
+            if (returning) tick++
+            returning = true
+            while (true) {
+                kotlinx.coroutines.delay(LIVE_REFRESH_MS)
+                tick++
+            }
         }
+    }
+    val load by produceState<Load<com.ataglanceplus.live.FinanceSource.History>>(Load.Loading, symbol, range, vwapSettings, candleSize, refresh.generation, tick) {
+        // A new stock, range or candle size starts from "Loading…"; a refresh keeps the chart until
+        // the new one is in, and keeps it if the feed does not answer this time.
+        val view = Triple(symbol, range, candleSize)
+        val fresh = shown == view
+        if (!fresh) value = Load.Loading
+        shown = view
+        val next = withContext(Dispatchers.IO) { com.ataglanceplus.live.FinanceSource.history(context, symbol, range, vwapSettings, candleSize) }
+        value = next?.let { Load.Ready(it) }
+            ?: (value.takeIf { fresh && it is Load.Ready } ?: Load.Missing("Yahoo Finance did not answer. Try again in a moment."))
         refresh.loaded = refresh.generation
     }
     // The user's eToro positions in this stock, for "What if" (refreshed when over a minute old).
-    val etoro by produceState<com.ataglanceplus.live.EtoroSource.Holding?>(null, symbol, refresh.generation) {
+    val etoro by produceState<com.ataglanceplus.live.EtoroSource.Holding?>(null, symbol, refresh.generation, tick) {
         value = withContext(Dispatchers.IO) {
             val source = com.ataglanceplus.live.EtoroSource
             val current = source.portfolio.value
-            if (source.hasKeys(context) && (current == null || System.currentTimeMillis() - current.at > 60_000)) source.refresh(context)
+            // Kept as fresh as the price, so "What if" measures from a price and a P/L of the same moment.
+            if (source.hasKeys(context) && (current == null || System.currentTimeMillis() - current.at > LIVE_REFRESH_MS)) source.refresh(context)
             val wanted = setOf(symbol.uppercase(), symbol.uppercase().replace('-', '.'))
             source.portfolio.value?.holdings?.firstOrNull { it.symbol?.uppercase() in wanted && it.open.isNotEmpty() }
         }
@@ -812,6 +835,11 @@ private fun StockDashboard(initial: String) {
             FinancePanel("Price") {
                 val ranges = com.ataglanceplus.live.FinanceSource.Range.entries
                 SegmentedPills(ranges.map { it.label }, range.ordinal) { range = ranges[it] }
+                // Candle size on 1D and 5D: Auto groups them to fit; 5m, 30m and 1h fix it.
+                if (range.minutes != null) {
+                    val sizes = listOf<Int?>(null, 5, 30, 60)
+                    SegmentedPills(listOf("Auto", "5m", "30m", "1h"), sizes.indexOf(candleSize).coerceAtLeast(0)) { candleSize = sizes[it] }
+                }
                 // Pre-market, after hours and overnight on the 1D and 5D charts, at a tap (it was
                 // only in the VWAP dialog, so it was easy to miss that it was off).
                 if (range.minutes != null) {
@@ -842,7 +870,9 @@ private fun StockDashboard(initial: String) {
                         candles = h.candles,
                         vwap = h.vwap,
                         vwapStarts = h.vwapStarts,
-                        minutes = range.minutes,
+                        minutes = h.minutes,
+                        candleMinutes = candleSize?.takeIf { range.minutes != null },
+                        viewKey = "$symbol/${range.name}/$candleSize/${vwapSettings.extendedHours}",
                         previousClose = q.previousClose.takeIf { range == com.ataglanceplus.live.FinanceSource.Range.DAY },
                         latest = h.latest,
                         format = { money(it) },
@@ -960,7 +990,9 @@ private fun WhatIfPanels(
     if (positions.isEmpty()) return
     val WhatIf = com.ataglanceplus.live.WhatIf
     var targets by remember(symbol) { mutableStateOf(Prefs.financeTargets(context, symbol)) }
-    var price by remember(symbol, now) { androidx.compose.runtime.mutableDoubleStateOf(now) }
+    // The chosen price; until the user picks one (or after "Now"), it follows the live price.
+    var chosen by remember(symbol) { mutableStateOf<Double?>(null) }
+    val price = chosen ?: now
     var adding by remember { mutableStateOf(false) }
     var typing by remember { mutableStateOf(false) }
     val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
@@ -1000,9 +1032,9 @@ private fun WhatIfPanels(
                 "$" + money(price), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.clickable { typing = true },
             )
-            Text(if (price == now) " now" else " if", color = SportSub, fontSize = 13.sp, modifier = Modifier.padding(bottom = 5.dp).weight(1f))
+            Text(if (chosen == null) " now" else " if", color = SportSub, fontSize = 13.sp, modifier = Modifier.padding(bottom = 5.dp).weight(1f))
             val move = price - now
-            if (price != now) {
+            if (chosen != null && price != now) {
                 Text(
                     (if (move >= 0) "▲ " else "▼ ") + money(kotlin.math.abs(move)) + String.format(locale, " (%+.2f%%) from now", 100 * move / now),
                     color = if (move >= 0) UP_TEXT else DOWN_TEXT, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 5.dp),
@@ -1015,13 +1047,13 @@ private fun WhatIfPanels(
                     label, textAlign = TextAlign.Center, fontSize = 13.sp, fontWeight = FontWeight.Medium,
                     color = when { step <= -0.1 -> DOWN_TEXT; step >= 0.1 -> UP_TEXT; else -> Color.White },
                     modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(SportCard)
-                        .clickable { price = cents((price + step).coerceAtLeast(0.01)) }.padding(vertical = 8.dp),
+                        .clickable { chosen = cents((price + step).coerceAtLeast(0.01)) }.padding(vertical = 8.dp),
                 )
             }
         }
         androidx.compose.material3.Slider(
             value = price.coerceIn(low, high).toFloat(),
-            onValueChange = { price = cents(it.toDouble()) },
+            onValueChange = { chosen = cents(it.toDouble()) },
             valueRange = low.toFloat()..high.toFloat(),
             colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = SportAccent, activeTrackColor = SportAccent, inactiveTrackColor = Color(0xFF2A303D)),
         )
@@ -1038,7 +1070,7 @@ private fun WhatIfPanels(
                         modifier = Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp)).background(SportCard)
                             .then(if (on) Modifier.border(1.5.dp, SportAccent, RoundedCornerShape(12.dp)) else Modifier)
                             .then(Modifier.combinedClickable(
-                                onClick = { if (preset == null) adding = true else price = cents(preset.price) },
+                                onClick = { if (preset == null) adding = true else chosen = if (preset.label == "Now") null else cents(preset.price) },
                                 onLongClick = {
                                     if (preset?.target == true) {
                                         targets = targets - preset.price
@@ -1112,7 +1144,7 @@ private fun WhatIfPanels(
                 targets = (targets + cents(value)).distinct().sorted()
                 Prefs.setFinanceTargets(context, symbol, targets)
             }
-            price = cents(value)
+            chosen = cents(value)
             adding = false
             typing = false
         }
@@ -1145,6 +1177,9 @@ private fun PriceDialog(title: String, initial: String, onDismiss: () -> Unit, o
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
+
+/** How often the stock screen reads the price again while it is open and in front. */
+private const val LIVE_REFRESH_MS = 15_000L
 
 /** Up and down as text on the dark screen: the same hues, lifted to read on it. */
 private val UP_TEXT = Color(0xFF5BD35B)
@@ -1288,6 +1323,10 @@ private fun CandleChart(
     vwap: List<Double?>,
     vwapStarts: Set<Int>,
     minutes: Int?,
+    /** The user's chosen candle size in minutes, or null to group automatically. */
+    candleMinutes: Int?,
+    /** Names the view, so a refresh keeps its zoom and chosen candle and a new view starts afresh. */
+    viewKey: String,
     previousClose: Double?,
     latest: Double,
     format: (Double) -> String,
@@ -1297,8 +1336,19 @@ private fun CandleChart(
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
-    var selected by remember(candles) { mutableIntStateOf(candles.lastIndex) }
-    val window = remember(candles.size, candles.firstOrNull()?.time) { ChartWindow(candles.size.toFloat(), minOf(12f, candles.size.toFloat())) }
+    // Kept across refreshes of the same view: the zoom (following new candles when it shows the
+    // latest) and the chosen candle (moving on to the newest when it was on the latest).
+    val firstTime = candles.firstOrNull()?.time
+    var selected by remember(viewKey, firstTime) { mutableIntStateOf(candles.lastIndex) }
+    var lastSeen by remember(viewKey, firstTime) { mutableIntStateOf(candles.lastIndex) }
+    val window = remember(viewKey, firstTime) { ChartWindow(candles.size.toFloat(), minOf(12f, candles.size.toFloat())) }
+    if (lastSeen != candles.lastIndex || window.total != candles.size.toFloat()) {
+        SideEffect {
+            if (selected == lastSeen || selected > candles.lastIndex) selected = candles.lastIndex
+            lastSeen = candles.lastIndex
+            window.resize(candles.size.toFloat())
+        }
+    }
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val small = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, color = muted)
@@ -1323,7 +1373,8 @@ private fun CandleChart(
             // extended hours shows 15-minute bars; zoomed in, the 5-minute candles).
             val perCandle = (plotWidth - room) / window.count
             val stepMs = minutes?.let { m ->
-                val step = listOf(5, 10, 15, 30, 60, 120, 240).filter { it >= m && it % m == 0 }.firstOrNull { perCandle * (it / m) >= 3.5f } ?: 240
+                val step = candleMinutes?.takeIf { it >= m && it % m == 0 }
+                    ?: listOf(5, 10, 15, 30, 60, 120, 240).filter { it >= m && it % m == 0 }.firstOrNull { perCandle * (it / m) >= 3.5f } ?: 240
                 if (step == m) null else step * 60_000L
             }
             val shown = bars(candles, first, last, minutes?.let { it * 60_000L }, stepMs)
@@ -1539,7 +1590,35 @@ private fun Readout(
                     }
                 }
             }
+            // The shares traded in this candle (or bar of candles). Yahoo reports none for most
+            // pre-market and after-hours candles; overnight it is eToro's own, not the exchange's.
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("Volume", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 8.dp))
+                Text(
+                    if (bar.volume > 0) java.text.NumberFormat.getIntegerInstance(locale).format(bar.volume) + " shares" else "None reported",
+                    fontSize = 13.5.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                    color = if (bar.volume > 0) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (bar.volume > 0) {
+                    Text(
+                        if (bar.session == com.ataglanceplus.live.FinanceSource.Session.OVERNIGHT) " · ${compactShares(bar.volume, locale)} on eToro" else " · ${compactShares(bar.volume, locale)}",
+                        fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                    )
+                }
+            }
         }
+    }
+}
+
+/** A share count in short form: 950, 12.4K, 1.24M, 3.1B. */
+private fun compactShares(shares: Long, locale: Locale): String {
+    fun short(value: Double, suffix: String): String =
+        String.format(locale, if (value < 10) "%.2f" else if (value < 100) "%.1f" else "%.0f", value) + suffix
+    return when {
+        shares >= 999_500_000L -> short(shares / 1e9, "B")
+        shares >= 999_500L -> short(shares / 1e6, "M")
+        shares >= 10_000L -> short(shares / 1e3, "K")
+        else -> java.text.NumberFormat.getIntegerInstance(locale).format(shares)
     }
 }
 
@@ -1874,10 +1953,31 @@ private fun AxisLabels(axis: List<Pair<Int, String>>, count: Int) {
  * The part of a chart on screen, for pinch-to-zoom: [start] and [count] in the chart's own units
  * (candles, or a 0–1 share of the time span), never fewer than [minVisible] or more than [total].
  */
-private class ChartWindow(val total: Float, private val minVisible: Float) {
+private class ChartWindow(initialTotal: Float, private val minVisible: Float) {
+    var total by androidx.compose.runtime.mutableFloatStateOf(initialTotal)
+        private set
     var start by androidx.compose.runtime.mutableFloatStateOf(0f)
-    var count by androidx.compose.runtime.mutableFloatStateOf(total)
+    var count by androidx.compose.runtime.mutableFloatStateOf(initialTotal)
     val zoomed: Boolean get() = count < total * 0.999f
+
+    /**
+     * New data has [newTotal] items: the whole range stays whole; zoomed in, the view stays where
+     * it is, or moves along with the newest when it was showing them.
+     */
+    fun resize(newTotal: Float) {
+        if (newTotal == total) return
+        if (!zoomed) {
+            total = newTotal
+            start = 0f
+            count = newTotal
+            return
+        }
+        val atEnd = start + count >= total - 0.5f
+        val grown = newTotal - total
+        total = newTotal
+        count = count.coerceAtMost(newTotal)
+        start = (if (atEnd) start + grown else start).coerceIn(0f, (newTotal - count).coerceAtLeast(0f))
+    }
 
     /** Zooms by [factor] around [at] (a 0–1 share of the width), then moves by [pan] widths. */
     fun transform(factor: Float, at: Float, pan: Float) {

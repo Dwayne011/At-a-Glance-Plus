@@ -274,6 +274,8 @@ object FinanceSource {
         val latestExtended: Boolean,
         /** Whether the chart has overnight candles (from eToro). */
         val hasOvernight: Boolean,
+        /** The candles' step in minutes as fetched (intraday ranges), else null. */
+        val minutes: Int? = null,
     ) {
         /** The change over the range: from the day's previous close for one day, else from the first price. */
         val rangeChange: Double get() = quote.price - (points.firstOrNull()?.second ?: quote.previousClose)
@@ -284,14 +286,19 @@ object FinanceSource {
      * the intraday ranges of a US listing include pre-market and after-hours candles (Yahoo's) and
      * the overnight session's (eToro's, see [EtoroCandles]), from the range's start until now.
      */
-    fun history(context: android.content.Context, symbol: String, range: Range, settings: VwapSettings): History? {
+    fun history(context: android.content.Context, symbol: String, range: Range, settings: VwapSettings, candleMinutes: Int? = null): History? {
         val quote = fetch(symbol) ?: return null
         val prePost = settings.extendedHours && range.interval.endsWith("m")
+        // The step fetched: the range's own, or a finer one when the user picks smaller candles
+        // than it (5-minute candles on 5D). Coarser candles are grouped on the chart instead.
+        val minutes = range.minutes?.let { own -> if (candleMinutes != null && candleMinutes < own) candleMinutes else own }
+        val interval = minutes?.let { "${it}m" } ?: range.interval
+        val etoroInterval = when (minutes) { null -> null; 5 -> "FiveMinutes"; 30 -> "ThirtyMinutes"; else -> range.etoroInterval }
         val url = URL(
             "https://query1.finance.yahoo.com/v8/finance/chart/" +
                 // One day with extended hours asks for two, so that before the market opens the
                 // chart can show the last full day as well as this morning (see below).
-                URLEncoder.encode(symbol, "UTF-8") + "?range=${if (range == Range.DAY && prePost) "2d" else range.range}&interval=${range.interval}" +
+                URLEncoder.encode(symbol, "UTF-8") + "?range=${if (range == Range.DAY && prePost) "2d" else range.range}&interval=$interval" +
                 if (prePost) "&includePrePost=true" else ""
         )
         val connection = (url.openConnection() as HttpURLConnection).apply {
@@ -335,10 +342,10 @@ object FinanceSource {
             // The overnight session, which Yahoo does not carry, from eToro: its candles in the
             // overnight hours from the range's first candle on, and on one day of today alone,
             // the night that led into it (from 20:00 the evening before).
-            val overnight = if (prePost && us && range.etoroInterval != null && yahoo.isNotEmpty()) {
+            val overnight = if (prePost && us && etoroInterval != null && yahoo.isNotEmpty()) {
                 val count = if (range == Range.DAY) 600 else 1000
                 val from = yahoo.first().time - if (range == Range.DAY && todayOnly) 8 * 3_600_000L else 0L
-                EtoroCandles.instrumentId(context, symbol)?.let { id -> EtoroCandles.candles(id, range.etoroInterval, count) }.orEmpty()
+                EtoroCandles.instrumentId(context, symbol)?.let { id -> EtoroCandles.candles(id, etoroInterval, count) }.orEmpty()
                     .filter { it.time >= from && usSession(it.time) == Session.OVERNIGHT }
             } else emptyList()
             val taken = yahoo.map { it.time }.toHashSet()
@@ -365,6 +372,7 @@ object FinanceSource {
                 latest = if (prePost) quote.extended?.price ?: quote.price else quote.price,
                 latestExtended = prePost && quote.extended != null,
                 hasOvernight = overnight.isNotEmpty(),
+                minutes = minutes,
             )
         } catch (e: Exception) {
             Log.w(TAG, "history failed for $symbol", e)

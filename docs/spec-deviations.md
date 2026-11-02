@@ -536,3 +536,34 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
   eToro dashboard and "What if" on a stock's screen, and that the app cannot trade. The Finance
   page links to it under Accounts, and the eToro chip's settings point to it too. Back returns to
   whichever page opened it.
+
+## 0.38.0: candle sizes, live refresh and volume on the stock screen
+
+- **Candle size** on 1D and 5D: Auto · 5m · 30m · 1h, under the range buttons.
+  - Auto groups the candles to fit the width, as before.
+  - The fixed sizes stay put however far you zoom.
+  - 5m on 5D asks Yahoo and eToro for 5-minute candles over the five days. The default is 30-minute
+    candles.
+  - Sizes coarser than the fetched candles (30m and 1h on 1D, 1h on 5D) are built on the chart by
+    grouping candles of the same session. Each grouped bar has the group's open, high, low and
+    close, and the sum of its volumes.
+  - Checked with live AAPL data:
+    - 5D at 5m has the four overnight sessions in the range, 376 eToro candles, as at 30m (64).
+    - The candles are strictly in time order.
+- **Live refresh:** the price, the chart and the eToro positions are read again every 15 seconds.
+  This happens only while the stock screen is open and in front (Lifecycle RESUMED). It stops once
+  the user leaves the screen, switches app or turns off the screen; nothing runs in the
+  background. Back on the screen, it reads at once.
+  - A refresh keeps:
+    - the zoom (following the newest candles when they were in view);
+    - the chosen candle (moving on to the newest when the latest was chosen);
+    - a "What if" price the user picked. Until the user picks one, or after "Now", that price
+      follows the live price.
+  - If the feed does not answer, the chart already on screen stays.
+- **Volume per candle:** the readout above the chart has a Volume line, with:
+  - the shares traded in the chosen candle or bar, in full;
+  - a short form after it (1.24M);
+  - "on eToro" for overnight candles, whose volume is eToro's own, not the exchange's.
+
+  Yahoo reports no volume for most pre-market and after-hours candles, so those read "None
+  reported".
