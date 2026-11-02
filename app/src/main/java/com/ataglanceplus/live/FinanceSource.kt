@@ -82,6 +82,18 @@ object FinanceSource {
         _status.value = if (failed == 0) "Updated" else "Could not update $failed of ${tickers.size}; showing the last prices"
     }
 
+    /**
+     * A fresher quote fetched elsewhere (the stock screen, as it opens, refreshes and updates
+     * live): it replaces the card's copy of that stock, so the card shows the same price as the
+     * screen. A stock the card does not follow is left out. Nothing changes if it is the same.
+     */
+    fun publish(quote: Quote) {
+        val current = _quotes.value
+        val i = current.indexOfFirst { it.symbol.equals(quote.symbol, ignoreCase = true) }
+        if (i < 0 || current[i] == quote) return
+        _quotes.value = current.toMutableList().also { it[i] = quote }
+    }
+
     /** One ticker's quote, or null if it does not exist or the feed did not answer. */
     fun fetch(symbol: String): Quote? {
         val url = URL(
@@ -288,6 +300,8 @@ object FinanceSource {
      */
     fun history(context: android.content.Context, symbol: String, range: Range, settings: VwapSettings, candleMinutes: Int? = null): History? {
         val quote = fetch(symbol) ?: return null
+        // The card shows the same price as the stock screen (see publish).
+        publish(quote)
         val prePost = settings.extendedHours && range.interval.endsWith("m")
         // The step fetched: the range's own, or a finer one when the user picks smaller candles
         // than it (5-minute candles on 5D). Coarser candles are grouped on the chart instead.

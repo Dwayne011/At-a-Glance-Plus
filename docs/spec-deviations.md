@@ -636,3 +636,18 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
 - Checked:
   - Both tabs were rendered at 1.3× text on a 384dp-wide screen (Robolectric, with Compose's test
     tools to tap the tab, not kept), using the ONDS positions from the user's calculator.
+
+## 0.39.1: the finance card follows the stock screen's price
+
+- Reported: the At a Glance finance card and the stock screen showed different prices. The card
+  read "Pre-market 6.39" after the market had opened; the screen read 6.23.
+- Each time the stock screen reads a stock's price, the card's copy of that stock is replaced
+  with it (FinanceSource.publish). The service already redraws the card whenever its prices
+  change, so the card updates straight away. This happens:
+  - when the screen opens;
+  - on pull-to-refresh;
+  - every 15 seconds while the screen is open.
+- Stocks the card does not follow are left out, and an unchanged price causes no redraw. The
+  card's own refresh interval is unchanged.
+- Checked: a unit test replaced ONDS in a two-stock list (matching regardless of letter case),
+  left NOK as it was, and ignored a stock the card does not follow.
