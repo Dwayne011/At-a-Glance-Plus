@@ -289,7 +289,9 @@ object FinanceSource {
         val prePost = settings.extendedHours && range.interval.endsWith("m")
         val url = URL(
             "https://query1.finance.yahoo.com/v8/finance/chart/" +
-                URLEncoder.encode(symbol, "UTF-8") + "?range=${range.range}&interval=${range.interval}" +
+                // One day with extended hours asks for two, so that before the market opens the
+                // chart can show the last full day as well as this morning (see below).
+                URLEncoder.encode(symbol, "UTF-8") + "?range=${if (range == Range.DAY && prePost) "2d" else range.range}&interval=${range.interval}" +
                 if (prePost) "&includePrePost=true" else ""
         )
         val connection = (url.openConnection() as HttpURLConnection).apply {
@@ -314,7 +316,7 @@ object FinanceSource {
             val lows = column("low")
             val volumes = column("volume")
             val us = meta.optString("exchangeTimezoneName") == "America/New_York"
-            val yahoo = (0 until minOf(times?.length() ?: 0, closes?.length() ?: 0)).mapNotNull { i ->
+            val fetched = (0 until minOf(times?.length() ?: 0, closes?.length() ?: 0)).mapNotNull { i ->
                 if (listOf(opens, highs, lows, closes).any { it == null || it.isNull(i) }) return@mapNotNull null
                 val time = times!!.getLong(i) * 1000
                 Candle(time, opens!!.getDouble(i), highs!!.getDouble(i), lows!!.getDouble(i), closes!!.getDouble(i),
@@ -323,12 +325,21 @@ object FinanceSource {
                     // being the 16:00 closing print (the official close), not after hours.
                     if (us && prePost) usSession(time) else Session.REGULAR)
             }
+            // One day with extended hours: today, once its regular session has begun; before
+            // that (pre-market), the last full trading day as well, so the chart shows the close,
+            // the night after it and this morning.
+            val offset = meta.optLong("gmtoffset") * 1000
+            val days = fetched.groupBy { Math.floorDiv(it.time + offset, 86_400_000L) }.toSortedMap().values.toList()
+            val todayOnly = days.lastOrNull()?.any { it.session == Session.REGULAR } == true
+            val yahoo = if (range == Range.DAY && prePost && days.size > 1) (if (todayOnly) days.last() else days.takeLast(2).flatten()) else fetched
             // The overnight session, which Yahoo does not carry, from eToro: its candles in the
-            // overnight hours from the range's first candle on.
+            // overnight hours from the range's first candle on, and on one day of today alone,
+            // the night that led into it (from 20:00 the evening before).
             val overnight = if (prePost && us && range.etoroInterval != null && yahoo.isNotEmpty()) {
                 val count = if (range == Range.DAY) 600 else 1000
+                val from = yahoo.first().time - if (range == Range.DAY && todayOnly) 8 * 3_600_000L else 0L
                 EtoroCandles.instrumentId(context, symbol)?.let { id -> EtoroCandles.candles(id, range.etoroInterval, count) }.orEmpty()
-                    .filter { it.time >= yahoo.first().time && usSession(it.time) == Session.OVERNIGHT }
+                    .filter { it.time >= from && usSession(it.time) == Session.OVERNIGHT }
             } else emptyList()
             val taken = yahoo.map { it.time }.toHashSet()
             val candles = (yahoo + overnight.filter { it.time !in taken }).sortedBy { it.time }
@@ -337,7 +348,9 @@ object FinanceSource {
             History(
                 quote = quote,
                 // One day starts from the previous close, so the line and the change agree.
-                points = if (range == Range.DAY && points.isNotEmpty()) listOf(points.first().first to quote.previousClose) + points else points,
+                points = (if (yahoo.isNotEmpty()) points.filter { it.first >= yahoo.first().time } else points).let { shown ->
+                    if (range == Range.DAY && shown.isNotEmpty()) listOf(shown.first().first to quote.previousClose) + shown else shown
+                },
                 candles = candles,
                 vwap = average,
                 vwapStarts = starts,

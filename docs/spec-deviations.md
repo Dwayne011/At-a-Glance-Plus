@@ -479,3 +479,16 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
   old slate-navy gradient.
 - Checked by rendering the real card (Robolectric, not kept): sunny, cloudy, rain and a clear
   night, and the extra card in rain. No text was cut off or outside its tile.
+
+## 0.36.1: extended hours at a tap; 1D before the open
+
+- The stock chart's extended hours (pre-market, after hours and overnight) can now be switched
+  on and off with a switch right under the range pills on 1D and 5D, not only in the VWAP dialog
+  (where it was easy to miss that it was off). It is still on by default.
+- With extended hours on, the 1D chart asks Yahoo for two days. Before the regular session
+  opens, it shows the last full trading day, the overnight session after it and today's
+  pre-market. Once the session opens, it shows today, starting with the overnight session that
+  led into it (from 20:00 the evening before).
+- Checked with live AAPL data during Monday's pre-market (Robolectric, not kept). The chart ran
+  from Friday 04:00 New York time to 07:03 today: pre-market 104, regular 78, after hours 48 and
+  overnight 94 candles, in time order, ending at the live pre-market price of 344.57.

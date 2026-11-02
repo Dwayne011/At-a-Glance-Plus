@@ -801,6 +801,23 @@ private fun StockDashboard(initial: String) {
             FinancePanel("Price") {
                 val ranges = com.ataglanceplus.live.FinanceSource.Range.entries
                 SegmentedPills(ranges.map { it.label }, range.ordinal) { range = ranges[it] }
+                // Pre-market, after hours and overnight on the 1D and 5D charts, at a tap (it was
+                // only in the VWAP dialog, so it was easy to miss that it was off).
+                if (range.minutes != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Extended hours", style = MaterialTheme.typography.bodyMedium)
+                            Text("Pre-market, after hours and overnight", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = vwapSettings.extendedHours,
+                            onCheckedChange = {
+                                vwapSettings = vwapSettings.copy(extendedHours = it)
+                                Prefs.setFinanceVwap(context, vwapSettings)
+                            },
+                        )
+                    }
+                }
                 if (h.candles.size >= 2) {
                     val zone = ZoneId.systemDefault()
                     // Dates along the bottom for the longer ranges (the intraday ones label whole hours).
