@@ -42,6 +42,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -78,11 +79,14 @@ class AtAGlanceService : SmartspaceService() {
      * Whether SystemUI shows a new push while the phone dozes is not verified yet.
      */
     private var screenOff = false
+    /** The screen's state as a flow, for work that waits for it to come on (live scores). */
+    private val screenOn = kotlinx.coroutines.flow.MutableStateFlow(true)
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Intent.ACTION_SCREEN_OFF || intent.action == Intent.ACTION_SCREEN_ON) {
                 screenOff = intent.action == Intent.ACTION_SCREEN_OFF
+                screenOn.value = !screenOff
             }
             if (intent.action == Intent.ACTION_SCREEN_ON) refreshIfStale()
             pushAll()
@@ -120,11 +124,16 @@ class AtAGlanceService : SmartspaceService() {
     private var walletJob: Job? = null
     private var walletSyncedAt = 0L
     private var shownFinance: String? = null
+    /** The passes the Wallet card last showed, for the history (null before the first draw). */
+    private var walletShown: Set<String>? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onCreate() {
         super.onCreate()
+        // Started with the screen off (after a restart, say): know it from the start.
+        screenOff = !getSystemService(android.os.PowerManager::class.java).isInteractive
+        screenOn.value = !screenOff
         Prefs.get(this).registerOnSharedPreferenceChangeListener(prefsListener)
         registerReceiver(screenReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -233,6 +242,7 @@ class AtAGlanceService : SmartspaceService() {
             }
         }
         ServiceState.event("Service created")
+        com.ataglanceplus.DebugLog.add(this, com.ataglanceplus.DebugLog.Kind.CONNECTION, "Service started (screen ${if (screenOff) "off" else "on"})")
         Log.i(TAG, "onCreate")
     }
 
@@ -247,6 +257,7 @@ class AtAGlanceService : SmartspaceService() {
         sessions.keys.forEach { ServiceState.sessionDestroyed(it.id) }
         sessions.clear()
         ServiceState.event("Service destroyed")
+        com.ataglanceplus.DebugLog.add(this, com.ataglanceplus.DebugLog.Kind.CONNECTION, "Service stopped by the system (no launcher or lock screen bound)")
         Log.i(TAG, "onDestroy")
         super.onDestroy()
     }
@@ -254,6 +265,7 @@ class AtAGlanceService : SmartspaceService() {
     override fun onCreateSmartspaceSession(config: SmartspaceConfig, sessionId: SmartspaceSessionId) {
         Log.i(TAG, "session created: ${sessionId.id} surface=${config.uiSurface} client=${config.packageName} count=${config.smartspaceTargetCount}")
         sessions[sessionId] = config
+        com.ataglanceplus.DebugLog.add(this, com.ataglanceplus.DebugLog.Kind.CONNECTION, "${surfaceName(config.uiSurface)} connected (${config.packageName}, ${config.smartspaceTargetCount} cards)")
         ServiceState.sessionCreated(
             SessionInfo(
                 id = sessionId.id,
@@ -307,6 +319,7 @@ class AtAGlanceService : SmartspaceService() {
 
     override fun onDestroySmartspaceSession(sessionId: SmartspaceSessionId) {
         Log.i(TAG, "session destroyed: ${sessionId.id}")
+        sessions[sessionId]?.let { com.ataglanceplus.DebugLog.add(this, com.ataglanceplus.DebugLog.Kind.CONNECTION, "${surfaceName(it.uiSurface)} disconnected (${it.packageName})") }
         sessions.remove(sessionId)
         islandSeen.remove(sessionId)
         ServiceState.sessionDestroyed(sessionId.id)
@@ -314,6 +327,12 @@ class AtAGlanceService : SmartspaceService() {
 
     override fun onDestroy(sessionId: SmartspaceSessionId) {
         onDestroySmartspaceSession(sessionId)
+    }
+
+    private fun surfaceName(surface: String): String = when (surface) {
+        SURFACE_HOME -> "Home screen"
+        SURFACE_LOCKSCREEN -> "Lock screen"
+        else -> "Surface \"$surface\""
     }
 
     /**
@@ -367,7 +386,16 @@ class AtAGlanceService : SmartspaceService() {
             val ids = com.ataglanceplus.wallet.WalletRules.activePassIds(
                 this, System.currentTimeMillis(), com.ataglanceplus.wallet.WalletGeofences.cachedLocation,
             )
-            com.ataglanceplus.wallet.WalletSource.passes.value.filter { it.id in ids }
+            com.ataglanceplus.wallet.WalletSource.passes.value.filter { it.id in ids }.also { shown ->
+                // The history notes each change in which passes the card shows.
+                if (ids != walletShown) {
+                    walletShown = ids
+                    com.ataglanceplus.DebugLog.add(
+                        this, com.ataglanceplus.DebugLog.Kind.WALLET,
+                        if (shown.isEmpty()) "Wallet card: no pass to show" else "Wallet card shows: " + shown.joinToString(", ") { it.title },
+                    )
+                }
+            }
         }.getOrDefault(emptyList()),
     )
 
@@ -395,6 +423,8 @@ class AtAGlanceService : SmartspaceService() {
         if (Prefs.sportsFollowed(this).isEmpty()) return
         sportsJob = scope.launch {
             while (true) {
+                // Paused while the screen is off; scores are fetched again the moment it comes on.
+                screenOn.first { it }
                 if (Prefs.cardEnabled(this@AtAGlanceService, CardType.SPORTS)) {
                     if (System.currentTimeMillis() - sportsScheduledAt > SPORTS_SCHEDULE_MS) {
                         runCatching { SportsSource.refreshSchedules(this@AtAGlanceService) }
@@ -425,6 +455,9 @@ class AtAGlanceService : SmartspaceService() {
             // A location for the pass rules at most every 15 minutes, not at every unlock.
             val fix = com.ataglanceplus.wallet.WalletGeofences.cachedLocation
             if (fix == null || now - fix.time > WALLET_LOCATION_MS) com.ataglanceplus.wallet.WalletGeofences.refreshLocation(this)
+            // Places not watched yet (a permission given in Android's settings, location turned
+            // back on): try registering them again.
+            if (com.ataglanceplus.wallet.WalletGeofences.status.value?.ok != true) com.ataglanceplus.wallet.WalletGeofences.refresh(this)
             if (now - walletSyncedAt > WALLET_SYNC_MS) restartWalletSync()
         }
         if (message != null && now >= messageUntil) endMessage()

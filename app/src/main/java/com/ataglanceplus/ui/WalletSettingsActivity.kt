@@ -226,8 +226,10 @@ private fun PassList(version: Int, onBack: () -> Unit, onOpen: (String) -> Unit,
     var syncing by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var permissionTick by remember { mutableIntStateOf(0) }
-    val fine = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++ }
-    val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++ }
+    // Each answer re-registers the places, so they start being watched at once.
+    val fine = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++; WalletGeofences.refresh(context) }
+    val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++; WalletGeofences.refresh(context) }
+    val geofences by WalletGeofences.status.collectAsStateWithLifecycle()
     val rules = remember(version, passes) { passes.associate { it.id to ruleOf(context, it) } }
     var cardOn by remember { mutableStateOf(Prefs.cardEnabled(context, CardType.WALLET)) }
 
@@ -264,12 +266,30 @@ private fun PassList(version: Int, onBack: () -> Unit, onOpen: (String) -> Unit,
                 }
             }),
         )
-        // Places need the location all the time, as passes show while the app is closed.
+        // Places are watched by Play services (geofences), which needs precise location all the
+        // time, location on and Google Location Accuracy. Whatever is missing is the one row here;
+        // with nothing missing, Play services' last answer.
         @Suppress("UNUSED_EXPRESSION") permissionTick
-        if (rules.values.any { it.enabled && it.places.isNotEmpty() } && !hasBackgroundLocation(context)) {
-            SettingRow("Allow location all the time", "Needed to show passes at your places while the app is closed", icon = Icons.Default.LocationOn, accent = true, onClick = {
-                if (!hasLocation(context)) fine.launch(Manifest.permission.ACCESS_FINE_LOCATION) else background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-            })
+        if (rules.values.any { it.enabled && it.places.isNotEmpty() }) {
+            val settings = { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)) } }
+            when {
+                !hasLocation(context) -> SettingRow("Allow location", "Needed to show passes at your places", icon = Icons.Default.LocationOn, accent = true,
+                    onClick = { fine.launch(Manifest.permission.ACCESS_FINE_LOCATION) })
+                !WalletGeofences.hasPrecise(context) -> SettingRow("Use precise location", "Approximate location is only good to a few kilometres, so places never trigger", icon = Icons.Default.LocationOn, accent = true,
+                    onClick = { fine.launch(Manifest.permission.ACCESS_FINE_LOCATION) })
+                !hasBackgroundLocation(context) -> SettingRow("Allow location all the time", "Needed to show passes at your places while the app is closed", icon = Icons.Default.LocationOn, accent = true,
+                    onClick = { background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) })
+                !WalletGeofences.locationOn(context) -> SettingRow("Turn on location", "Location is off on the phone", icon = Icons.Default.LocationOn, accent = true,
+                    onClick = { settings() })
+                else -> geofences?.let { g ->
+                    SettingRow(
+                        if (g.ok) "Places are watched" else "Places are not watched",
+                        g.message + if (g.ok) "" else " · tap for location settings",
+                        icon = Icons.Default.LocationOn, error = !g.ok,
+                        onClick = if (g.ok) null else ({ settings() }),
+                    )
+                }
+            }
         }
 
         val (on, off) = passes.partition { rules[it.id]?.enabled == true }

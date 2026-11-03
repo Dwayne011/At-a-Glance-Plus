@@ -1,0 +1,258 @@
+package com.ataglanceplus.ui
+
+import android.app.ActivityManager
+import android.app.usage.UsageStatsManager
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.os.PowerManager
+import android.os.Process
+import android.os.SystemClock
+import android.provider.Settings
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ataglanceplus.CrashLog
+import com.ataglanceplus.DebugLog
+import com.ataglanceplus.Prefs
+import com.ataglanceplus.service.ServiceState
+import com.ataglanceplus.wadb.Activator
+import com.ataglanceplus.wadb.Wadb
+import com.ataglanceplus.wallet.WalletGeofences
+import com.ataglanceplus.wallet.WalletRules
+import com.ataglanceplus.wallet.WalletSource
+import kotlinx.coroutines.launch
+
+/**
+ * Advanced › Debug: everything needed to tell why the cards stopped showing or a place did not
+ * trigger, on one page and in one shareable report. The connections now, why Android last
+ * stopped the app, how it treats the app in the background, the Wallet places' location state,
+ * the system's side (over wireless debugging) and the app's history.
+ *
+ * The report holds no keys, tokens, account names or coordinates.
+ */
+@Composable
+internal fun DebugPage(version: Int, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val sessions by ServiceState.sessions.collectAsStateWithLifecycle()
+    val lastEvent by ServiceState.lastEvent.collectAsStateWithLifecycle()
+    val busy by Wadb.busy.collectAsStateWithLifecycle()
+    val wadbLog by Wadb.log.collectAsStateWithLifecycle()
+    val geofences by WalletGeofences.status.collectAsStateWithLifecycle()
+    val inside by WalletGeofences.inside.collectAsStateWithLifecycle()
+    val changed by WalletGeofences.changed.collectAsStateWithLifecycle()
+    var tick by remember { mutableIntStateOf(0) }
+    @Suppress("UNUSED_EXPRESSION") changed
+    val history = remember(version, tick, sessions, geofences, inside) { DebugLog.read(context) }
+    val paired = remember(version) { Prefs.isPaired(context) }
+
+    SettingsPage("Debug", onBack) {
+        SettingRow("Share debug report", "Everything on this page as text, without keys, accounts or locations", icon = Icons.Default.Share, accent = true,
+            onClick = { share(context, report(context)) })
+        SettingRow("Copy debug report", icon = Icons.AutoMirrored.Filled.List, onClick = { copy(context, "At a Glance Plus debug report", report(context)) })
+
+        Subheader("Now")
+        now(context).forEach { (label, value) -> SettingRow(label, value, icon = Icons.Default.Info) }
+        if (sessions.isEmpty()) {
+            CheckRow("Not connected", false, "Neither the launcher nor the lock screen is connected: they show Google's At a Glance until you activate again")
+        } else {
+            sessions.values.sortedBy { it.surface }.forEach { s ->
+                CheckRow(
+                    "${s.surface.replaceFirstChar { it.uppercase() }} connected", true,
+                    "${s.clientPackage} · last drawn ${if (s.lastPushAt == 0L) "never" else DebugLog.time(s.lastPushAt)}",
+                )
+            }
+        }
+        if (lastEvent.isNotEmpty()) SettingNote("Last event: $lastEvent")
+
+        Subheader("Why Android last stopped the app")
+        val exits = remember(version, tick) { DebugLog.exitReasons(context, 5) }
+        if (exits.isEmpty()) SettingNote("Android has no record of it stopping.")
+        exits.forEach { SettingRow(DebugLog.time(it.timestamp), DebugLog.describe(it), icon = Icons.Default.Info) }
+        SettingNote("Each stop drops the connection: the launcher and lock screen go back to Google's until the next activation.")
+
+        Subheader("Battery and background")
+        power(context).forEach { (label, ok, detail) -> CheckRow(label, ok, detail) }
+        SettingRow("Open the app's battery settings", icon = Icons.Default.Build, onClick = {
+            runCatching {
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null)))
+            }
+        })
+
+        Subheader("Location for Wallet places")
+        location(context, geofences, inside).forEach { (label, ok, detail) ->
+            SettingRow(label, detail, icon = if (ok == null) Icons.Default.LocationOn else if (ok) Icons.Default.CheckCircle else Icons.Default.Warning, error = ok == false)
+        }
+        SettingNote("Play services watches the places and tells the app on arrival and departure, so Android's location indicator names Play services, not this app.")
+
+        Subheader("The system's side")
+        SettingRow(
+            if (busy) "Checking…" else "Check the launcher, SystemUI and At a Glance",
+            if (paired) "Over wireless debugging: why they last restarted, which provider At a Glance uses, background limits" else "Pair with this phone first (Advanced)",
+            icon = Icons.Default.Build, enabled = paired && !busy,
+            onClick = { scope.launch { Activator.systemCheck(context); tick++ } },
+        )
+        if (wadbLog.isNotEmpty()) LogText(wadbLog, limit = 12_000)
+
+        Subheader("History")
+        SettingNote("Newest first. Kept on this phone only (${history.size} entries).")
+        SettingRow("Copy the history", icon = Icons.AutoMirrored.Filled.List, onClick = { copy(context, "At a Glance Plus history", history.joinToString("\n")) })
+        SettingRow("Clear the history", icon = Icons.Default.Delete, onClick = { DebugLog.clear(context); tick++ })
+        if (history.isEmpty()) SettingNote("Nothing yet.")
+        history.take(200).forEach { HistoryEntry(it) }
+    }
+}
+
+/** One history line, as the time and kind over the message. */
+@Composable
+private fun HistoryEntry(line: String) {
+    val stamp = line.take(19)
+    val rest = line.drop(19).trim()
+    val kind = rest.substringBefore(' ')
+    val message = rest.substringAfter(' ').trim()
+    androidx.compose.foundation.layout.Column(
+        androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+    ) {
+        Text("$stamp · $kind", style = MaterialTheme.typography.labelSmall,
+            color = if (kind == "Error") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(message, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** Version, phone, and how long the app has been running. */
+private fun now(context: Context): List<Pair<String, String>> {
+    val started = System.currentTimeMillis() - (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime())
+    return listOf(
+        "App" to "Version ${DebugLog.version(context)} · running since ${DebugLog.time(started)}",
+        "Phone" to "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.ID}",
+    )
+}
+
+/** Whether Android may stop or hold back the app in the background: (label, fine, detail). */
+private fun power(context: Context): List<Triple<String, Boolean, String>> {
+    val pkg = context.packageName
+    val unrestricted = context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(pkg)
+    val restricted = context.getSystemService(ActivityManager::class.java).isBackgroundRestricted
+    val bucket = runCatching { context.getSystemService(UsageStatsManager::class.java).appStandbyBucket }.getOrDefault(-1)
+    val bucketName = when (bucket) {
+        UsageStatsManager.STANDBY_BUCKET_ACTIVE -> "Active"
+        UsageStatsManager.STANDBY_BUCKET_WORKING_SET -> "Working set"
+        UsageStatsManager.STANDBY_BUCKET_FREQUENT -> "Frequent"
+        UsageStatsManager.STANDBY_BUCKET_RARE -> "Rare"
+        UsageStatsManager.STANDBY_BUCKET_RESTRICTED -> "Restricted"
+        5 -> "Exempted"
+        else -> "Unknown ($bucket)"
+    }
+    return listOf(
+        Triple("Battery use: ${if (unrestricted) "Unrestricted" else "Optimised"}", true,
+            if (unrestricted) "Android does not hold the app back to save battery"
+            else "The usual setting. The connection keeps the app running; if it keeps dropping, try Unrestricted"),
+        Triple("Background use ${if (restricted) "restricted" else "allowed"}", !restricted,
+            if (restricted) "Battery is set to Restricted: Android may stop the app at any time. Set it to Optimised or Unrestricted"
+            else "Not restricted"),
+        Triple("Standby bucket: $bucketName", bucket != UsageStatsManager.STANDBY_BUCKET_RESTRICTED, "How often Android lets the app run background work"),
+    )
+}
+
+/** The Wallet places' location state: (label, fine or not or neutral, detail). No coordinates. */
+private fun location(context: Context, status: WalletGeofences.Status?, inside: Set<String>): List<Triple<String, Boolean?, String>> {
+    val out = mutableListOf<Triple<String, Boolean?, String>>()
+    val permission = when {
+        WalletGeofences.hasPrecise(context) -> "Precise"
+        WalletGeofences.hasLocation(context) -> "Approximate only"
+        else -> "Not allowed"
+    }
+    out += Triple("Location permission: $permission", WalletGeofences.hasPrecise(context), if (WalletGeofences.hasPrecise(context)) "What places need" else "Places need precise location; approximate is only good to a few kilometres")
+    out += Triple("Allowed all the time: ${if (WalletGeofences.hasBackground(context)) "yes" else "no"}", WalletGeofences.hasBackground(context), "Needed to notice arriving while the app is closed")
+    out += Triple("Location on: ${if (WalletGeofences.locationOn(context)) "yes" else "no"}", WalletGeofences.locationOn(context), "The phone's location switch")
+    out += Triple(
+        when { status == null -> "Places: not registered since the app started"; status.ok -> "Places: ${status.message}"; else -> "Places not watched" },
+        status?.ok,
+        status?.let { (if (it.ok) "" else it.message + " · ") + "at " + DebugLog.time(it.at) } ?: "Registered when the cards connect, the rules change or the screen comes on",
+    )
+    val fix = WalletGeofences.cachedLocation
+    out += Triple(
+        "Last location fix",
+        null,
+        fix?.let { "${DebugLog.time(it.time)} · accurate to ${it.accuracy.toInt()} m" } ?: "None since the app started",
+    )
+    WalletSource.ensureLoaded(context)
+    val passes = WalletSource.passes.value.associateBy { it.id }
+    val showing = runCatching { WalletRules.activePassIds(context, System.currentTimeMillis(), fix) }.getOrDefault(emptySet())
+    val insidePasses = inside.map(WalletGeofences::passOf).toSet()
+    WalletRules.rules(context).filter { it.enabled && it.places.isNotEmpty() }.forEach { rule ->
+        val title = passes[rule.passId]?.title ?: "A pass no longer in Wallet"
+        val places = rule.places.joinToString("; ") { place ->
+            val name = place.chain?.let { "any $it" } ?: place.label
+            val distance = fix?.let { f -> WalletRules.distanceTo(context, f, place) }?.let { " · ${(it / 10).toInt() * 10} m away at the last fix" }.orEmpty()
+            "$name within ${place.radiusM} m$distance"
+        }
+        out += Triple(
+            "$title: ${if (rule.passId in showing) "showing" else "not showing"}",
+            rule.passId in showing,
+            places + if (rule.passId in insidePasses) " · inside, says Play services" else " · not inside, says Play services",
+        )
+    }
+    return out
+}
+
+/** The whole page as text, plus the errors and the command log. */
+internal fun report(context: Context): String = buildString {
+    appendLine("At a Glance Plus debug report · ${DebugLog.time(System.currentTimeMillis())}")
+    appendLine()
+    appendLine("== Now")
+    now(context).forEach { (l, v) -> appendLine("$l: $v") }
+    val sessions = ServiceState.sessions.value.values
+    if (sessions.isEmpty()) appendLine("Connected: no (launcher and lock screen on Google's)")
+    sessions.sortedBy { it.surface }.forEach { appendLine("Connected: ${it.surface} · ${it.clientPackage} · last drawn ${if (it.lastPushAt == 0L) "never" else DebugLog.time(it.lastPushAt)} · ${it.showing.joinToString(", ")}") }
+    ServiceState.lastEvent.value.takeIf { it.isNotEmpty() }?.let { appendLine("Last event: $it") }
+    appendLine()
+    appendLine("== Why Android last stopped the app")
+    DebugLog.exitReasons(context, 10).forEach { appendLine("${DebugLog.time(it.timestamp)}: ${DebugLog.describe(it)}") }
+    appendLine()
+    appendLine("== Battery and background")
+    power(context).forEach { (l, ok, d) -> appendLine("${if (ok) "OK " else "!! "}$l · $d") }
+    appendLine()
+    appendLine("== Location for Wallet places")
+    location(context, WalletGeofences.status.value, WalletGeofences.inside.value).forEach { (l, ok, d) ->
+        appendLine("${when (ok) { true -> "OK "; false -> "!! "; null -> "-- " }}$l · $d")
+    }
+    appendLine()
+    appendLine("== History (newest first)")
+    DebugLog.read(context).forEach { appendLine(it) }
+    appendLine()
+    appendLine("== Errors")
+    appendLine(CrashLog.read(context).ifEmpty { "None" })
+    Wadb.log.value.takeIf { it.isNotEmpty() }?.let {
+        appendLine()
+        appendLine("== Last command log")
+        appendLine(it)
+    }
+}
+
+private fun share(context: Context, text: String) {
+    val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+        .putExtra(Intent.EXTRA_SUBJECT, "At a Glance Plus debug report")
+        .putExtra(Intent.EXTRA_TEXT, text)
+    runCatching { context.startActivity(Intent.createChooser(send, "Share debug report").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}

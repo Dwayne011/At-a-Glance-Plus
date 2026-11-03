@@ -134,6 +134,7 @@ private fun SettingsApp() {
             "finance/add" -> "card/finance"
             "finance/etoro" -> etoroFrom
             "sports/add" -> "card/sports"
+            "advanced/debug" -> "advanced"
             else -> "home"
         }
     }
@@ -158,7 +159,8 @@ private fun SettingsApp() {
         "more" -> MoreCardsPage(version, ::up)
         "chips" -> ChipsSection(::up)
         "backup" -> BackupPage(::up)
-        "advanced" -> AdvancedPage(version, ::up)
+        "advanced" -> AdvancedPage(version, ::up, open)
+        "advanced/debug" -> DebugPage(version, ::up)
         else -> HomePage(version, open)
     }
 }
@@ -253,7 +255,7 @@ private fun HomePage(version: Int, open: (String) -> Unit) {
             SwitchSettingRow("Re-activate after a restart", "Waits for Wi-Fi, then activates", icon = Icons.Default.Refresh, checked = Prefs.activateOnBoot(context)) { Prefs.setActivateOnBoot(context, it) }
         }
         LinkRow("Backup and restore", "Export or import your settings", icon = Icons.Default.AccountBox) { open("backup") }
-        LinkRow("Advanced", "Connection, wireless debugging, logs and adb commands", icon = Icons.Default.Settings) { open("advanced") }
+        LinkRow("Advanced", "Connection, debug and history, wireless debugging and adb commands", icon = Icons.Default.Settings) { open("advanced") }
         if (wadbStatus.isNotEmpty()) SettingNote(wadbStatus, MaterialTheme.colorScheme.primary)
         SettingNote("Version ${runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()}")
     }
@@ -470,7 +472,7 @@ internal fun startPairing(context: Context) {
 
 /** The technical parts: the connection, the device checks, wireless debugging, logs and adb commands. */
 @Composable
-private fun AdvancedPage(version: Int, onBack: () -> Unit) {
+private fun AdvancedPage(version: Int, onBack: () -> Unit, open: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sessions by ServiceState.sessions.collectAsStateWithLifecycle()
@@ -487,6 +489,7 @@ private fun AdvancedPage(version: Int, onBack: () -> Unit) {
     val provider = remember(version) { Commands.lookupDefaultProvider(context) }
 
     SettingsPage("Advanced", onBack) {
+        LinkRow("Debug", "Connection history, why the app stopped, battery, location, and a report to share", icon = Icons.Default.Build) { open("advanced/debug") }
         Subheader("Connection")
         if (sessions.isEmpty()) SettingRow("No sessions", "No launcher or lock screen has connected to this service yet", icon = Icons.Default.Info)
         sessions.values.sortedBy { it.surface }.forEach { s ->
@@ -551,14 +554,14 @@ private fun AdvancedPage(version: Int, onBack: () -> Unit) {
 }
 
 @Composable
-private fun CheckRow(label: String, ok: Boolean, detail: String) {
+internal fun CheckRow(label: String, ok: Boolean, detail: String) {
     SettingRow(label, detail, icon = if (ok) Icons.Default.CheckCircle else Icons.Default.Warning, error = !ok)
 }
 
 @Composable
-private fun LogText(text: String) {
+internal fun LogText(text: String, limit: Int = 4000) {
     Text(
-        text.take(4000), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
+        text.take(limit), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp)).padding(12.dp),
     )

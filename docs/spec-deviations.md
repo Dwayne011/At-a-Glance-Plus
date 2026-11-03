@@ -691,3 +691,72 @@ timers, location requests, network polling, redraws and the animations on each s
   current.
 - A running timer ticks every second on the always-on display.
 - The Animated and Wash weather looks animate while the home screen is in view.
+
+## 0.40.0: Wallet places fixed, scores pause with the screen off, Debug page
+
+**Wallet places** were reported never to show their pass on arrival. The causes found in the code:
+1. **Precise location:** geofences were registered when any location permission was held, but
+   Play services needs precise location (and "all the time"). With approximate location the
+   registration failed in silence.
+2. **Unchecked registration:** Play services' answer was never checked. The usual refusal,
+   "geofencing not available", comes when Google Location Accuracy is off.
+3. **Strict match:** a pass showed only if the position reported on arrival was inside the
+   place's radius. That position is often just outside it, so an arrival could still show
+   nothing.
+
+Fixes:
+- **What places need, checked and shown:** precise location, all the time, location on. The
+  Wallet page shows the one thing missing as a row that fixes it, or else "Places are watched" or
+  Play services' refusal in words, with a link to location settings.
+- **Play services' answer is checked:** success or failure goes in the history.
+- **Re-registered after changes:** places are registered again after any permission answer, and
+  when the screen comes on while they are not watched.
+- **Arrival and departure tracked:** the app keeps which places the phone is inside from Play
+  services' events. A pass shows while the phone is inside one of its places, or while a fix
+  under 30 minutes old is within the radius. Older fixes no longer count, so a pass does not
+  linger.
+- **Geofence size:** geofences are at least 100 m, with one-minute responsiveness.
+- **No location indicator for the app:** Play services watches the places, so Android's
+  indicator names it, not this app. The Debug page says so.
+
+**Live scores** are no longer fetched while the screen is off. The sports loop waits for the
+screen and fetches at once when it comes on.
+
+**Debug** (Advanced › Debug) shows:
+- **Now:** the connections, with each surface and when it was last drawn.
+- **Why Android last stopped the app:** from ApplicationExitInfo, such as an update, low memory,
+  a crash or a force stop.
+- **Battery and background:** battery optimisation, background restriction and the standby
+  bucket.
+- **Location for Wallet places:**
+  - the permissions and the location switch;
+  - Play services' status;
+  - the last fix's age and accuracy;
+  - for each pass with places, whether it shows, how far its places were at the last fix, and
+    whether Play services says the phone is inside.
+- **The system's side**, over wireless debugging:
+  - dumpsys smartspace;
+  - why the Pixel Launcher and SystemUI last stopped;
+  - the standby bucket;
+  - background appops;
+  - the battery allowlist.
+- **History**, newest first.
+- **Report:** "Share debug report" and "Copy debug report" put all of it, with the errors and the
+  last command log, into one text.
+
+The history (DebugLog, files/debug_history.log, at most about 800 lines) records:
+- each app start, with Android's reasons for each stop since;
+- the service starting and stopping;
+- the home screen and lock screen connecting and disconnecting;
+- phone restarts and app updates;
+- each activation step's exit code;
+- places' registration results, arrivals and departures;
+- location fixes that failed;
+- changes in which passes the Wallet card shows;
+- every recorded error.
+
+It holds no keys, tokens, account names or coordinates, and is not in backups.
+
+Checked:
+- The Debug page was rendered (Robolectric, reached by tapping Advanced › Debug).
+- The report was printed in the test: no coordinates, keys or accounts.

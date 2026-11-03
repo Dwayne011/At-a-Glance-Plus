@@ -12,6 +12,8 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        // The history notes each start, with why Android stopped the app before (off the main thread).
+        Thread { DebugLog.processStarted(this) }.start()
     }
 }
 
@@ -31,6 +33,7 @@ object CrashLog {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             runCatching { write(app, "Crash on thread ${thread.name}", error) }
+            runCatching { DebugLog.add(app, DebugLog.Kind.ERROR, "Crash on thread ${thread.name}: ${error.javaClass.simpleName}: ${error.message.orEmpty().take(200)}") }
             previous?.uncaughtException(thread, error)
         }
     }
@@ -39,6 +42,7 @@ object CrashLog {
     fun record(context: Context, where: String, error: Throwable) {
         Log.w(TAG, where, error)
         runCatching { write(context.applicationContext, where, error) }
+        DebugLog.add(context, DebugLog.Kind.ERROR, "$where: ${error.javaClass.simpleName}: ${error.message.orEmpty().take(200)}")
     }
 
     fun read(context: Context): String = runCatching { file(context).readText() }.getOrDefault("")

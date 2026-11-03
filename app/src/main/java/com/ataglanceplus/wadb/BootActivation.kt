@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        com.ataglanceplus.DebugLog.add(context, com.ataglanceplus.DebugLog.Kind.PROCESS, "Phone restarted" + if (Prefs.activateOnBoot(context)) "; activating again" else "")
         if (!Prefs.activateOnBoot(context) || !Prefs.isPaired(context)) return
         if (!Wadb.canWriteSecureSettings(context)) {
             Log.w(TAG, "cannot activate on boot: secure settings permission missing")
@@ -48,6 +49,7 @@ class BootReceiver : BroadcastReceiver() {
 class UpdateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        com.ataglanceplus.DebugLog.add(context, com.ataglanceplus.DebugLog.Kind.PROCESS, "Updated to ${version(context)}: the launcher and lock screen go back to Google's until activated again")
         if (!Prefs.isPaired(context)) return
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(

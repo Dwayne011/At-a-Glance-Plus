@@ -20,6 +20,13 @@ object WalletRules {
     /** Hours before a flight/event/transit begins that it starts showing, if the pass gives no time. */
     private const val AUTO_LEAD_MS = 3L * 60 * 60 * 1000
     private const val AUTO_TRAIL_MS = 3L * 60 * 60 * 1000
+    private const val FIX_FRESH_MS = 30L * 60 * 1000
+
+    /** How far a fix is from the place (its nearest branch for a chain), in metres, or null. */
+    fun distanceTo(context: Context, location: Location, place: Place): Float? {
+        val spots = if (place.chain == null) listOf(place.lat to place.lng) else PlaceSearch.branches(context, place.chain)
+        return spots.minOfOrNull { (lat, lng) -> FloatArray(1).also { Location.distanceBetween(location.latitude, location.longitude, lat, lng, it) }[0] }
+    }
 
     /**
      * A spot ([lat], [lng]) or, with [chain], any branch of that chain near the user (see
@@ -95,6 +102,11 @@ object WalletRules {
     fun activePassIds(context: Context, now: Long, location: Location?): Set<String> {
         WalletSource.ensureLoaded(context)
         val passes = WalletSource.passes.value.associateBy { it.id }
+        // At a place: Play services says the phone is inside one of the pass's geofences, or a
+        // recent fix (under 30 minutes old) is within the place's radius. An old fix no longer
+        // counts, so a pass does not stay up long after leaving.
+        val inside = WalletGeofences.insidePasses()
+        val fix = location?.takeIf { now - it.time < FIX_FRESH_MS }
         return rules(context).filter { rule ->
             if (!rule.enabled) return@filter false
             val pass = passes[rule.passId] ?: return@filter false
@@ -103,7 +115,8 @@ object WalletRules {
             if (pass.kind in AUTOMATIC) return@filter autoMatch(pass, now)
             (rule.places.isEmpty() && rule.windows.isEmpty()) ||
                 rule.windows.any { it.matches(now) } ||
-                (location != null && rule.places.any { place -> near(context, location, place) })
+                (rule.places.isNotEmpty() && rule.passId in inside) ||
+                (fix != null && rule.places.any { place -> near(context, fix, place) })
         }.map { it.passId }.toSet()
     }
 
