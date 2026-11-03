@@ -651,3 +651,43 @@ Replaces the live race card of 0.26.0 and the Results tab of 0.27.0, as chosen: 
   card's own refresh interval is unchanged.
 - Checked: a unit test replaced ONDS in a two-stock list (matching regardless of letter case),
   left NOK as it was, and ignored a stock the card does not follow.
+
+## 0.39.2: battery audit fixes
+
+The user asked for a check for battery drain. The background work was reviewed: the service's
+timers, location requests, network polling, redraws and the animations on each surface.
+
+**Fixed:**
+- **F1 live timing:**
+  - Its connection to F1's feed (a long-poll that never rests) stayed open after leaving the app
+    while the app stayed in memory, for the rest of the session.
+  - It is now connected only while the screen is in front (Lifecycle STARTED).
+- **Finance card on the always-on display:**
+  - With two or more stocks its pages took turns every 4 seconds with a fade, keeping the
+    always-on display redrawing.
+  - The always-on display now shows the first stock alone. When a big move shows the card, that
+    is the biggest mover.
+- **Redraws with the screen off:**
+  - Every redraw (the minute check for calendar countdowns, sports, Wallet and alarms; chips;
+    prices…) also rebuilt the home screen's cards, which cannot be seen with the screen off.
+  - Only the lock screen is redrawn while the screen is off. Turning the screen on redraws
+    everything at once, as before.
+- **Media track bar:**
+  - It was nudged every 30 seconds while music played, even with the screen off.
+  - It is now nudged only with the screen on; the always-on display shows no moving track bar.
+- **Wallet pass location:**
+  - A location was requested at every unlock while signed in to Google.
+  - It is now requested at most every 15 minutes.
+
+**Checked and left as they were:**
+- Weather location is requested only when the last fix is over 30 minutes old, at balanced
+  accuracy.
+- The animated weather looks and the equaliser are hidden or still on the always-on display.
+- The message pulse is not shown on the always-on display.
+- Battery changes redraw only when the chip's value changes.
+
+**Open for the user to decide:**
+- Prices and live sports scores are still fetched with the screen off, to keep the lock screen
+  current.
+- A running timer ticks every second on the always-on display.
+- The Animated and Wash weather looks animate while the home screen is in view.

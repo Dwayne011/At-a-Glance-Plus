@@ -908,7 +908,9 @@ object LiveCards {
      */
     fun finance(context: Context, aod: Boolean, quotes: List<Quote>, showing: FinanceRules.Showing): SmartspaceTarget {
         val key = showing.instanceKey
-        val ordered = (if (showing.byMoves) quotes.sortedByDescending { it.moved } else quotes).take(MAX_STOCKS)
+        // On the always-on display, the first stock alone: pages taking turns every 4 seconds
+        // would keep redrawing a screen that should change about once a minute.
+        val ordered = (if (showing.byMoves) quotes.sortedByDescending { it.moved } else quotes).take(if (aod) 1 else MAX_STOCKS)
         val views = RemoteViews(context.packageName, R.layout.card_finance)
         if (aod) Style.aodBody(views)
         ordered.forEach { quote ->

@@ -169,7 +169,8 @@ class AtAGlanceService : SmartspaceService() {
         scope.launch {
             while (true) {
                 delay(TRACK_BAR_MS)
-                if (MediaSource.now.value?.playing == true && !Prefs.mediaWave(this@AtAGlanceService)) pushAll()
+                // Not with the screen off: the always-on display shows no moving track bar.
+                if (!screenOff && MediaSource.now.value?.playing == true && !Prefs.mediaWave(this@AtAGlanceService)) pushAll()
             }
         }
         // The trip bar moves on between the maps app's updates: redraw it every 15 s while
@@ -315,8 +316,14 @@ class AtAGlanceService : SmartspaceService() {
         onDestroySmartspaceSession(sessionId)
     }
 
+    /**
+     * Redraws every surface. While the screen is off the home screen cannot be seen, so only the
+     * lock screen (the always-on display) is redrawn; turning the screen on redraws them all.
+     */
     private fun pushAll() {
-        sessions.keys.toList().forEach { push(it) }
+        sessions.entries.toList().forEach { (id, config) ->
+            if (!screenOff || config.uiSurface != SURFACE_HOME) push(id)
+        }
     }
 
     private fun push(sessionId: SmartspaceSessionId) {
@@ -415,7 +422,9 @@ class AtAGlanceService : SmartspaceService() {
         if (now - financeFetchedAt > Prefs.financeRefreshMinutes(this) * 60_000L) restartFinance()
         if (now - sportsScheduledAt > SPORTS_SCHEDULE_MS || now - sportsCheckedAt > SPORTS_STALE_MS) restartSports()
         if (com.ataglanceplus.wallet.GoogleAccount.isSignedIn(this)) {
-            com.ataglanceplus.wallet.WalletGeofences.refreshLocation(this)
+            // A location for the pass rules at most every 15 minutes, not at every unlock.
+            val fix = com.ataglanceplus.wallet.WalletGeofences.cachedLocation
+            if (fix == null || now - fix.time > WALLET_LOCATION_MS) com.ataglanceplus.wallet.WalletGeofences.refreshLocation(this)
             if (now - walletSyncedAt > WALLET_SYNC_MS) restartWalletSync()
         }
         if (message != null && now >= messageUntil) endMessage()
@@ -489,5 +498,6 @@ class AtAGlanceService : SmartspaceService() {
         private const val WALLET_SYNC_MS = 6 * 60 * 60_000L
         private const val TRACK_BAR_MS = 30_000L
         private const val NAV_TRIP_MS = 15_000L
+        private const val WALLET_LOCATION_MS = 15 * 60_000L
     }
 }

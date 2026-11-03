@@ -2649,9 +2649,18 @@ private fun F1TimingLine(position: String, colour: Int, code: String, faded: Boo
 @Composable
 private fun F1LiveSession(context: Context, session: com.ataglanceplus.live.RaceSession) {
     val scope = rememberCoroutineScope()
-    DisposableEffect(Unit) {
-        com.ataglanceplus.live.LiveTiming.want(scope, true)
-        onDispose { com.ataglanceplus.live.LiveTiming.want(scope, false) }
+    // Connected only while the screen is in front: leaving the app (it stays in memory) used to
+    // keep the live feed streaming in the background for the rest of the session.
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            com.ataglanceplus.live.LiveTiming.want(scope, true)
+            try {
+                kotlinx.coroutines.awaitCancellation()
+            } finally {
+                com.ataglanceplus.live.LiveTiming.want(scope, false)
+            }
+        }
     }
     val live by com.ataglanceplus.live.LiveTiming.state.collectAsStateWithLifecycle()
     val state = live
