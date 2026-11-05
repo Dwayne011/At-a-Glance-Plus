@@ -881,3 +881,20 @@ Checked: both pages were rendered by tapping through Settings › Advanced › D
   - with it dismissed, weather got all five;
   - with eight chips and the stocks card dismissed, weather took six and the extra chips card
     took the other two.
+
+## 0.41.3: finance card text clear of the chart
+
+- Reported, from the user's phone (large text): the price line overlapped the chart and its
+  dotted previous-close line, and the change pill was cut short ("-3.6").
+- **Text moved up:** the text sits higher (9dp from the top, was 17dp).
+- **The chart follows the text size:** the chart's band starts 5dp below where the text block
+  ends at the phone's text size. The block measures 12dp plus 44sp (the title's 23sp line, plus
+  the pill's 19sp line and padding). The band ends 5% above the bottom.
+- **The pill is never cut:** the price line takes the room the pill leaves.
+- **The price line shrinks to fit:** it is measured at the phone's text size against that room
+  and made smaller (13.5sp down to 10sp, with 4dp to spare) until it fits.
+  - Android's built-in auto-size text was tried first. It cannot be checked in the renders, so
+    it was replaced with this measurement, which can.
+- Checked by rendering at 1.0× and 1.3× text, with one wide chip or two chips, using a stock
+  falling from the previous close (the reported case). In the 1.3× wide-chip case the price
+  measures 169dp of the 174dp room.

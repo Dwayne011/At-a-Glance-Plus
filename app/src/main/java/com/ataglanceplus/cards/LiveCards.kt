@@ -929,11 +929,9 @@ object LiveCards {
             page.setTextViewText(R.id.finance_title, "${quote.symbol} · ${quote.name}")
             // Beside chips there is less room: the price without its currency code ("6.39", "117.45p").
             fun shown(v: Double) = price(v, quote.currency).let { if (withChips) it.removeSuffix(" ${quote.currency}") else it }
-            page.setTextViewText(
-                R.id.finance_detail,
-                if (extended != null) "${extended.session.label} ${shown(extended.price)} · ${signed(extended.change)}"
-                else "${shown(quote.price)} · ${signed(quote.change)}",
-            )
+            val detailText = if (extended != null) "${extended.session.label} ${shown(extended.price)} · ${signed(extended.change)}"
+                else "${shown(quote.price)} · ${signed(quote.change)}"
+            page.setTextViewText(R.id.finance_detail, detailText)
             page.setTextViewText(R.id.finance_change, signed(extended?.changePercent ?: quote.changePercent) + "%")
             page.setTextColor(R.id.finance_change, colour)
             if (!withChips) {
@@ -950,6 +948,7 @@ object LiveCards {
                 page.setInt(R.id.finance_change, "setBackgroundResource", if (up) R.drawable.finance_pill_up else R.drawable.finance_pill_down)
             }
             if (withChips) {
+                fitDetail(context, page, chips, detailText, signed(extended?.changePercent ?: quote.changePercent) + "%")
                 backdrop(context, quote, chips)?.let { (bitmap, closeAtDp) ->
                     page.setImageViewBitmap(R.id.finance_chart, bitmap)
                     page.setInt(R.id.finance_chart, "setColorFilter", colour)
@@ -996,6 +995,38 @@ object LiveCards {
      * yesterday's close as a faint line for reference.
      */
     /**
+     * The price line beside the change pill, on the finance card with chips: measured at the
+     * phone's text size against the room the pill and chips leave, and made smaller (13.5sp down
+     * to 10sp) until it fits, so it is not cut off at large text sizes.
+     */
+    private fun fitDetail(context: Context, page: RemoteViews, chips: List<ChipSpec>, text: String, change: String) {
+        val metrics = context.resources.displayMetrics
+        val column = if (Chips.plan(context, chips, Chips.MAX_RIGHT).any { it.big }) 128f else 100f
+        // The page: the card less its 18dp end padding and the chips' column (whose 8dp gap and
+        // -8dp end margin cancel out), less the page's own 18dp + 6dp padding.
+        val pageDp = WeatherCard.cardWidthDp(context) - 18f - column - 24f
+        fun px(sp: Float) = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, sp, metrics)
+        val pill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = px(12.5f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }.measureText(change) / metrics.density + 16f + 8f
+        // 4dp to spare: the pill's medium-bold face measures a little wider than plain bold.
+        val room = pageDp - pill - 4f
+        // As AagText.Detail: sans-serif regular, letter spacing 0.0077em.
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = android.graphics.Typeface.SANS_SERIF
+            letterSpacing = 0.0077f
+        }
+        var size = 13.5f
+        while (size > 10f) {
+            paint.textSize = px(size)
+            if (paint.measureText(text) / metrics.density <= room) break
+            size -= 0.5f
+        }
+        page.setTextViewTextSize(R.id.finance_detail, android.util.TypedValue.COMPLEX_UNIT_SP, size)
+    }
+
+    /**
      * The day's line for the finance card with chips: the line and a fading area under it across
      * the lower part of the page, as an alpha-only image the card tints (small enough for four
      * stocks in one card). Returns it with the previous close's height in dp, when it is in view.
@@ -1010,9 +1041,13 @@ object LiveCards {
         val scale = 1.5f
         val w = (wDp * scale).toInt()
         val h = (hDp * scale).toInt()
-        // The line keeps to the band under the text: from 60% of the height to 6% above the bottom.
-        val bandTop = 0.60f * hDp
-        val bandBottom = 0.94f * hDp
+        // The line keeps to the band under the text, at the phone's text size: the text block
+        // (9dp padding, the title's 23sp line, 3dp, then the pill's 19sp line and 2dp padding,
+        // taller than the price's 18sp) ends at 12dp + 44sp; the band starts 5dp below it (no
+        // lower than 80% of the card) and ends 5% above the bottom.
+        val fontScale = context.resources.configuration.fontScale
+        val bandBottom = 0.95f * hDp
+        val bandTop = (12f + 44f * fontScale + 5f).coerceAtMost(0.80f * hDp)
         val low = minOf(points.min(), quote.previousClose)
         val high = maxOf(points.max(), quote.previousClose)
         val span = (high - low).takeIf { it > 0 } ?: 1.0
