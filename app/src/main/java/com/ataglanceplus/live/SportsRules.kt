@@ -44,13 +44,45 @@ object SportsRules {
     private const val HOUR = 3_600_000L
     const val STEP_LASTS = 60_000L
 
+    /** A dismissed team card comes back this long before the team's next kick-off. */
+    const val TEAM_RETURN_MS = 30 * 60_000L
+    /** A dismissed F1 (racing) card comes back this long before the next session. */
+    const val RACE_RETURN_MS = HOUR
+
+    /**
+     * Dismissing a sports card snoozes its team or series, whatever stage it was at (before,
+     * live, result, next): it stays away until [TEAM_RETURN_MS] before the next kick-off, or
+     * [RACE_RETURN_MS] before the next session, that is still that far off. Returns false when the
+     * card's team or series is not known (no schedule loaded), for the ordinary dismissal instead.
+     */
+    fun dismiss(context: Context, instanceKey: String): Boolean {
+        val eventId = instanceKey.split(':').getOrNull(1) ?: return false
+        val follow = SportsSource.games.value.entries.firstOrNull { (_, list) -> list.any { it.eventId == eventId } }?.key
+            ?: SportsSource.races.value.entries.firstOrNull { (_, list) -> list.any { it.eventId == eventId } }?.key
+            ?: return false
+        Prefs.snoozeSports(context, follow, System.currentTimeMillis())
+        return true
+    }
+
+    /** When a snoozed team or series comes back: the first start still [lead] off at [dismissedAt], less [lead]; null while none is known. */
+    fun returnsAt(starts: List<Long>, dismissedAt: Long, lead: Long): Long? =
+        starts.filter { it - lead > dismissedAt }.minOrNull()?.minus(lead)
+
     fun showing(context: Context, games: Map<String, List<Game>>, races: Map<String, List<RaceSession>>): List<SportsShowing> {
         val now = System.currentTimeMillis()
         val before = Prefs.sportsBeforeHours(context) * HOUR
         val after = Prefs.sportsAfterHours(context) * HOUR
         val next = Prefs.sportsNextAlways(context)
+        val snoozes = Prefs.sportsSnoozes(context)
         val result = mutableListOf<SportsShowing>()
         Prefs.sportsFollowed(context).forEach { f ->
+            // Dismissed: away until shortly before the next start, then back as usual.
+            snoozes[f.key]?.let { at ->
+                val starts = if (f.isRacing) races[f.key].orEmpty().map { it.start } else games[f.key].orEmpty().map { it.start }
+                val back = returnsAt(starts, at, if (f.isRacing) RACE_RETURN_MS else TEAM_RETURN_MS)
+                if (back == null || now < back) return@forEach
+                Prefs.clearSportsSnooze(context, f.key)
+            }
             if (f.isRacing) {
                 val sessions = races[f.key].orEmpty()
                 pick(sessions, now, before, after, next, { it.state }, { it.start }, { endOf(it) })

@@ -247,8 +247,9 @@ private fun HomePage(version: Int, open: (String) -> Unit) {
         LinkRow("Card height", "${Prefs.cardHeightDp(context)} dp", iconRes = R.drawable.ic_comp_screen) { editingHeight = true }
         SwitchSettingRow("Show all cards", "Off: only as many as the launcher asks for", icon = Icons.AutoMirrored.Filled.List, checked = Prefs.showAllCards(context)) { Prefs.setShowAllCards(context, it) }
         SwitchSettingRow("Always-on look on the lock screen", "The always-on display style with the screen on", icon = Icons.Default.Lock, checked = Prefs.aodPreview(context)) { Prefs.setAodPreview(context, it) }
-        val dismissed = Prefs.dismissed(context)
-        if (dismissed.isNotEmpty()) SettingRow("Bring back dismissed cards", "${dismissed.size} hidden", icon = Icons.Default.Refresh, onClick = { Prefs.restoreDismissed(context) })
+        // Dismissed cards, and sports cards snoozed until their next start.
+        val hidden = Prefs.dismissed(context).size + Prefs.sportsSnoozes(context).size
+        if (hidden > 0) SettingRow("Bring back dismissed cards", "$hidden hidden", icon = Icons.Default.Refresh, onClick = { Prefs.restoreDismissed(context) })
 
         Subheader("System")
         if (Prefs.isPaired(context)) {

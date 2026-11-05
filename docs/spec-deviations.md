@@ -898,3 +898,33 @@ Checked: both pages were rendered by tapping through Settings › Advanced › D
 - Checked by rendering at 1.0× and 1.3× text, with one wide chip or two chips, using a stock
   falling from the previous close (the reported case). In the 1.3× wide-chip case the price
   measures 169dp of the 174dp room.
+
+## 0.41.4: when dismissed sports and F1 cards come back
+
+The user asked what brings each dismissed card back, and chose new timings.
+
+**Before:**
+- Dismissals were stored per stage ("sports:<event>:BEFORE", ":LIVE", ":AFTER"). A team's card
+  came back at every stage: at kick-off, then for the result, then for the next fixture.
+- F1 came back for every session's start, live session and result, many times a weekend.
+
+**Now:**
+- **Team card:** dismissing it at any stage snoozes the team. It comes back 30 minutes before the
+  next kick-off that is still more than 30 minutes away. So dismissing a fixture 90 minutes off
+  brings it back 30 minutes before kick-off. Dismissing the live game or the result hides it
+  until 30 minutes before the following game. That includes the "next game" card when "Next game
+  when nothing's on" is on.
+- **F1 (racing series):** the same, 1 hour before the next session that is still more than an
+  hour away.
+- **Stocks card:** unchanged. It comes back at the next price refresh, as the user chose.
+- **How it is stored:** snoozes are kept per followed team or series with the time of the
+  dismissal (sports_snoozed), and checked against the schedule each minute. A snooze ends once
+  its time comes. If the team's schedule is not loaded when the card is dismissed, it falls back
+  to the old per-stage dismissal.
+- **Settings:**
+  - "Bring back dismissed cards" counts and clears these snoozes too.
+  - The Sports page explains the timings.
+- Checked with a Robolectric test of the real rules:
+  - a fixture 90 minutes off: hidden after dismissing, back at 29 minutes before kick-off;
+  - dismissed live: hidden through the result, and with the next game three days off;
+  - F1 qualifying 100 minutes off: hidden, back at 59 minutes before.

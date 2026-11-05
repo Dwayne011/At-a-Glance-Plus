@@ -369,6 +369,7 @@ internal fun SportsPage(version: Int, onBack: () -> Unit, open: (String) -> Unit
         LinkRow("Before kick-off", "${Prefs.sportsBeforeHours(context)} h") { choosing = "before" }
         LinkRow("After full time", "${Prefs.sportsAfterHours(context)} h") { choosing = "after" }
         SwitchSettingRow("Next game when nothing's on", "Otherwise each team's card only shows around its games", checked = Prefs.sportsNextAlways(context)) { Prefs.setSportsNextAlways(context, it) }
+        SettingNote("A dismissed card comes back 30 minutes before the team's next game, or for Formula 1, an hour before the next session.")
 
         Subheader("Tapping a game")
         LinkRow("Opens", when (Prefs.sportsOpen(context)) {

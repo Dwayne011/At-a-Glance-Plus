@@ -20,6 +20,7 @@ object Prefs {
     private const val KEY_WEATHER_LOOK = "weather_look"
     private const val KEY_CHIPS = "chips"
     private const val KEY_DISMISSED = "dismissed_cards"
+    private const val KEY_SPORTS_SNOOZED = "sports_snoozed"
     private const val KEY_CHIP_APP = "chip_app_"
     private const val KEY_GMAIL_LABELS = "gmail_labels_"
     private const val KEY_COUNTDOWN = "countdown_day"
@@ -222,7 +223,30 @@ object Prefs {
     fun dismissed(context: Context): Set<String> = get(context).getStringSet(KEY_DISMISSED, emptySet()) ?: emptySet()
 
     fun dismiss(context: Context, instanceKey: String) {
-        get(context).edit().putStringSet(KEY_DISMISSED, dismissed(context) + instanceKey).apply()
+        // Sports and F1 cards are snoozed by team or series instead (see SportsRules.dismiss).
+        if (instanceKey.startsWith("sports:") && com.ataglanceplus.live.SportsRules.dismiss(context, instanceKey)) return
+        get(context).edit { putStringSet(KEY_DISMISSED, dismissed(context) + instanceKey) }
+    }
+
+    /**
+     * Dismissed sports cards, by followed team or series key, with when they were dismissed: the
+     * card stays away until shortly before that team's or series' next start (SportsRules).
+     */
+    fun sportsSnoozes(context: Context): Map<String, Long> =
+        get(context).getStringSet(KEY_SPORTS_SNOOZED, emptySet()).orEmpty().mapNotNull { entry ->
+            val at = entry.substringAfterLast('|').toLongOrNull() ?: return@mapNotNull null
+            entry.substringBeforeLast('|') to at
+        }.toMap()
+
+    fun snoozeSports(context: Context, followKey: String, at: Long) {
+        val kept = sportsSnoozes(context) - followKey + (followKey to at)
+        get(context).edit { putStringSet(KEY_SPORTS_SNOOZED, kept.map { (k, v) -> "$k|$v" }.toSet()) }
+    }
+
+    fun clearSportsSnooze(context: Context, followKey: String) {
+        val now = sportsSnoozes(context)
+        if (followKey !in now) return
+        get(context).edit { putStringSet(KEY_SPORTS_SNOOZED, (now - followKey).map { (k, v) -> "$k|$v" }.toSet()) }
     }
 
     /** Forgets dismissals of instances that have ended. */
@@ -233,7 +257,7 @@ object Prefs {
     }
 
     fun restoreDismissed(context: Context) {
-        get(context).edit().remove(KEY_DISMISSED).apply()
+        get(context).edit { remove(KEY_DISMISSED).remove(KEY_SPORTS_SNOOZED) }
     }
 
     /** Draw the lock screen in the always-on look even while the screen is on. */
