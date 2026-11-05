@@ -23,7 +23,7 @@ object DebugLog {
 
     enum class Kind(val label: String) {
         PROCESS("App"), CONNECTION("Connection"), ACTIVATION("Activation"), LOCATION("Location"),
-        WALLET("Wallet"), FETCH("Fetch"), POWER("Power"), ERROR("Error"),
+        WALLET("Wallet"), LIVE("Live"), FETCH("Fetch"), POWER("Power"), ERROR("Error"),
     }
 
     private const val TAG = "DebugLog"

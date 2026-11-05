@@ -87,6 +87,8 @@ object CardDeck {
         val timerChips = if (timer != null || alarm != null) takeForCard() else null
         // Chips go on the first calendar card; the others stack without any.
         val calendarChips = if (calendars.isNotEmpty()) takeForCard() else null
+        // The finance card has room for chips too (beside its stocks).
+        val financeChips = if (finance != null) takeForCard() else null
         // The rest on extra chips cards, two rows each.
         val extraChips = buildList {
             while (!pool.isNullOrEmpty()) {
@@ -120,9 +122,9 @@ object CardDeck {
             calendars.forEachIndexed { i, event -> card("calendar") { LiveCards.calendar(context, aod, event, if (i == 0) calendarChips else emptyList()) } }
             wallet.forEach { pass -> card("wallet") { LiveCards.wallet(context, aod, pass) } }
             // Finance is always up; a big move or a time window brings it ahead of upcoming games.
-            finance?.takeIf { it.forward }?.let { card("finance") { LiveCards.finance(context, aod, data.quotes, it) } }
+            finance?.takeIf { it.forward }?.let { card("finance") { LiveCards.finance(context, aod, data.quotes, it, financeChips) } }
             otherSports.forEach { card("sports") { sportsCard(context, aod, it) } }
-            finance?.takeIf { !it.forward }?.let { card("finance") { LiveCards.finance(context, aod, data.quotes, it) } }
+            finance?.takeIf { !it.forward }?.let { card("finance") { LiveCards.finance(context, aod, data.quotes, it, financeChips) } }
         }
         val weatherCard = WeatherCard.build(context, surface, aod, data.weather, data.weatherStatus, weatherChips)
         // The extra card: the chips that did not fit, or, with none, today and the next days.

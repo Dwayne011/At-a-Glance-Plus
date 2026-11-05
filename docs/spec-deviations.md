@@ -760,3 +760,79 @@ It holds no keys, tokens, account names or coordinates, and is not in backups.
 Checked:
 - The Debug page was rendered (Robolectric, reached by tapping Advanced › Debug).
 - The report was printed in the test: no coordinates, keys or accounts.
+
+## 0.41.0: What if maths, finance card with chips, candle menu, eToro volume, and fixes
+
+**Fixes from the user's report:**
+- **What if was off:**
+  - It took eToro's current P/L for each position and moved it by the gap between the chosen
+    price and Yahoo's price. eToro's figure is at eToro's own price, so any difference between
+    the two feeds was multiplied by the units (about $365 a cent on 36,500 units).
+  - P/L is now units × (price − open price), up for a buy, down for a sell, the same as the
+    user's calculator. Break-even is the open prices weighted by units.
+  - Checked against the calculator: +124,238.61 at $10 (calculator +124,238.58, which rounds each
+    position first), and break-even 6.5975, the same.
+  - eToro's own figure can differ by its spread and fees.
+- **"Fetching live scores … JobCancellationException" errors:** pausing scores with the screen
+  off restarts the sports job when the screen comes on, and each stop was recorded as an error.
+  A stop on purpose (a coroutine cancellation) is no longer recorded.
+- **Running in the background:**
+  - The At a Glance service stays running because the launcher and lock screen are connected to
+    it. That is how the cards work.
+  - A pairing started and never finished kept a foreground service searching the network
+    indefinitely, and Android restarted it. Pairing now stops after 10 minutes and is not
+    restarted.
+- **Live Updates:**
+  - Uber Eats posts a plain ongoing notification, not a marked Live Update, so it was not shown.
+  - Ongoing notifications from delivery and ride apps now show as Live Update cards: Uber, Uber
+    Eats, Deliveroo, Just Eat, Bolt, Bolt Food, Lyft, DoorDash, Grubhub, FREENOW, Citymapper and
+    Domino's (UK).
+  - Each new Live Update is noted in the Debug history, with whether the app marked it.
+
+**Stocks:**
+- **At most four stocks:**
+  - Adding stops at four, and the Finance page says so.
+  - Settings with more keep the first four.
+- **Swipe between stocks:** swiping the price card left or right on the stock screen moves to the
+  next or previous stock, the card following the finger. Dots under it show which stock is open.
+- **Candle sizes:**
+  - The sizes are Auto, 5m, 15m, 30m, 1h and 4h (the user's mockup D).
+  - They are a "Candles: Auto ▾" menu beside the Price title on 1D and 5D, replacing the second
+    row of pills, which looked like a second copy of the range setting.
+  - 15m on 5D fetches 15-minute candles from Yahoo, and eToro's 5-minute candles grouped into
+    15.
+  - 1h and 4h are grouped on the chart.
+- **Time labels when zoomed:** the labels step from 6 hours down to 1 hour, 30, 15, 10 and 5
+  minutes, the finest that fits for the candles on screen. They are spaced by their measured
+  width, so 12-hour labels ("10:15 AM") never overlap.
+- **Volume:**
+  - Yahoo reports no volume for most pre-market and after-hours candles. Those candles now take
+    eToro's volume for the same time, as eToro's chart shows (labelled "on eToro" and drawn on
+    eToro's scale).
+  - The VWAP starts again where the volume's source changes.
+  - eToro's public candle feed returns at most about 1000 candles per request (checked with
+    1500, 2000 and 3000). So with 5- or 15-minute candles on 5D, the first day's pre-market has
+    no eToro volume. 1D, and 5D at 30 minutes or more, are complete.
+  - Checked with live ONDS and AAPL data: for example, 88 of 91 ONDS pre-market candles on 1D
+    now have volume.
+- **Card refresh:** the home screen card keeps its own interval, which the user can choose,
+  unchanged. The stock screen still refreshes every 15 seconds while open.
+
+**Finance card with chips (the user's mockup C):**
+- With chips, the finance card puts the chips' column on the right, as the calendar card does.
+- Each stock's day's line and the area under it are drawn faintly across the lower part of the
+  card, with a dotted line at the previous close. Over them sit the ticker and name, then the
+  price, its move and the change pill.
+- The line is an alpha-only image tinted green or red (about 70 KB a stock), so four stocks stay
+  well inside the card size limit.
+- Beside chips the price drops its currency code ("6.39"), so the line fits.
+- The card takes its chips from the user's chips after the navigation, timer or alarm, and
+  calendar cards. Without chips it is as before.
+- Rendered:
+  - rising and falling stocks;
+  - without chips;
+  - on the always-on display;
+  - with one tall chip;
+  - at 1.3× text.
+
+  The layout audit found no clipping.

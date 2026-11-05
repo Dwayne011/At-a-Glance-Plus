@@ -20,10 +20,12 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -818,6 +820,7 @@ private fun StockDashboard(initial: String) {
                 detail = "${q.symbol} · ${h.exchangeName}",
                 value = "${money(extended?.price ?: q.price)} ${q.currency}",
                 rising = (extended?.change ?: change) >= 0,
+                modifier = Modifier.stockSwipe(tickers, symbol) { symbol = it },
             ) {
                 if (extended != null) {
                     Text(
@@ -835,6 +838,7 @@ private fun StockDashboard(initial: String) {
                     color = if (change >= 0) UP_TEXT else DOWN_TEXT,
                 )
             }
+            StockDots(tickers, symbol)
             // "What if" has a tab of its own, beside the chart, once there are eToro positions in
             // this (US dollar) stock.
             val holding = etoro?.takeIf { it.open.isNotEmpty() && q.currency == "USD" }
@@ -845,14 +849,13 @@ private fun StockDashboard(initial: String) {
                     close = q.price.takeIf { extended != null } ?: q.previousClose, dayHigh = h.dayHigh, money = ::money,
                 )
             } else {
-            FinancePanel("Price") {
+            FinancePanel(
+                "Price",
+                // Candle size beside the title, on the ranges that have it (1D and 5D).
+                action = if (range.minutes != null) ({ CandleMenu(candleSize) { candleSize = it } }) else null,
+            ) {
                 val ranges = com.ataglanceplus.live.FinanceSource.Range.entries
                 SegmentedPills(ranges.map { it.label }, range.ordinal) { range = ranges[it] }
-                // Candle size on 1D and 5D: Auto groups them to fit; 5m, 30m and 1h fix it.
-                if (range.minutes != null) {
-                    val sizes = listOf<Int?>(null, 5, 30, 60)
-                    SegmentedPills(listOf("Auto", "5m", "30m", "1h"), sizes.indexOf(candleSize).coerceAtLeast(0)) { candleSize = sizes[it] }
-                }
                 // Pre-market, after hours and overnight on the 1D and 5D charts, at a tap (it was
                 // only in the VWAP dialog, so it was easy to miss that it was off).
                 if (range.minutes != null) {
@@ -957,7 +960,7 @@ internal fun VwapDialog(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Extended hours")
                         Text(
-                            "1D and 5D charts of US stocks include pre-market and after-hours trading (Yahoo's prices) and the overnight session (eToro's, as Yahoo has none), as in eToro's 24/5 charts. The VWAP leaves out candles with no reported volume.",
+                            "1D and 5D charts of US stocks include pre-market and after-hours trading (Yahoo's prices) and the overnight session (eToro's, as Yahoo has none), as in eToro's 24/5 charts. Yahoo reports no volume outside regular hours, so those candles show eToro's volume (its own trading, on its own scale), and the VWAP starts again where the volume's source changes.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -1250,10 +1253,13 @@ private fun FinanceScreen(content: @Composable androidx.compose.foundation.layou
 
 /** The headline: what it is, the value large, then its moves, on a wash of green or red. */
 @Composable
-private fun FinanceHero(name: String, detail: String, value: String, rising: Boolean, moves: @Composable () -> Unit) {
+private fun FinanceHero(
+    name: String, detail: String, value: String, rising: Boolean,
+    modifier: Modifier = Modifier, moves: @Composable () -> Unit,
+) {
     val tone = if (rising) UP else DOWN
     Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
             .background(Brush.verticalGradient(listOf(tone.copy(alpha = 0.22f), SportHigh)))
             .border(1.dp, SportBorder, RoundedCornerShape(20.dp))
             .padding(horizontal = 18.dp, vertical = 16.dp),
@@ -1266,15 +1272,96 @@ private fun FinanceHero(name: String, detail: String, value: String, rising: Boo
     }
 }
 
+/**
+ * Swiping the price card left or right moves to the next or previous of the user's stocks (no
+ * wrap at the ends), the card following the finger a little as it goes.
+ */
+@Composable
+private fun Modifier.stockSwipe(tickers: List<String>, symbol: String, onSwitch: (String) -> Unit): Modifier {
+    if (tickers.size < 2) return this
+    val drag = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val threshold = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
+    return this
+        .graphicsLayer { translationX = drag.value * 0.4f }
+        .pointerInput(tickers, symbol) {
+            detectHorizontalDragGestures(
+                onDragEnd = {
+                    val i = tickers.indexOf(symbol)
+                    val next = when {
+                        drag.value <= -threshold && i < tickers.lastIndex -> tickers[i + 1]
+                        drag.value >= threshold && i > 0 -> tickers[i - 1]
+                        else -> null
+                    }
+                    next?.let(onSwitch)
+                    scope.launch { drag.animateTo(0f) }
+                },
+                onDragCancel = { scope.launch { drag.animateTo(0f) } },
+            ) { change, amount ->
+                change.consume()
+                scope.launch { drag.snapTo(drag.value + amount) }
+            }
+        }
+}
+
+/** Which of the user's stocks is shown: a dot each, the current one filled. */
+@Composable
+private fun StockDots(tickers: List<String>, symbol: String) {
+    if (tickers.size < 2) return
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+        tickers.forEach { t ->
+            Box(
+                Modifier.padding(horizontal = 3.dp).size(6.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(if (t == symbol) Color.White else Color.White.copy(alpha = 0.28f))
+            )
+        }
+    }
+}
+
 /** A titled panel, as the sports dashboards draw theirs. */
 @Composable
-private fun FinancePanel(title: String, content: @Composable () -> Unit) {
+private fun FinancePanel(title: String, action: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(SportHigh).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            action?.invoke()
+        }
         content()
+    }
+}
+
+/** The candle sizes on the 1D and 5D charts: null is Auto (grouped to fit the width). */
+private val CANDLE_SIZES = listOf<Int?>(null, 5, 15, 30, 60, 240)
+
+private fun candleLabel(minutes: Int?): String = when (minutes) {
+    null -> "Auto"
+    in 1..59 -> "${minutes}m"
+    else -> "${minutes!! / 60}h"
+}
+
+/** "Candles: Auto ▾" beside the chart's title, opening the sizes; a tick marks the one chosen. */
+@Composable
+private fun CandleMenu(chosen: Int?, onChoose: (Int?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Text(
+            "Candles: ${candleLabel(chosen)} ▾", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+            modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(SportCard)
+                .border(1.dp, SportBorder, RoundedCornerShape(16.dp))
+                .clickable { open = true }.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            CANDLE_SIZES.forEach { size ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(if (size == null) "Auto (fit the chart)" else candleLabel(size)) },
+                    trailingIcon = if (size == chosen) ({ Text("✓", color = SportAccent) }) else null,
+                    onClick = { open = false; onChoose(size) },
+                )
+            }
+        }
     }
 }
 
@@ -1321,6 +1408,8 @@ private class Bar(
     val from: Int, val to: Int, val time: Long, val end: Long,
     val open: Double, val high: Double, val low: Double, val close: Double, val volume: Long,
     val session: com.ataglanceplus.live.FinanceSource.Session,
+    /** The volume is eToro's own (see FinanceSource.Candle.etoroVolume). */
+    val etoroVolume: Boolean = false,
 )
 
 /**
@@ -1342,6 +1431,7 @@ private fun bars(candles: List<com.ataglanceplus.live.FinanceSource.Candle>, fir
         out += Bar(
             i, j, start, if (stepMs != null) start + stepMs else c.time + (baseMs ?: 0L),
             c.open, group.maxOf { it.high }, group.minOf { it.low }, group.last().close, group.sumOf { it.volume }, c.session,
+            group.any { it.etoroVolume },
         )
         i = j + 1
     }
@@ -1489,13 +1579,13 @@ private fun CandleChart(
                             drawLine(tagColour.copy(alpha = 0.8f), Offset(0f, y(latest)), Offset(size.width, y(latest)), strokeWidth = 1.dp.toPx(),
                                 pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 3.dp.toPx())))
                         }
-                        // Volume: each feed on its own scale (eToro's overnight volume is not the exchange's).
-                        val maxDay = shown.filter { it.session != Session.OVERNIGHT }.maxOfOrNull { it.volume }?.coerceAtLeast(1) ?: 1
-                        val maxNight = shown.filter { it.session == Session.OVERNIGHT }.maxOfOrNull { it.volume }?.coerceAtLeast(1) ?: 1
+                        // Volume: each feed on its own scale (eToro's volume is its own trading, not the exchange's).
+                        val maxDay = shown.filter { !it.etoroVolume }.maxOfOrNull { it.volume }?.coerceAtLeast(1) ?: 1
+                        val maxNight = shown.filter { it.etoroVolume }.maxOfOrNull { it.volume }?.coerceAtLeast(1) ?: 1
                         val bodyWidth = { b: Bar -> ((b.to - b.from + 1) * slot * 0.62f).coerceAtLeast(1.2.dp.toPx()) }
                         shown.forEach { b ->
                             if (b.volume <= 0) return@forEach
-                            val h = volH * b.volume / (if (b.session == Session.OVERNIGHT) maxNight else maxDay).toFloat()
+                            val h = volH * b.volume / (if (b.etoroVolume) maxNight else maxDay).toFloat()
                             val w = bodyWidth(b)
                             drawRoundRect((if (b.close >= b.open) CANDLE_UP else CANDLE_DOWN).copy(alpha = 0.35f), Offset(xb(b) - w / 2, volTop + volH - h), Size(w, h), CornerRadius(minOf(1.5.dp.toPx(), w / 4)))
                         }
@@ -1536,15 +1626,29 @@ private fun CandleChart(
                             drawText(m, topLeft = Offset((x - m.size.width / 2f).coerceIn(0f, size.width - m.size.width), labelY))
                         }
                         if (minutes != null) {
+                            // The finest step that leaves room between labels, from 5 minutes (zoomed
+                            // right in) to 6 hours, on round times; otherwise the days.
                             val local = (first..last).map { java.time.Instant.ofEpochMilli(candles[it].time).atZone(zone) }
-                            val gap = 46.dp.toPx()
-                            val hourly = listOf(1, 2, 3, 4, 6).firstOrNull { step ->
-                                val xs = local.indices.filter { local[it].minute == 0 && local[it].hour % step == 0 }.map { xi(first + it) }
-                                xs.zipWithNext().all { (a, b) -> b - a >= gap }
+                            val h24 = android.text.format.DateFormat.is24HourFormat(context)
+                            // Room for a label at a step: its widest form ("Mon 12:45 PM") and a margin.
+                            fun gapFor(step: Int): Float {
+                                val sample = (if (h24) "Mon 23:45" else if (step < 60) "Mon 12:45 PM" else "Mon 12 PM")
+                                return measurer.measure(sample, small).size.width + 8.dp.toPx()
                             }
-                            val ticks = if (hourly != null) local.indices.filter { local[it].minute == 0 && local[it].hour % hourly == 0 }
+                            val minuteOfDay = local.map { it.hour * 60 + it.minute }
+                            val every = listOf(5, 10, 15, 30, 60, 120, 180, 240, 360).firstOrNull { step ->
+                                val xs = local.indices.filter { minuteOfDay[it] % step == 0 }.map { xi(first + it) }
+                                xs.isNotEmpty() && xs.zipWithNext().all { (a, b) -> b - a >= gapFor(step) }
+                            }
+                            val gap = every?.let { gapFor(it) } ?: 46.dp.toPx()
+                            val hourly = every
+                            val ticks = if (every != null) local.indices.filter { minuteOfDay[it] % every == 0 }
                             else local.indices.filter { it == 0 || local[it].toLocalDate() != local[it - 1].toLocalDate() }
-                            val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h a"
+                            val pattern = when {
+                                h24 -> "HH:mm"
+                                every != null && every < 60 -> "h:mm a"
+                                else -> "h a"
+                            }
                             var lastX = -gap
                             var lastDate: java.time.LocalDate? = null
                             ticks.forEach { k ->
@@ -1644,7 +1748,7 @@ private fun Readout(
                 )
                 if (bar.volume > 0) {
                     Text(
-                        if (bar.session == com.ataglanceplus.live.FinanceSource.Session.OVERNIGHT) " · ${compactShares(bar.volume, locale)} on eToro" else " · ${compactShares(bar.volume, locale)}",
+                        if (bar.etoroVolume) " · ${compactShares(bar.volume, locale)} on eToro" else " · ${compactShares(bar.volume, locale)}",
                         fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                     )
                 }

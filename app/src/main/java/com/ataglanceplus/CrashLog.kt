@@ -40,6 +40,9 @@ object CrashLog {
 
     /** An error the app caught and carried on from. */
     fun record(context: Context, where: String, error: Throwable) {
+        // A job stopped on purpose (the sports loop restarted as the screen came on, say) is
+        // not an error.
+        if (error is kotlinx.coroutines.CancellationException) return
         Log.w(TAG, where, error)
         runCatching { write(context.applicationContext, where, error) }
         DebugLog.add(context, DebugLog.Kind.ERROR, "$where: ${error.javaClass.simpleName}: ${error.message.orEmpty().take(200)}")

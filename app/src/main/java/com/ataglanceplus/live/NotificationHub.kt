@@ -139,9 +139,19 @@ object NotificationHub {
             it.isOngoing && (it.notification.category == Notification.CATEGORY_NAVIGATION || it.packageName == MAPS)
         }?.let { navFrom(context, it) }
         val live = usable
-            .filter { it.key != timer?.key && it.key != nav?.key && isLiveUpdate(it.notification) }
+            .filter { it.key != timer?.key && it.key != nav?.key && (isLiveUpdate(it.notification) || isTrip(it)) }
             .sortedByDescending { it.postTime }
             .map { liveFrom(context, it) }
+        // The history notes each new Live Update once, and whether the app marked it as one.
+        live.filter { it.key !in seenLive }.forEach { l ->
+            val sbn = usable.first { it.key == l.key }
+            com.ataglanceplus.DebugLog.add(
+                context, com.ataglanceplus.DebugLog.Kind.LIVE,
+                "Live Update from ${l.app}: " + if (isLiveUpdate(sbn.notification)) "marked by the app" else "an ongoing delivery or ride notification",
+            )
+        }
+        seenLive.retainAll(live.map { it.key }.toSet())
+        seenLive.addAll(live.map { it.key })
         _timer.value = timer
         _nav.value = nav
         _live.value = live
@@ -187,6 +197,25 @@ object NotificationHub {
         }
         return null
     }
+
+    /** Live Updates already noted in the history. */
+    private val seenLive = mutableSetOf<String>()
+
+    /**
+     * Delivery and ride apps, whose order or trip notification is shown as a Live Update even
+     * when the app does not mark it as one (Uber Eats, for example, posts a plain ongoing
+     * notification).
+     */
+    private val TRIP_APPS = setOf(
+        "com.ubercab", "com.ubercab.eats", "com.deliveroo.orderapp", "com.justeat.app.uk", "com.justeat.app",
+        "ee.mtakso.client", "com.bolt.deliveryclient", "me.lyft.android", "com.dd.doordash", "com.grubhub.android",
+        "taxi.android.client", "com.citymapper.app.release", "uk.co.dominos.android",
+    )
+
+    /** An ongoing notification with something to say from a delivery or ride app. */
+    private fun isTrip(sbn: StatusBarNotification): Boolean =
+        sbn.packageName in TRIP_APPS && sbn.isOngoing &&
+            (title(sbn.notification).isNotEmpty() || text(sbn.notification).isNotEmpty())
 
     private fun isLiveUpdate(n: Notification): Boolean =
         n.flags and Notification.FLAG_PROMOTED_ONGOING != 0 ||

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Finance with chips (layout C): the stocks taking turns on the left, each over its day's line
+    drawn faintly across the card, and the chips' column on the right, as on the calendar card.
+    Pages come from include_finance_page_chart.xml.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_root"
+    style="@style/AagCardRoot">
+
+    <LinearLayout
+        android:id="@+id/card_body"
+        style="@style/AagCardBody"
+        android:background="@drawable/card_bg_finance"
+        android:baselineAligned="false"
+        android:clipToPadding="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="0dp"
+        android:paddingEnd="18dp">
+
+        <ViewFlipper
+            android:id="@+id/finance_flipper"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:autoStart="true"
+            android:flipInterval="4000"
+            android:inAnimation="@android:anim/fade_in"
+            android:outAnimation="@android:anim/fade_out" />
+
+        <LinearLayout
+            android:id="@+id/complications"
+            android:layout_width="100dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="-8dp"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Hold ring (spec 6.3): traces the card's edge while it is held, until the launcher's menu opens. -->
+    <ImageView
+        android:id="@+id/hold_bar"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/card_body_height"
+        android:layout_gravity="center_vertical"
+        android:contentDescription="@null"
+        android:duplicateParentState="true"
+        android:scaleType="fitXY"
+        android:src="@drawable/hold_bar_red_400"
+        android:visibility="gone" />
+</FrameLayout>

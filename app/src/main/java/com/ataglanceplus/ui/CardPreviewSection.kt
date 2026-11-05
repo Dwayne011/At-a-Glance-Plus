@@ -211,7 +211,12 @@ internal fun FinancePage(version: Int, onBack: () -> Unit, open: (String) -> Uni
                 trailing = { IconButton(onClick = { Prefs.setFinanceTickers(context, tickers - ticker) }) { Icon(Icons.Default.Close, contentDescription = "Remove") } },
             )
         }
-        SettingRow("Add a stock", icon = Icons.Default.Add, accent = true, onClick = { open("finance/add") })
+        // Up to four stocks: the card takes turns between them and the stock screen swipes through them.
+        if (tickers.size < Prefs.MAX_FINANCE_TICKERS) {
+            SettingRow("Add a stock", "${tickers.size} of ${Prefs.MAX_FINANCE_TICKERS}", icon = Icons.Default.Add, accent = true, onClick = { open("finance/add") })
+        } else {
+            SettingNote("Following ${Prefs.MAX_FINANCE_TICKERS} stocks, the most there is room for. Remove one to add another.")
+        }
         if (status.isNotEmpty()) SettingNote("Prices: $status")
 
         Subheader("Updates")
@@ -322,6 +327,8 @@ internal fun AddStockPage(onBack: () -> Unit) {
                         val quote = withContext(Dispatchers.IO) { FinanceSource.fetch(match.symbol) }
                         if (quote == null) {
                             message = "${match.symbol} has no price from the feed right now, so it was not added."
+                        } else if (Prefs.financeTickers(context).size >= Prefs.MAX_FINANCE_TICKERS) {
+                            message = "Already following ${Prefs.MAX_FINANCE_TICKERS} stocks. Remove one to add ${quote.symbol}."
                         } else {
                             Prefs.setFinanceTickers(context, Prefs.financeTickers(context) + quote.symbol)
                             message = String.format(locale, "Added %s · %.2f %s", quote.symbol, quote.price, quote.currency)

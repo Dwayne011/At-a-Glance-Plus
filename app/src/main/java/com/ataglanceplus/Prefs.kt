@@ -271,11 +271,15 @@ object Prefs {
     // --- Finance card ---
 
     /** Tickers in the user's order (Yahoo Finance symbols, e.g. AAPL, VOD.L). */
+    /** The most stocks the user can follow. */
+    const val MAX_FINANCE_TICKERS = 4
+
+    /** The followed stocks, in the user's order (the first [MAX_FINANCE_TICKERS] of any saved before the limit). */
     fun financeTickers(context: Context): List<String> =
-        get(context).getString(KEY_FIN_TICKERS, "").orEmpty().split(',').filter { it.isNotBlank() }
+        get(context).getString(KEY_FIN_TICKERS, "").orEmpty().split(',').filter { it.isNotBlank() }.take(MAX_FINANCE_TICKERS)
 
     fun setFinanceTickers(context: Context, tickers: List<String>) {
-        get(context).edit().putString(KEY_FIN_TICKERS, tickers.joinToString(",")).apply()
+        get(context).edit { putString(KEY_FIN_TICKERS, tickers.distinct().take(MAX_FINANCE_TICKERS).joinToString(",")) }
     }
 
     /** How often prices are fetched. */

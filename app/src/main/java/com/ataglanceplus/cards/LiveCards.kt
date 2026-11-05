@@ -906,13 +906,18 @@ object LiveCards {
      * biggest movers come first; otherwise the user's order. Each page opens that stock on
      * Google Finance.
      */
-    fun finance(context: Context, aod: Boolean, quotes: List<Quote>, showing: FinanceRules.Showing): SmartspaceTarget {
+    fun finance(context: Context, aod: Boolean, quotes: List<Quote>, showing: FinanceRules.Showing, given: List<ChipSpec>? = null): SmartspaceTarget {
         val key = showing.instanceKey
         // On the always-on display, the first stock alone: pages taking turns every 4 seconds
         // would keep redrawing a screen that should change about once a minute.
         val ordered = (if (showing.byMoves) quotes.sortedByDescending { it.moved } else quotes).take(if (aod) 1 else MAX_STOCKS)
-        val views = RemoteViews(context.packageName, R.layout.card_finance)
+        // With chips (layout C): the chips' column on the right, each stock over its day's line
+        // drawn faintly across the card. Without: the badge, name and a small chart, as before.
+        val chips = given.orEmpty().takeIf { Chips.plan(context, it, Chips.MAX_RIGHT).isNotEmpty() }.orEmpty()
+        val withChips = chips.isNotEmpty()
+        val views = RemoteViews(context.packageName, if (withChips) R.layout.card_finance_chips else R.layout.card_finance)
         if (aod) Style.aodBody(views)
+        if (withChips) PanelCards.fillColumn(context, views, chips, aod)
         ordered.forEach { quote ->
             // Outside regular hours: the latest price and its move from the close, named for its
             // session ("Overnight 6.56 · −0.32"), as eToro shows it.
@@ -920,27 +925,42 @@ object LiveCards {
             val change = extended?.change ?: quote.change
             val up = change >= 0
             val colour = if (aod) Style.AOD_TEXT else if (up) UP else DOWN
-            val page = RemoteViews(context.packageName, R.layout.include_finance_page)
+            val page = RemoteViews(context.packageName, if (withChips) R.layout.include_finance_page_chart else R.layout.include_finance_page)
             page.setTextViewText(R.id.finance_title, "${quote.symbol} · ${quote.name}")
+            // Beside chips there is less room: the price without its currency code ("6.39", "117.45p").
+            fun shown(v: Double) = price(v, quote.currency).let { if (withChips) it.removeSuffix(" ${quote.currency}") else it }
             page.setTextViewText(
                 R.id.finance_detail,
-                if (extended != null) "${extended.session.label} ${price(extended.price, quote.currency)} · ${signed(extended.change)}"
-                else "${price(quote.price, quote.currency)} · ${signed(quote.change)}",
+                if (extended != null) "${extended.session.label} ${shown(extended.price)} · ${signed(extended.change)}"
+                else "${shown(quote.price)} · ${signed(quote.change)}",
             )
             page.setTextViewText(R.id.finance_change, signed(extended?.changePercent ?: quote.changePercent) + "%")
             page.setTextColor(R.id.finance_change, colour)
-            page.setImageViewResource(R.id.finance_trend, if (up) R.drawable.ic_trend_up else R.drawable.ic_trend_down)
-            page.setInt(R.id.finance_trend, "setColorFilter", colour)
+            if (!withChips) {
+                page.setImageViewResource(R.id.finance_trend, if (up) R.drawable.ic_trend_up else R.drawable.ic_trend_down)
+                page.setInt(R.id.finance_trend, "setColorFilter", colour)
+                page.setInt(R.id.finance_badge, "setBackgroundResource",
+                    if (aod) R.drawable.aod_outline_r12 else if (up) R.drawable.finance_badge_up else R.drawable.finance_badge_down)
+            }
             if (aod) {
-                page.setInt(R.id.finance_badge, "setBackgroundResource", R.drawable.aod_outline_r12)
                 page.setInt(R.id.finance_change, "setBackgroundResource", R.drawable.aod_outline_r14)
                 page.setTextColor(R.id.finance_title, Style.AOD_TEXT)
                 page.setTextColor(R.id.finance_detail, Style.AOD_TEXT)
             } else {
-                page.setInt(R.id.finance_badge, "setBackgroundResource", if (up) R.drawable.finance_badge_up else R.drawable.finance_badge_down)
                 page.setInt(R.id.finance_change, "setBackgroundResource", if (up) R.drawable.finance_pill_up else R.drawable.finance_pill_down)
             }
-            chart(quote, colour)?.let { page.setImageViewBitmap(R.id.finance_chart, it) }
+            if (withChips) {
+                backdrop(context, quote, chips)?.let { (bitmap, closeAtDp) ->
+                    page.setImageViewBitmap(R.id.finance_chart, bitmap)
+                    page.setInt(R.id.finance_chart, "setColorFilter", colour)
+                    closeAtDp?.let { y ->
+                        page.setViewVisibility(R.id.finance_close, View.VISIBLE)
+                        page.setViewLayoutMargin(R.id.finance_close, RemoteViews.MARGIN_TOP, y - 1f, android.util.TypedValue.COMPLEX_UNIT_DIP)
+                    }
+                }
+            } else {
+                chart(quote, colour)?.let { page.setImageViewBitmap(R.id.finance_chart, it) }
+            }
             // Each page takes its own taps, so it carries the hold ring too.
             Style.holdBar(page, pinned = false, aod = aod, id = R.id.finance_hold)
             if (!aod) {
@@ -975,6 +995,50 @@ object LiveCards {
      * Today's prices as a small line chart (128 x 44 px, drawn at 2x for the 64 x 22 dp slot), with
      * yesterday's close as a faint line for reference.
      */
+    /**
+     * The day's line for the finance card with chips: the line and a fading area under it across
+     * the lower part of the page, as an alpha-only image the card tints (small enough for four
+     * stocks in one card). Returns it with the previous close's height in dp, when it is in view.
+     */
+    private fun backdrop(context: Context, quote: Quote, chips: List<ChipSpec>): Pair<android.graphics.Bitmap, Float?>? {
+        val points = quote.points + listOfNotNull(quote.extended?.price)
+        if (points.size < 2) return null
+        val placed = Chips.plan(context, chips, Chips.MAX_RIGHT)
+        val column = if (placed.any { it.big }) 128f else 100f
+        val wDp = (WeatherCard.cardWidthDp(context) - column - 8f).coerceAtLeast(120f)
+        val hDp = Prefs.cardHeightDp(context).toFloat()
+        val scale = 1.5f
+        val w = (wDp * scale).toInt()
+        val h = (hDp * scale).toInt()
+        // The line keeps to the band under the text: from 60% of the height to 6% above the bottom.
+        val bandTop = 0.60f * hDp
+        val bandBottom = 0.94f * hDp
+        val low = minOf(points.min(), quote.previousClose)
+        val high = maxOf(points.max(), quote.previousClose)
+        val span = (high - low).takeIf { it > 0 } ?: 1.0
+        fun yDp(v: Double) = (bandBottom - (v - low) / span * (bandBottom - bandTop)).toFloat()
+        val bitmap = androidx.core.graphics.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8)
+        val canvas = android.graphics.Canvas(bitmap)
+        val path = android.graphics.Path()
+        points.forEachIndexed { i, v ->
+            val x = i * w.toFloat() / (points.size - 1)
+            val y = yDp(v) * scale
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        val area = android.graphics.Path(path).apply { lineTo(w.toFloat(), h.toFloat()); lineTo(0f, h.toFloat()); close() }
+        canvas.drawPath(area, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            shader = android.graphics.LinearGradient(0f, bandTop * scale, 0f, h.toFloat(), 0x38000000, 0x00000000, android.graphics.Shader.TileMode.CLAMP)
+        })
+        canvas.drawPath(path, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x8C000000.toInt()
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 2f * scale
+            strokeJoin = android.graphics.Paint.Join.ROUND
+            strokeCap = android.graphics.Paint.Cap.ROUND
+        })
+        return bitmap to yDp(quote.previousClose)
+    }
+
     private fun chart(quote: Quote, colour: Int): android.graphics.Bitmap? {
         // The line ends at the price outside regular hours, when there is one.
         val points = quote.points + listOfNotNull(quote.extended?.price)

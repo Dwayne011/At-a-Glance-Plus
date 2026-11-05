@@ -73,18 +73,27 @@ class PairingService : Service() {
             }
             else -> return START_NOT_STICKY
         }
-        return START_REDELIVER_INTENT
+        // Not restarted by Android if it is stopped: a pairing is started by the user each time.
+        return START_NOT_STICKY
     }
 
     private fun startSearch() {
         if (searchJob?.isActive == true) return
         searchJob = scope.launch {
-            AdbMdns.ports(this@PairingService, AdbMdns.TLS_PAIRING).collect { port ->
-                Log.i(TAG, "pairing port: $port")
-                if (port > 0) {
-                    pairingPort = port
-                    notificationManager.notify(NOTIFICATION_ID, inputNotification(port))
+            // Searching the network keeps the Wi-Fi radio busy: an abandoned pairing stops
+            // after 10 minutes rather than running in the background until the phone restarts.
+            val found = kotlinx.coroutines.withTimeoutOrNull(SEARCH_LIMIT_MS) {
+                AdbMdns.ports(this@PairingService, AdbMdns.TLS_PAIRING).collect { port ->
+                    Log.i(TAG, "pairing port: $port")
+                    if (port > 0) {
+                        pairingPort = port
+                        notificationManager.notify(NOTIFICATION_ID, inputNotification(port))
+                    }
                 }
+            }
+            if (found == null) {
+                com.ataglanceplus.DebugLog.add(this@PairingService, com.ataglanceplus.DebugLog.Kind.ACTIVATION, "Pairing stopped after 10 minutes without a code")
+                finish(getString(R.string.pairing_failed), "Stopped after 10 minutes. Tap Pair again in the app when you are ready.")
             }
         }
     }
@@ -186,6 +195,7 @@ class PairingService : Service() {
         baseNotification().setContentTitle(text).setOngoing(true).setProgress(0, 0, true).build()
 
     companion object {
+        private const val SEARCH_LIMIT_MS = 10 * 60_000L
         private const val TAG = "PairingService"
         private const val CHANNEL = "pairing"
         private const val NOTIFICATION_ID = 10
