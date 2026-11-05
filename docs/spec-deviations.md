@@ -967,3 +967,31 @@ candle at 18:45. The debug report showed the app running and drawing the cards, 
   back to Google's at 04:35"), with Activate.
 - It is not shown during the app's own activation or reset (wireless debugging busy). It is
   removed when a surface connects again.
+
+## 0.41.6: fewer, gentler requests to Yahoo
+
+The user shared community notes on Yahoo's unofficial limits: about 2,000–2,500 requests an hour
+per IP address, sooner for bursts, refusals as HTTP 403, 999 or 429. The advice was to batch
+tickers into one call and space requests out.
+
+**The app's usage:**
+- The stock screen while open makes 2 requests every 15 seconds, about 480 an hour.
+- The card made one request per stock at its interval, back to back.
+
+So the hourly total is under the limit. Bursts, and the address being shared with other phones
+on mobile data (carrier-grade NAT), are the likelier triggers.
+
+**Changes:**
+- **The card's refresh is one request:** Yahoo's spark feed (/v7/finance/spark?symbols=…) gives
+  every followed stock in one call. It carries the same meta and day's closes as the single
+  chart call, read by the same code (quoteFrom). A stock the batch leaves out is asked for on
+  its own. When Yahoo refused the batch, none are, so the app does not ask again at once.
+- **The stock screen spaces its two requests:** the quote and the chart are now 400 ms apart
+  rather than back to back.
+- Refusals of any code (403, 999, 429…) are already treated alike since 0.41.5: logged, shown,
+  and backed off.
+
+**Checked against the live feed** (ONDS, NOK, AAPL, VOD.L): the batch and the single calls agree
+on price, previous close, currency and name. The only differences were a fraction of a cent and
+a couple of chart points, from being seconds apart. The card's refresh through the batch reads
+"Updated".

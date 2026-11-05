@@ -74,8 +74,12 @@ object FinanceSource {
         }
         val previous = _quotes.value.associateBy { it.symbol }
         var failed = 0
+        // All the stocks in one request. Only a stock the batch left out is asked for on its own;
+        // when Yahoo refused the batch, none are, so as not to ask again at once.
+        val batch = fetchAll(tickers, context)
         val fresh = tickers.mapNotNull { symbol ->
-            fetch(symbol, context) ?: previous[symbol].also { failed++ }
+            (batch?.get(symbol.uppercase()) ?: if (batch != null) fetch(symbol, context) else null)
+                ?: previous[symbol].also { failed++ }
         }
         refreshedAt = System.currentTimeMillis()
         _quotes.value = fresh
@@ -165,28 +169,54 @@ object FinanceSource {
     fun fetch(symbol: String, context: Context? = null): Quote? {
         val body = yahoo("/v8/finance/chart/" + URLEncoder.encode(symbol, "UTF-8") + "?range=1d&interval=5m", context) ?: return null
         return try {
-            val root = JSONObject(body)
-            val result = root.getJSONObject("chart").getJSONArray("result").getJSONObject(0)
-            val meta = result.getJSONObject("meta")
-            val closes = result.optJSONObject("indicators")?.optJSONArray("quote")?.optJSONObject(0)?.optJSONArray("close")
-            val points = (0 until (closes?.length() ?: 0)).mapNotNull { i ->
-                if (closes!!.isNull(i)) null else closes.getDouble(i)
-            }
-            Quote(
-                symbol = meta.optString("symbol", symbol),
-                name = meta.optString("longName").ifEmpty { meta.optString("shortName") }.trim().ifEmpty { symbol },
-                currency = meta.optString("currency"),
-                exchange = meta.optString("exchangeName"),
-                price = meta.getDouble("regularMarketPrice"),
-                previousClose = meta.optDouble("chartPreviousClose").takeUnless { it.isNaN() }
-                    ?: meta.optDouble("previousClose").takeUnless { it.isNaN() } ?: meta.getDouble("regularMarketPrice"),
-                points = points,
-                extended = extended(meta, System.currentTimeMillis()),
-            )
+            quoteFrom(JSONObject(body).getJSONObject("chart").getJSONArray("result").getJSONObject(0), symbol)
         } catch (e: Exception) {
             Log.w(TAG, "quote failed for $symbol", e)
             null
         }
+    }
+
+    /**
+     * Several tickers' quotes in one request (Yahoo's spark feed, the same day's data as [fetch]),
+     * by upper-case symbol; null when Yahoo did not answer. One request instead of one each keeps
+     * the card's refresh to a single call, as Yahoo limits how often an address may ask.
+     */
+    fun fetchAll(symbols: List<String>, context: Context? = null): Map<String, Quote>? {
+        if (symbols.isEmpty()) return emptyMap()
+        val list = symbols.joinToString(",") { URLEncoder.encode(it, "UTF-8") }
+        val body = yahoo("/v7/finance/spark?symbols=$list&range=1d&interval=5m", context) ?: return null
+        return try {
+            val results = JSONObject(body).getJSONObject("spark").getJSONArray("result")
+            (0 until results.length()).mapNotNull { i ->
+                val entry = results.getJSONObject(i)
+                val symbol = entry.optString("symbol")
+                val response = entry.optJSONArray("response")?.optJSONObject(0) ?: return@mapNotNull null
+                runCatching { symbol.uppercase() to quoteFrom(response, symbol) }.getOrNull()
+            }.toMap()
+        } catch (e: Exception) {
+            Log.w(TAG, "batch quotes failed", e)
+            emptyMap()
+        }
+    }
+
+    /** A quote from one chart result (its meta and the day's closes). */
+    private fun quoteFrom(result: JSONObject, symbol: String): Quote {
+        val meta = result.getJSONObject("meta")
+        val closes = result.optJSONObject("indicators")?.optJSONArray("quote")?.optJSONObject(0)?.optJSONArray("close")
+        val points = (0 until (closes?.length() ?: 0)).mapNotNull { i ->
+            if (closes!!.isNull(i)) null else closes.getDouble(i)
+        }
+        return Quote(
+            symbol = meta.optString("symbol", symbol),
+            name = meta.optString("longName").ifEmpty { meta.optString("shortName") }.trim().ifEmpty { symbol },
+            currency = meta.optString("currency"),
+            exchange = meta.optString("exchangeName"),
+            price = meta.getDouble("regularMarketPrice"),
+            previousClose = meta.optDouble("chartPreviousClose").takeUnless { it.isNaN() }
+                ?: meta.optDouble("previousClose").takeUnless { it.isNaN() } ?: meta.getDouble("regularMarketPrice"),
+            points = points,
+            extended = extended(meta, System.currentTimeMillis()),
+        )
     }
 
     /**
@@ -372,6 +402,8 @@ object FinanceSource {
         val quote = fetch(symbol, context) ?: return null
         // The card shows the same price as the stock screen (see publish).
         publish(quote)
+        // A short gap between the two requests rather than a burst, which Yahoo is quicker to refuse.
+        Thread.sleep(400)
         val prePost = settings.extendedHours && range.interval.endsWith("m")
         // The step fetched: the range's own, or a finer one when the user picks smaller candles
         // than it (5-minute candles on 5D). Coarser candles are grouped on the chart instead.
