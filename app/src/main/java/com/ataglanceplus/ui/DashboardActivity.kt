@@ -770,7 +770,8 @@ private fun StockDashboard(initial: String) {
             if (returning) tick++
             returning = true
             while (true) {
-                kotlinx.coroutines.delay(LIVE_REFRESH_MS)
+                // Every 15 seconds; longer while Yahoo is refusing, so a rate limit can lift.
+                kotlinx.coroutines.delay(com.ataglanceplus.live.FinanceSource.waitMs(LIVE_REFRESH_MS))
                 tick++
             }
         }
@@ -839,6 +840,17 @@ private fun StockDashboard(initial: String) {
                 )
             }
             StockDots(tickers, symbol)
+            // Prices not updating: say so, with Yahoo's reply and when the last prices came.
+            @Suppress("UNUSED_EXPRESSION") tick
+            com.ataglanceplus.live.FinanceSource.problem?.let { why ->
+                val last = com.ataglanceplus.live.FinanceSource.answeredAt.takeIf { it > 0 }
+                    ?.let { " · last prices at " + clock(context, Instant.ofEpochMilli(it)) }.orEmpty()
+                val wait = com.ataglanceplus.live.FinanceSource.waitMs(LIVE_REFRESH_MS) / 1000
+                Text(
+                    "Prices not updating: Yahoo did not answer ($why)$last. Trying again every ${if (wait >= 60) "${wait / 60} min" else "$wait s"}.",
+                    color = DOWN_TEXT, fontSize = 12.5.sp, lineHeight = 17.sp,
+                )
+            }
             // "What if" has a tab of its own, beside the chart, once there are eToro positions in
             // this (US dollar) stock.
             val holding = etoro?.takeIf { it.open.isNotEmpty() && q.currency == "USD" }

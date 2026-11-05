@@ -75,7 +75,7 @@ object FinanceSource {
         val previous = _quotes.value.associateBy { it.symbol }
         var failed = 0
         val fresh = tickers.mapNotNull { symbol ->
-            fetch(symbol) ?: previous[symbol].also { failed++ }
+            fetch(symbol, context) ?: previous[symbol].also { failed++ }
         }
         refreshedAt = System.currentTimeMillis()
         _quotes.value = fresh
@@ -94,21 +94,78 @@ object FinanceSource {
         _quotes.value = current.toMutableList().also { it[i] = quote }
     }
 
-    /** One ticker's quote, or null if it does not exist or the feed did not answer. */
-    fun fetch(symbol: String): Quote? {
-        val url = URL(
-            "https://query1.finance.yahoo.com/v8/finance/chart/" +
-                URLEncoder.encode(symbol, "UTF-8") + "?range=1d&interval=5m"
-        )
-        val connection = (url.openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10_000
-            readTimeout = 10_000
-            // The feed refuses requests without a browser-like agent.
-            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16) AtAGlancePlus")
+    /** Yahoo's two hosts: the second is tried when the first refuses or fails. */
+    private val HOSTS = listOf("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com")
+
+    /** Why the last request to Yahoo failed (its reply, or the network error), or null while it answers. */
+    @Volatile var problem: String? = null
+        private set
+    /** When Yahoo last answered (epoch ms). */
+    @Volatile var answeredAt = 0L
+        private set
+    /** Requests in a row that Yahoo refused or that failed. */
+    @Volatile var failures = 0
+        private set
+    @Volatile private var logged: String? = null
+
+    /**
+     * How long the stock screen waits before asking again: [normalMs] while Yahoo answers; after
+     * refusals 30 seconds, then 1, 2 and at most 5 minutes, so a rate limit can lift instead of
+     * being hit again every 15 seconds.
+     */
+    fun waitMs(normalMs: Long): Long = if (failures == 0) normalMs else minOf(30_000L shl (failures - 1).coerceAtMost(4), 5 * 60_000L)
+
+    /**
+     * A GET of [path] from Yahoo's chart feed: the body, or null when neither host answered. Each
+     * change between answering and failing (with Yahoo's status, such as "HTTP 429, too many
+     * requests") goes in the debug history when [context] is given.
+     */
+    private fun yahoo(path: String, context: Context?): String? {
+        var why = "no answer"
+        for (host in HOSTS) {
+            val connection = (URL(host + path).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                useCaches = false
+                // The feed refuses requests without a browser-like agent.
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16) AtAGlancePlus")
+            }
+            try {
+                val code = connection.responseCode
+                if (code == 200) {
+                    val body = connection.inputStream.bufferedReader().use { it.readText() }
+                    failures = 0
+                    problem = null
+                    answeredAt = System.currentTimeMillis()
+                    if (logged != null && context != null) {
+                        logged = null
+                        com.ataglanceplus.DebugLog.add(context, com.ataglanceplus.DebugLog.Kind.FETCH, "Prices: Yahoo is answering again")
+                    }
+                    return body
+                }
+                // No such stock: Yahoo answered, so it is not a problem with the feed.
+                if (code == 404) return null
+                why = "HTTP $code" + when (code) { 429 -> ", too many requests"; 401, 403 -> ", refused"; in 500..599 -> ", Yahoo's error"; else -> "" }
+            } catch (e: Exception) {
+                why = e.javaClass.simpleName + (e.message?.let { ": $it" } ?: "")
+            } finally {
+                connection.disconnect()
+            }
         }
+        failures++
+        problem = why
+        if (logged != why && context != null) {
+            logged = why
+            com.ataglanceplus.DebugLog.add(context, com.ataglanceplus.DebugLog.Kind.FETCH, "Prices: Yahoo did not answer ($why); showing the last prices")
+        }
+        return null
+    }
+
+    /** One ticker's quote, or null if it does not exist or the feed did not answer. */
+    fun fetch(symbol: String, context: Context? = null): Quote? {
+        val body = yahoo("/v8/finance/chart/" + URLEncoder.encode(symbol, "UTF-8") + "?range=1d&interval=5m", context) ?: return null
         return try {
-            if (connection.responseCode != 200) return null
-            val root = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+            val root = JSONObject(body)
             val result = root.getJSONObject("chart").getJSONArray("result").getJSONObject(0)
             val meta = result.getJSONObject("meta")
             val closes = result.optJSONObject("indicators")?.optJSONArray("quote")?.optJSONObject(0)?.optJSONArray("close")
@@ -129,8 +186,6 @@ object FinanceSource {
         } catch (e: Exception) {
             Log.w(TAG, "quote failed for $symbol", e)
             null
-        } finally {
-            connection.disconnect()
         }
     }
 
@@ -314,7 +369,7 @@ object FinanceSource {
      * the overnight session's (eToro's, see [EtoroCandles]), from the range's start until now.
      */
     fun history(context: android.content.Context, symbol: String, range: Range, settings: VwapSettings, candleMinutes: Int? = null): History? {
-        val quote = fetch(symbol) ?: return null
+        val quote = fetch(symbol, context) ?: return null
         // The card shows the same price as the stock screen (see publish).
         publish(quote)
         val prePost = settings.extendedHours && range.interval.endsWith("m")
@@ -324,21 +379,16 @@ object FinanceSource {
         val interval = minutes?.let { "${it}m" } ?: range.interval
         // eToro's candles at the step fetched: five-minute ones grouped into 15 minutes for 15m.
         val etoroInterval = when (minutes) { null -> null; 5, 15 -> "FiveMinutes"; 30 -> "ThirtyMinutes"; else -> range.etoroInterval }
-        val url = URL(
-            "https://query1.finance.yahoo.com/v8/finance/chart/" +
+        val body = yahoo(
+            "/v8/finance/chart/" +
                 // One day with extended hours asks for two, so that before the market opens the
                 // chart can show the last full day as well as this morning (see below).
                 URLEncoder.encode(symbol, "UTF-8") + "?range=${if (range == Range.DAY && prePost) "2d" else range.range}&interval=$interval" +
-                if (prePost) "&includePrePost=true" else ""
-        )
-        val connection = (url.openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10_000
-            readTimeout = 10_000
-            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16) AtAGlancePlus")
-        }
+                if (prePost) "&includePrePost=true" else "",
+            context,
+        ) ?: return null
         return try {
-            if (connection.responseCode != 200) return null
-            val result = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+            val result = JSONObject(body)
                 .getJSONObject("chart").getJSONArray("result").getJSONObject(0)
             val meta = result.getJSONObject("meta")
             val times = result.optJSONArray("timestamp")
@@ -418,8 +468,6 @@ object FinanceSource {
         } catch (e: Exception) {
             Log.w(TAG, "history failed for $symbol", e)
             null
-        } finally {
-            connection.disconnect()
         }
     }
 

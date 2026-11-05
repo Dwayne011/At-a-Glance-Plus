@@ -928,3 +928,42 @@ The user asked what brings each dismissed card back, and chose new timings.
   - a fixture 90 minutes off: hidden after dismissing, back at 29 minutes before kick-off;
   - dismissed live: hidden through the result, and with the next game three days off;
   - F1 qualifying 100 minutes off: hidden, back at 59 minutes before.
+
+## 0.41.5: prices that stop updating, and a notice when the cards disconnect
+
+**Report:** the stock screen and the finance card stopped updating. The screen showed a 17:00–17:15
+candle at 18:45. The debug report showed the app running and drawing the cards, and no errors.
+
+**Findings:**
+- Every Yahoo request had time limits, so a stuck connection was ruled out.
+- The likely cause is Yahoo refusing requests (its free feed rate-limits apps that ask often; the
+  stock screen asked every 15 seconds). On a refusal the app quietly kept the last prices and
+  recorded nothing.
+- Not confirmed, as no refusal was logged.
+
+**Changes:**
+- **One path to Yahoo:** all Yahoo chart requests go through one function. It tries
+  query1.finance.yahoo.com, then query2 if the first refuses or fails. It does not cache.
+- **Failures are logged:** each change between answering and failing goes in the Debug history,
+  with Yahoo's reply ("HTTP 429, too many requests", "HTTP 403, refused", a network error…). A
+  404 (no such stock) is an answer, not a failure.
+- **Backing off:** the stock screen's 15-second refresh waits longer after refusals (30 seconds,
+  then 1, 2, 4 and at most 5 minutes), and is back to 15 seconds once Yahoo answers.
+- **Shown on the screen:** while prices are not updating, the stock screen says so under the
+  price card, with Yahoo's reply, the time of the last prices and the current retry interval.
+- Checked against the live feed (Robolectric):
+  - ONDS fetched;
+  - the 1D chart current to the minute;
+  - an unknown symbol not counted as a refusal;
+  - the waits 30, 60, 120, 240 and 300 seconds.
+
+  A refusal from Yahoo could not be produced from here.
+
+**Disconnected notice** (the user chose "Notify me"):
+- When the launcher and lock screen all let go of the service, the service is destroyed and the
+  phone shows Google's cards. The report showed this at 04:35, after the launcher restarted at
+  04:16.
+- A notification now says so ("At a Glance Plus disconnected · Your home and lock screen went
+  back to Google's at 04:35"), with Activate.
+- It is not shown during the app's own activation or reset (wireless debugging busy). It is
+  removed when a surface connects again.

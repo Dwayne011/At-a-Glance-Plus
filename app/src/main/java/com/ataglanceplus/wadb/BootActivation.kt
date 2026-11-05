@@ -80,6 +80,43 @@ class UpdateReceiver : BroadcastReceiver() {
     companion object {
         private const val CHANNEL = "update"
         const val NOTIFICATION_ID = 12
+        const val DISCONNECTED_ID = 13
+
+        /**
+         * The launcher and lock screen dropped this app (the phone or Android restarted them, and
+         * they went back to Google's At a Glance): a notification to switch back, with Activate.
+         * It goes when they connect again.
+         */
+        fun notifyDisconnected(context: Context) {
+            if (!Prefs.isPaired(context)) return
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL, context.getString(R.string.update_channel), NotificationManager.IMPORTANCE_DEFAULT)
+            )
+            val activate = PendingIntent.getForegroundService(
+                context, 1, Intent(context, BootActivationService::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val open = PendingIntent.getActivity(
+                context, 1, Intent(context, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val at = android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date())
+            val notification = Notification.Builder(context, CHANNEL)
+                .setSmallIcon(R.drawable.ic_card)
+                .setContentTitle("At a Glance Plus disconnected")
+                .setContentText("Your home and lock screen went back to Google's at $at. Tap Activate to switch back.")
+                .setStyle(Notification.BigTextStyle().bigText("Your home and lock screen went back to Google's At a Glance at $at. Tap Activate to switch back."))
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .addAction(Notification.Action.Builder(null, context.getString(R.string.update_activate), activate).build())
+                .build()
+            manager.notify(DISCONNECTED_ID, notification)
+        }
+
+        fun clearDisconnected(context: Context) {
+            context.getSystemService(NotificationManager::class.java).cancel(DISCONNECTED_ID)
+        }
     }
 }
 

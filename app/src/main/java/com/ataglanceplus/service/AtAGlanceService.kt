@@ -258,6 +258,9 @@ class AtAGlanceService : SmartspaceService() {
         sessions.clear()
         ServiceState.event("Service destroyed")
         com.ataglanceplus.DebugLog.add(this, com.ataglanceplus.DebugLog.Kind.CONNECTION, "Service stopped by the system (no launcher or lock screen bound)")
+        // Nothing is connected any more, so the phone shows Google's cards: offer to switch back,
+        // unless this is the app's own activation restarting the launcher and SystemUI.
+        if (!com.ataglanceplus.wadb.Wadb.busy.value) com.ataglanceplus.wadb.UpdateReceiver.notifyDisconnected(this)
         Log.i(TAG, "onDestroy")
         super.onDestroy()
     }
@@ -266,6 +269,8 @@ class AtAGlanceService : SmartspaceService() {
         Log.i(TAG, "session created: ${sessionId.id} surface=${config.uiSurface} client=${config.packageName} count=${config.smartspaceTargetCount}")
         sessions[sessionId] = config
         com.ataglanceplus.DebugLog.add(this, com.ataglanceplus.DebugLog.Kind.CONNECTION, "${surfaceName(config.uiSurface)} connected (${config.packageName}, ${config.smartspaceTargetCount} cards)")
+        // Connected again: the "disconnected" notification has done its job.
+        com.ataglanceplus.wadb.UpdateReceiver.clearDisconnected(this)
         ServiceState.sessionCreated(
             SessionInfo(
                 id = sessionId.id,
