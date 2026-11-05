@@ -836,3 +836,29 @@ Checked:
   - at 1.3× text.
 
   The layout audit found no clipping.
+
+## 0.41.1: Advanced tidied (mockup approved)
+
+**Advanced** now holds only:
+- **At a Glance:** one status row ("Showing on the home and lock screen · Connected since 09:41",
+  or "Not showing" in red) and Activate now. Activate now's line shows the last activation's
+  result.
+- **Wireless debugging:** one row, either "Ready" or the one thing wrong (not paired, not on
+  Wi-Fi, or wireless debugging off), then Pair again and Open wireless debugging.
+- **Help:**
+  - "N errors recorded", in red, only when there are any;
+  - Debug.
+
+A missing Pixel Launcher or Google provider appears as a red row only when it is missing.
+
+**Moved to Debug:**
+- the device checks (Pixel Launcher, Google provider);
+- the four wireless debugging checks;
+- the errors, as when, where and what (Copy gives them in full with stack traces), with Clear;
+- reading the phone's crash log and the command log;
+- the adb commands for a computer, folded under one row.
+
+The chip-fitting report left the screens and is in the shareable debug report. Sessions now
+record when they connected, for the status row. Home's "Errors recorded" row opens Debug.
+
+Checked: both pages were rendered by tapping through Settings › Advanced › Debug (Robolectric).

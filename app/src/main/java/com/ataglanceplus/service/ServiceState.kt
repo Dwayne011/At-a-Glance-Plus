@@ -14,6 +14,8 @@ data class SessionInfo(
     val lastPushAt: Long,
     /** The cards last sent, in order ("timer", "weather", "extra chips"…), for the Cards tab. */
     val showing: List<String> = emptyList(),
+    /** When the client connected (epoch ms). */
+    val connectedAt: Long = System.currentTimeMillis(),
 )
 
 /**

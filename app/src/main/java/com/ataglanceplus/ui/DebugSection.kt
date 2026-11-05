@@ -85,6 +85,53 @@ internal fun DebugPage(version: Int, onBack: () -> Unit) {
         }
         if (lastEvent.isNotEmpty()) SettingNote("Last event: $lastEvent")
 
+        Subheader("Device")
+        CheckRow("Pixel Launcher installed", com.ataglanceplus.Commands.isPixelLauncherInstalled(context), com.ataglanceplus.Commands.PIXEL_LAUNCHER)
+        when (val provider = remember(version) { com.ataglanceplus.Commands.lookupDefaultProvider(context) }) {
+            is com.ataglanceplus.Commands.Provider.Found -> CheckRow("Google At a Glance provider found", true, provider.component.flattenToShortString())
+            is com.ataglanceplus.Commands.Provider.Missing -> CheckRow("Google At a Glance provider found", false, provider.reason)
+        }
+
+        Subheader("Wireless debugging")
+        val wirelessOn = remember(version, tick) { Wadb.wirelessDebuggingState(context) }
+        val canSelfEnable = remember(version, tick) { Wadb.canSwitchDebuggingOn(context) }
+        CheckRow("Paired with this phone", paired, if (paired) "The phone trusts this app's key" else "Pair once; no computer needed")
+        CheckRow("Wireless debugging on", wirelessOn == true, if (wirelessOn == true) "Developer options › Wireless debugging" else "Android hides this setting from apps; Activate checks it directly")
+        CheckRow(
+            "Can switch it on after a restart", canSelfEnable,
+            when {
+                canSelfEnable -> "Secure-settings permission held"
+                Prefs.debugSwitchBlocked(context) -> "Android no longer lets apps switch it on; turn it on yourself after a restart (a notification reminds you)"
+                else -> "Granted automatically during the first activation"
+            },
+        )
+        CheckRow("Wi-Fi connected", Wadb.isWifiConnected(context), "Wireless debugging only works on Wi-Fi")
+
+        Subheader("Errors")
+        var errors by remember(version, tick) { androidx.compose.runtime.mutableStateOf(CrashLog.read(context)) }
+        if (errors.isEmpty()) {
+            SettingRow("No errors recorded", icon = Icons.Default.CheckCircle)
+        } else {
+            // Each error as when, where and what; the full details (stack traces) go with Copy.
+            val entries = errors.split("=== ").filter { it.isNotBlank() }
+            SettingRow(
+                "${entries.size} error${if (entries.size == 1) "" else "s"} recorded", "Newest first · tap to copy " + if (entries.size == 1) "it in full" else "them in full",
+                icon = Icons.Default.Warning, error = true, onClick = { copy(context, "At a Glance Plus errors", errors) },
+            )
+            entries.take(10).forEach { entry ->
+                val lines = entry.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                androidx.compose.foundation.layout.Column(
+                    androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                ) {
+                    Text(lines.getOrElse(0) { "" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    Text(lines.getOrElse(1) { "" }, style = MaterialTheme.typography.bodySmall)
+                    lines.getOrNull(2)?.let { Text(it.take(160), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+            }
+            if (entries.size > 10) SettingNote("And ${entries.size - 10} older; Copy has them all.")
+            SettingRow("Clear the errors", icon = Icons.Default.Delete, onClick = { CrashLog.clear(context); errors = "" })
+        }
+
         Subheader("Why Android last stopped the app")
         val exits = remember(version, tick) { DebugLog.exitReasons(context, 5) }
         if (exits.isEmpty()) SettingNote("Android has no record of it stopping.")
@@ -112,7 +159,28 @@ internal fun DebugPage(version: Int, onBack: () -> Unit) {
             icon = Icons.Default.Build, enabled = paired && !busy,
             onClick = { scope.launch { Activator.systemCheck(context); tick++ } },
         )
-        if (wadbLog.isNotEmpty()) LogText(wadbLog, limit = 12_000)
+        SettingRow(
+            "Read the phone's crash log", "This app's, the launcher's and SystemUI's crashes, into the log below",
+            icon = Icons.Default.Build, enabled = paired && !busy,
+            onClick = { scope.launch { Activator.readCrashLog(context); tick++ } },
+        )
+        if (wadbLog.isNotEmpty()) {
+            SettingRow("Command log", "The last activation, check or crash log · tap to copy", icon = Icons.AutoMirrored.Filled.List, onClick = { copy(context, "Command log", wadbLog) })
+            LogText(wadbLog, limit = 12_000)
+        }
+
+        // The same commands for a computer, folded away until wanted.
+        var commands by remember { androidx.compose.runtime.mutableStateOf(false) }
+        SettingRow(
+            if (commands) "Hide the commands for a computer" else "Commands for a computer",
+            "For adb over USB, if wireless debugging is not an option",
+            icon = Icons.Default.Build, onClick = { commands = !commands },
+        )
+        if (commands) {
+            CommandRow("Activate", com.ataglanceplus.Commands.activateAdb(context))
+            com.ataglanceplus.Commands.resetAdb(context)?.let { CommandRow("Back to Google", it) }
+            SettingNote("Service component: ${com.ataglanceplus.Commands.serviceComponent(context)} · user ${com.ataglanceplus.Commands.userId()}")
+        }
 
         Subheader("History")
         SettingNote("Newest first. Kept on this phone only (${history.size} entries).")
@@ -240,6 +308,9 @@ internal fun report(context: Context): String = buildString {
     appendLine()
     appendLine("== History (newest first)")
     DebugLog.read(context).forEach { appendLine(it) }
+    appendLine()
+    appendLine("== Chip fitting")
+    appendLine(runCatching { com.ataglanceplus.cards.WeatherCard.fitReport(context) }.getOrDefault("?"))
     appendLine()
     appendLine("== Errors")
     appendLine(CrashLog.read(context).ifEmpty { "None" })
