@@ -862,3 +862,22 @@ The chip-fitting report left the screens and is in the shareable debug report. S
 record when they connected, for the status row. Home's "Errors recorded" row opens Debug.
 
 Checked: both pages were rendered by tapping through Settings › Advanced › Debug (Robolectric).
+
+## 0.41.2: chips go to the cards in front of the weather card first
+
+- Reported: the finance card showed no chips. The weather card took all five of the user's chips
+  before the cards in front of it were given any.
+- **New order:** chips are handed out in the order the cards appear. First the cards in front of
+  the weather card that hold chips, in turn (navigation, then timer or alarm, then the first
+  calendar card, then stocks). Then the weather card fits what it can of the rest. Then the extra
+  chips cards take what is left.
+- **Hidden cards take none:** a card the launcher has no room for (when "Show all cards" is off)
+  takes no chips.
+- **Dismissed cards:** a dismissed card is not shown, so it takes none. Its chips go back to the
+  weather card at once (dismissing redraws), and whatever the weather card cannot fit goes to the
+  extra chips card.
+- Checked with the real deck builder (Robolectric), using the user's five chips:
+  - with the stocks card showing, stocks got Steps and Gmail, and weather got the other three;
+  - with it dismissed, weather got all five;
+  - with eight chips and the stocks card dismissed, weather took six and the extra chips card
+    took the other two.

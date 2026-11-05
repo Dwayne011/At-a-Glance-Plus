@@ -81,14 +81,40 @@ object CardDeck {
         fun take(count: Int): List<ChipSpec>? = pool?.let { p -> List(minOf(count, p.size)) { p.removeAt(0) } }
         // A chip taking 2 slots counts once, so each card takes as many as it really shows.
         fun takeForCard(): List<ChipSpec>? = take(Chips.taken(context, pool.orEmpty()))
-        // The weather card fits what it can, not only the first in line, so it picks its own.
+        // Chips go to the cards in the order they appear: every card in front of the weather
+        // card that can hold chips (navigation, timer or alarm, the first calendar card, stocks)
+        // takes its share first; the weather card then fits what it can of the rest, and the extra
+        // cards take what is left. A card the launcher has no room for takes none.
+        val limited = !(maxCards <= 0 || Prefs.showAllCards(context))
+        val order = buildList {
+            if (data.message != null && data.messageRemainingMs > 0 && on(CardType.MESSAGES)) add("message")
+            torch?.let { add("torch") }
+            nav?.let { add("nav") }
+            live.forEach { _ -> add("live") }
+            liveSports.forEach { _ -> add("sports") }
+            timer?.let { add("timer") }
+            alarm?.let { add("alarm") }
+            media?.let { add("media") }
+            calendars.forEachIndexed { i, _ -> add(if (i == 0) "calendar" else "calendar, stacked") }
+            wallet.forEach { _ -> add("wallet") }
+            finance?.takeIf { it.forward }?.let { add("finance") }
+            otherSports.forEach { _ -> add("sports") }
+            finance?.takeIf { !it.forward }?.let { add("finance") }
+        }
+        var navChips: List<ChipSpec>? = null
+        var timerChips: List<ChipSpec>? = null
+        var calendarChips: List<ChipSpec>? = null
+        var financeChips: List<ChipSpec>? = null
+        (if (limited) order.take((maxCards - 1).coerceAtLeast(0)) else order).forEach { kind ->
+            when (kind) {
+                "nav" -> navChips = takeForCard()
+                "timer", "alarm" -> timerChips = takeForCard()
+                "calendar" -> calendarChips = takeForCard()
+                "finance" -> financeChips = takeForCard()
+            }
+        }
+        // The weather card fits what it can of the rest, not only the first in line, so it picks its own.
         val weatherChips = pool?.let { p -> WeatherCard.chipsTaken(context, p).also { p.removeAll(it) } }
-        val navChips = if (nav != null) takeForCard() else null
-        val timerChips = if (timer != null || alarm != null) takeForCard() else null
-        // Chips go on the first calendar card; the others stack without any.
-        val calendarChips = if (calendars.isNotEmpty()) takeForCard() else null
-        // The finance card has room for chips too (beside its stocks).
-        val financeChips = if (finance != null) takeForCard() else null
         // The rest on extra chips cards, two rows each.
         val extraChips = buildList {
             while (!pool.isNullOrEmpty()) {
