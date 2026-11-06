@@ -72,6 +72,9 @@ object Activator {
                 "dumpsys bluetooth_manager | grep -oE 'model_name=[^|]*|untethered_(left|right|case)_battery=[^|]*'",
                 // If that finds nothing: where the stored metadata is, if anywhere (addresses masked).
                 "dumpsys bluetooth_manager | grep -iE 'untethered|metadata|battery' | sed -E 's/([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}/XX:XX/g' | cut -c1-240 | head -15",
+                // Whether the adapter's part of the dump arrived: its length, and its sections.
+                "dumpsys bluetooth_manager | grep -c ''",
+                "dumpsys bluetooth_manager | grep -m3 -iE 'Enabled Profile Services|ScanMode|Metadata:'",
                 // What the launcher or lock screen opened from At a Glance's press-and-hold menu.
                 "logcat -d -b main,system | grep 'START u0' | grep -iE 'smartspace|googlequicksearchbox|nexuslauncher|systemui|com.google.android.as' | grep -v 'category.LAUNCHER' | tail -8",
             ),

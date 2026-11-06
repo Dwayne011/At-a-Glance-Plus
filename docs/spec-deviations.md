@@ -1122,3 +1122,11 @@ activation (no broadcast receiver), and that System check shows the Buds' batter
   (com.google.android.as), and leave out ordinary app launches from the home screen.
 - **Where the Bluetooth metadata is:** a second Bluetooth line shows any metadata or battery
   lines, with addresses masked, cut to 240 characters, at most 15.
+
+## 0.43.3: System check, Bluetooth dump sections
+
+**Changes:** two more System check lines, to tell why the Buds' battery search found nothing:
+- the Bluetooth dump's length in lines, since a few dozen means the adapter's part is missing;
+- whether its "Enabled Profile Services", "ScanMode" and "Metadata:" sections are there.
+
+Neither prints addresses.
