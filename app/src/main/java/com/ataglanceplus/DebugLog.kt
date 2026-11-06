@@ -72,6 +72,26 @@ object DebugLog {
         exits.forEach { add(context, Kind.PROCESS, "Stopped at ${time(it.timestamp)}: ${describe(it)}") }
         exits.maxOfOrNull { it.timestamp }?.let { prefs.edit { putLong(KEY_EXIT_SEEN, it) } }
         add(context, Kind.PROCESS, "Started (version ${version(context)})")
+        checkReconnected(context, exits.lastOrNull())
+    }
+
+    /**
+     * After Android stopped the app (low memory, a kill), the launcher and lock screen go back to
+     * Google's and the app is told nothing. When the process starts again, if none of them has
+     * connected 45 seconds later, the "disconnected" notification goes up with Activate. Not
+     * after an update (that has its own notification), just after the phone started (the restart
+     * activation handles that), or when the user handed At a Glance back to Google.
+     */
+    private fun checkReconnected(context: Context, lastExit: ApplicationExitInfo?) {
+        if (!Prefs.wantsActive(context) || !Prefs.isPaired(context)) return
+        if (lastExit?.reason == ApplicationExitInfo.REASON_PACKAGE_UPDATED) return
+        if (android.os.SystemClock.elapsedRealtime() < 5 * 60_000L) return
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (com.ataglanceplus.service.ServiceState.sessions.value.isEmpty() && !com.ataglanceplus.wadb.Wadb.busy.value) {
+                add(context, Kind.CONNECTION, "Not connected 45 s after the app restarted: the phone shows Google's cards; notified")
+                com.ataglanceplus.wadb.UpdateReceiver.notifyDisconnected(context)
+            }
+        }, 45_000L)
     }
 
     fun exitReasons(context: Context, max: Int): List<ApplicationExitInfo> = runCatching {
@@ -110,7 +130,9 @@ object DebugLog {
             else -> info.importance.toString()
         }
         val detail = info.description?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
-        return "$reason (was $importance)$detail"
+        // The memory it was using when stopped: Android stops the largest processes first.
+        val memory = if (info.pss > 0 || info.rss > 0) " · using ${info.pss / 1024} MB (PSS), ${info.rss / 1024} MB (RSS)" else ""
+        return "$reason (was $importance)$detail$memory"
     }
 
     fun version(context: Context): String = runCatching {

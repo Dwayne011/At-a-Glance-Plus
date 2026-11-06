@@ -35,7 +35,11 @@ object Activator {
             context, steps,
             working = if (mode == Mode.ACTIVATE) "Switching At a Glance to this app" else "Restoring Google's At a Glance",
             done = if (mode == Mode.ACTIVATE) "Activated. The launcher and SystemUI restarted." else "Google's At a Glance restored.",
-        )
+        ).also {
+            // Whether the user wants the cards on this app, for the "disconnected" notice: on after
+            // an activation, off once they hand At a Glance back to Google.
+            if (it is Outcome.Success) Prefs.setWantsActive(context, mode == Mode.ACTIVATE)
+        }
     }
 
     /** Grants chip permissions that Android only lets the shell grant to a sideloaded app. */
@@ -58,6 +62,10 @@ object Activator {
                 "am get-standby-bucket $pkg",
                 "cmd appops get $pkg RUN_ANY_IN_BACKGROUND",
                 "dumpsys deviceidle whitelist | grep -c $pkg",
+                // Who stopped this app: the system's kill records and the low-memory killer's
+                // lines, while the phone's log still holds them (a few hours at most).
+                "logcat -d -b events | grep -E 'am_kill|am_proc_died' | grep $pkg | tail -20",
+                "logcat -d -b main,system | grep -iE 'lowmemorykiller|lmkd' | tail -15",
             ),
             working = "Checking the launcher, SystemUI and At a Glance", done = "System check done; it is below.",
         )

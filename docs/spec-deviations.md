@@ -995,3 +995,23 @@ on mobile data (carrier-grade NAT), are the likelier triggers.
 on price, previous close, currency and name. The only differences were a fraction of a cent and
 a couple of chart points, from being seconds apart. The card's refresh through the batch reads
 "Updated".
+
+## 0.41.7: after Android kills the app
+
+**Reported:** the user's debug report showed "Killed (signal 9) (was foreground service)" at
+01:02:38. The process started again 12 s later, but the launcher and lock screen stayed on
+Google's cards and no notice came up. A signal-9 kill skips onDestroy, so the "disconnected"
+notification from 0.41.5 never ran. The report does not say what sent the signal. A low-memory
+kill by lmkd is normally reported as "Low memory", not as a signal.
+
+**Changes:**
+- **Check after a restart:** when the process starts again (not after an update or just after
+  the phone started), the app waits 45 s. If no surface has connected and no activation is
+  running, it posts the "disconnected" notification with Activate.
+- **Only when wanted:** a new wants_active flag is set by a successful Activate and cleared when
+  At a Glance is handed back to Google, so the notice does not appear after a reset. It is not
+  backed up.
+- **Stop reasons show memory:** each stop reason now includes the app's PSS and RSS when Android
+  recorded them, and the report's "Now" section gives the memory the app is using.
+- **System check reads the kill records:** the events log lines (am_kill, am_proc_died) for this
+  app and the low-memory killer's lines, while the phone still holds them.

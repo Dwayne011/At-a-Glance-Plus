@@ -213,6 +213,12 @@ private fun now(context: Context): List<Pair<String, String>> {
     return listOf(
         "App" to "Version ${DebugLog.version(context)} · running since ${DebugLog.time(started)}",
         "Phone" to "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.ID}",
+        // Android stops the largest background processes first when memory runs short.
+        "Memory" to runCatching {
+            val pss = context.getSystemService(android.app.ActivityManager::class.java)
+                .getProcessMemoryInfo(intArrayOf(Process.myPid()))[0].totalPss
+            "using ${pss / 1024} MB (PSS)"
+        }.getOrDefault("unknown"),
     )
 }
 

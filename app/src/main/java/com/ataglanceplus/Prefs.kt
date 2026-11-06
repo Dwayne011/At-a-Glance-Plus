@@ -21,6 +21,7 @@ object Prefs {
     private const val KEY_CHIPS = "chips"
     private const val KEY_DISMISSED = "dismissed_cards"
     private const val KEY_SPORTS_SNOOZED = "sports_snoozed"
+    private const val KEY_WANTS_ACTIVE = "wants_active"
     private const val KEY_CHIP_APP = "chip_app_"
     private const val KEY_GMAIL_LABELS = "gmail_labels_"
     private const val KEY_COUNTDOWN = "countdown_day"
@@ -84,6 +85,16 @@ object Prefs {
 
     fun setPaired(context: Context, paired: Boolean) {
         get(context).edit().putBoolean(KEY_PAIRED, paired).apply()
+    }
+
+    /**
+     * Whether the user wants At a Glance on this app: set by an activation, cleared by handing it
+     * back to Google. Before the first activation since this was added, a pairing counts.
+     */
+    fun wantsActive(context: Context): Boolean = get(context).getBoolean(KEY_WANTS_ACTIVE, isPaired(context))
+
+    fun setWantsActive(context: Context, wants: Boolean) {
+        get(context).edit { putBoolean(KEY_WANTS_ACTIVE, wants) }
     }
 
     fun activateOnBoot(context: Context): Boolean = get(context).getBoolean(KEY_ACTIVATE_ON_BOOT, true)
