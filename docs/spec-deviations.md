@@ -1107,3 +1107,18 @@ activation (no broadcast receiver), and that System check shows the Buds' batter
   - **Fix:** it now runs in the background; the screen uses the last answer, and the next 15 s
     refresh picks up a new one.
   - **Asked less often:** it is only asked for when the latest day has a candle without volume.
+
+## 0.43.2: System check, a closer look
+
+**Found:**
+- **Settings in the press-and-hold menu:** the user's System check showed the home screen's
+  Settings item opening com.android.launcher3.proxy.ProxyActivityStarter, the launcher's way of
+  starting another app's PendingIntent. The page it then opened was not in the filtered lines.
+- **Buds battery:** the filter for model_name and untethered_*_battery found nothing in
+  `dumpsys bluetooth_manager` (exit 1).
+
+**Changes:**
+- **Wider launch filter:** the launch lines now also take Android System Intelligence
+  (com.google.android.as), and leave out ordinary app launches from the home screen.
+- **Where the Bluetooth metadata is:** a second Bluetooth line shows any metadata or battery
+  lines, with addresses masked, cut to 240 characters, at most 15.
