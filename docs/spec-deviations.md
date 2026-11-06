@@ -1151,3 +1151,20 @@ backs this app's settings up to Google straight away.
 - **Back up to Google now:** a new row on the Backup page runs `bmgr backupnow com.ataglanceplus`
   over wireless debugging. Only this app is backed up. The page shows the result read from
   bmgr's output, and the history notes it.
+
+## 0.44.1: the Settings item cannot be redirected; Bluetooth metadata section
+
+**Found:**
+- **Settings item:** the home screen's press-and-hold Settings item starts the launcher's own
+  page by component: act=APPLICATION_PREFERENCES pkg=com.google.android.apps.nexuslauncher
+  cmp=…/com.android.launcher3.settings.SettingsActivity (has extras). An explicit component
+  cannot be answered by another app, so it stays.
+- **Bluetooth dump:** the adapter's part is there (3,318 lines, ScanMode, Enabled Profile
+  Services, "Custom Metadata:"). The event log shows "Custom metadata changed for 10, 11, 12, 13,
+  14" for one device, which are the untethered left, right and case battery and the charging
+  keys in AOSP's numbering. So Play services does store the Buds' levels. The section is printed
+  differently from AOSP main's "custom metadata(model_name=…|…)", which is why the first search
+  found nothing.
+
+**Changes:** System check adds the "Custom Metadata:" section itself, up to 25 lines after it,
+with addresses masked.

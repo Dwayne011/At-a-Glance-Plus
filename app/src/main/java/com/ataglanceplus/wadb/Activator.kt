@@ -75,6 +75,8 @@ object Activator {
                 // Whether the adapter's part of the dump arrived: its length, and its sections.
                 "dumpsys bluetooth_manager | grep -c ''",
                 "dumpsys bluetooth_manager | grep -m3 -iE 'Enabled Profile Services|ScanMode|Metadata:'",
+                // The stored metadata section itself (Pixel prints it differently from AOSP), addresses masked.
+                "dumpsys bluetooth_manager | grep -A25 'Custom Metadata:' | sed -E 's/([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}/XX:XX/g' | cut -c1-300 | head -30",
                 // What the launcher or lock screen opened from At a Glance's press-and-hold menu.
                 "logcat -d -b main,system | grep 'START u0' | grep -iE 'smartspace|googlequicksearchbox|nexuslauncher|systemui|com.google.android.as' | grep -v 'category.LAUNCHER' | tail -8",
             ),
