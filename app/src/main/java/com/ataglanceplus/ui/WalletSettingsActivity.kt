@@ -227,7 +227,18 @@ private fun PassList(version: Int, onBack: () -> Unit, onOpen: (String) -> Unit,
     var menu by remember { mutableStateOf(false) }
     var permissionTick by remember { mutableIntStateOf(0) }
     // Each answer re-registers the places, so they start being watched at once.
-    val fine = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++; WalletGeofences.refresh(context) }
+    val fine = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (!WalletGeofences.hasPrecise(context)) FinishSetup.preciseDenied(context)
+        permissionTick++; WalletGeofences.refresh(context)
+    }
+    // Android 12 and later ignore a request for precise location on its own; after two refusals
+    // it stops asking, and only the app's settings can turn it on.
+    val askPrecise = {
+        if (FinishSetup.preciseBlocked(context)) runCatching {
+            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null)))
+        }
+        else fine.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
     val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++; WalletGeofences.refresh(context) }
     val geofences by WalletGeofences.status.collectAsStateWithLifecycle()
     val rules = remember(version, passes) { passes.associate { it.id to ruleOf(context, it) } }
@@ -274,9 +285,9 @@ private fun PassList(version: Int, onBack: () -> Unit, onOpen: (String) -> Unit,
             val settings = { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)) } }
             when {
                 !hasLocation(context) -> SettingRow("Allow location", "Needed to show passes at your places", icon = Icons.Default.LocationOn, accent = true,
-                    onClick = { fine.launch(Manifest.permission.ACCESS_FINE_LOCATION) })
+                    onClick = { askPrecise() })
                 !WalletGeofences.hasPrecise(context) -> SettingRow("Use precise location", "Approximate location is only good to a few kilometres, so places never trigger", icon = Icons.Default.LocationOn, accent = true,
-                    onClick = { fine.launch(Manifest.permission.ACCESS_FINE_LOCATION) })
+                    onClick = { askPrecise() })
                 !hasBackgroundLocation(context) -> SettingRow("Allow location all the time", "Needed to show passes at your places while the app is closed", icon = Icons.Default.LocationOn, accent = true,
                     onClick = { background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) })
                 !WalletGeofences.locationOn(context) -> SettingRow("Turn on location", "Location is off on the phone", icon = Icons.Default.LocationOn, accent = true,

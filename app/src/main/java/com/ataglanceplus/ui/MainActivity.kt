@@ -198,6 +198,7 @@ private fun HomePage(version: Int, open: (String) -> Unit) {
 
     SettingsPage("At a Glance Plus", null) {
         StatusBanner(version)
+        FinishSetupCard(version)
 
         // Only what needs doing: permissions a switched-on card can't work without, device problems, errors.
         val notifications = NotificationCounter.isEnabled(context)
@@ -385,7 +386,7 @@ private fun StatusBanner(version: Int) {
                     if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) startPairing(context)
                     else notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }) { Text("Pair with this phone") }
-                !(home && lock) -> Button(enabled = !busy, onClick = { scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) } }) { Text("Activate") }
+                !(home && lock) -> Button(enabled = !busy, onClick = { scope.launch { if (Activator.run(context, Activator.Mode.ACTIVATE) is Activator.Outcome.Success) FinishSetup.activated() } }) { Text("Activate") }
             }
             if (paired) OutlinedButton(enabled = !busy && Commands.defaultProvider(context) != null, onClick = {
                 scope.launch { Activator.run(context, Activator.Mode.RESET) }
@@ -510,7 +511,7 @@ private fun AdvancedPage(version: Int, onBack: () -> Unit, open: (String) -> Uni
                 else -> "Switch the home and lock screen to this app again"
             },
             icon = Icons.Default.PlayArrow, accent = true, enabled = paired && !busy,
-            onClick = { scope.launch { Activator.run(context, Activator.Mode.ACTIVATE) } },
+            onClick = { scope.launch { if (Activator.run(context, Activator.Mode.ACTIVATE) is Activator.Outcome.Success) FinishSetup.activated() } },
         )
         if (!Commands.isPixelLauncherInstalled(context)) CheckRow("Pixel Launcher not found", false, "The cards need the Pixel Launcher")
         (provider as? Commands.Provider.Missing)?.let { CheckRow("Google's At a Glance not found", false, it.reason) }

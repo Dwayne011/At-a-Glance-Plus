@@ -13,6 +13,11 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- Android's own "let the app always run in the background?" dialog, asked from Finish setup:
+         the cards drop back to Google's whenever Android stops the process. -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
     <!-- Granted by the app to itself over its first adb session; lets it switch wireless debugging on. -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"

@@ -1015,3 +1015,32 @@ kill by lmkd is normally reported as "Low memory", not as a signal.
   recorded them, and the report's "Now" section gives the memory the app is using.
 - **System check reads the kill records:** the events log lines (am_kill, am_proc_died) for this
   app and the low-memory killer's lines, while the phone still holds them.
+
+## 0.42.0: Finish setup asks for precise location and Unrestricted battery use
+
+**Asked for:** the app should ask for precise location and to be set to Unrestricted. The user
+chose both a card on Home and asking after Activate, and Android's own battery dialog rather
+than setting it silently over wireless debugging.
+
+**Found:** the Wallet page's "Use precise location" button asked for ACCESS_FINE_LOCATION on its
+own. Android 12 and later ignore that request, so tapping it showed nothing. Precise location is
+now asked for together with approximate. Android shows that as the "change to precise" dialog
+when approximate is already allowed.
+
+**Changes:**
+- **Finish setup card on Home** (under the status card), listing only what is missing:
+  - precise location, and then location all the time, when a Wallet pass that is switched on
+    has places;
+  - Unrestricted battery use, through Android's "let app always run in background?" dialog
+    (ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS; new manifest permission
+    REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).
+
+  The card goes once nothing is missing.
+- **After a successful Activate**, the app asks for each missing item in turn, the next time it
+  is in front (Activate leaves for the home screen). Each item is asked this way only once; the
+  card stays for anything still turned down.
+- **After two refusals** Android no longer shows the precise-location dialog. From then on, the
+  button opens the app's settings page, with directions to turn on Use precise location.
+- The counts of refusals and of what was asked are not backed up.
+
+**Checked:** rendered at 1.3× text; the card's text wraps beside the button and nothing is cut.
