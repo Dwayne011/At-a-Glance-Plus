@@ -140,7 +140,8 @@ object Prefs {
 
     /** The weather card's look; a still scene unless chosen otherwise. */
     fun weatherLook(context: Context): com.ataglanceplus.weather.WeatherLook =
-        runCatching { com.ataglanceplus.weather.WeatherLook.valueOf(get(context).getString(KEY_WEATHER_LOOK, null)!!) }
+        // Weather wash (removed in 0.43.0) became Animated scenes, the nearest look.
+        runCatching { com.ataglanceplus.weather.WeatherLook.valueOf(get(context).getString(KEY_WEATHER_LOOK, null)!!.replace("WASH", "ANIMATED")) }
             .getOrDefault(com.ataglanceplus.weather.WeatherLook.SCENES)
 
     fun setWeatherLook(context: Context, look: com.ataglanceplus.weather.WeatherLook) {

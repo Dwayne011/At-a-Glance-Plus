@@ -194,6 +194,16 @@
             android:minHeight="0dp"
             android:minWidth="0dp"
             android:visibility="gone" />
+
+        <!-- Dark mode: the daytime scene dimmed toward night, under the panels. -->
+        <ImageView
+            android:id="@+id/scene_scrim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:src="@drawable/scene_scrim_dark"
+            android:scaleType="fitXY"
+            android:visibility="gone" />
     </FrameLayout>
 
     <LinearLayout

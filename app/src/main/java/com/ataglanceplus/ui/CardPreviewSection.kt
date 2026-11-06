@@ -110,7 +110,13 @@ internal fun WeatherPage(version: Int, onBack: () -> Unit) {
                 onClick = { location.launch(Manifest.permission.ACCESS_COARSE_LOCATION) })
             !hasBackground -> SettingRow("Allow location in the background", "Otherwise the weather uses where you were when the app was last open. Choose \"Allow all the time\".",
                 icon = Icons.Default.LocationOn, accent = true, onClick = { background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) })
-            else -> SettingRow("Location", "Approximate, all the time", icon = Icons.Default.LocationOn)
+            // Whatever the permission, the forecast is asked for at a rounded position (about 1 km).
+            else -> SettingRow(
+                "Location",
+                (if (com.ataglanceplus.wallet.WalletGeofences.hasPrecise(context)) "Precise" else "Approximate") +
+                    ", all the time · only a rounded position (about 1 km) is sent to Open-Meteo",
+                icon = Icons.Default.LocationOn,
+            )
         }
 
         Subheader("Now")
@@ -128,10 +134,9 @@ internal fun WeatherPage(version: Int, onBack: () -> Unit) {
             "Style", WeatherLook.entries, look, label = { it.label },
             details = {
                 when (it) {
-                    WeatherLook.STANDARD -> "Your wallpaper's colours (Material You)."
+                    WeatherLook.STANDARD -> "Your wallpaper's colours (Material You), light or dark with the phone's theme."
                     WeatherLook.SCENES -> "Tinted for the weather and time of day, with the sun, stars, clouds, fog, rain or snow drawn in."
                     WeatherLook.ANIMATED -> "The scenes, moving gently. Uses more battery while the card is on screen."
-                    WeatherLook.WASH -> "The whole card in the weather's colours, moving gently, with frosted panels. Uses more battery while the card is on screen."
                 }
             },
             onDismiss = { choosingLook = false },

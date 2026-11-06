@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark mode over a daytime scene: a deep blue veil so the sky reads as dusk, not daylight. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#80101A2E" />
+</shape>

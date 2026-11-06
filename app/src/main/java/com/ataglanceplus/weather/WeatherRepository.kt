@@ -136,8 +136,8 @@ enum class TemperatureUnit(val apiValue: String, val symbol: String) {
 }
 
 /**
- * Weather from Open-Meteo (https://open-meteo.com): free, no API key. The location is coarse
- * (city level) and only the rounded coordinates are sent.
+ * Weather from Open-Meteo (https://open-meteo.com): free, no API key. Only the coordinates
+ * rounded to two decimals (about 1 km) are sent, whether location is precise or approximate.
  */
 object WeatherRepository {
 

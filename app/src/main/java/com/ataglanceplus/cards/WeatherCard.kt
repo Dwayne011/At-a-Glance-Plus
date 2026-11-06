@@ -116,11 +116,11 @@ object WeatherCard {
             return palette
         }
         views.setViewVisibility(R.id.weather_scene, View.VISIBLE)
-        // The wash: the weather's own gradient in place of the scene's sky, with the scene's
-        // moving weather over it, under frosted panels.
-        views.setImageViewResource(R.id.scene_sky, if (look == WeatherLook.WASH) reading.conditions.washSky(reading.isDay) else reading.conditions.sceneSky(reading.isDay))
+        views.setImageViewResource(R.id.scene_sky, reading.conditions.sceneSky(reading.isDay))
+        // Dark mode: a daytime scene dimmed toward dusk (night scenes are dark already).
+        views.setViewVisibility(R.id.scene_scrim, if (reading.isDay && PanelCards.isDark(context)) View.VISIBLE else View.GONE)
         val layers = reading.conditions.sceneLayers(reading.isDay)
-        if (look == WeatherLook.ANIMATED || look == WeatherLook.WASH) {
+        if (look == WeatherLook.ANIMATED) {
             layers.forEach { views.setViewVisibility(it.animated, View.VISIBLE) }
         } else {
             val stills = layers.mapNotNull { it.still }

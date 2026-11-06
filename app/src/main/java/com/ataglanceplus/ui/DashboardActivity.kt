@@ -972,7 +972,7 @@ internal fun VwapDialog(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Extended hours")
                         Text(
-                            "1D and 5D charts of US stocks include pre-market and after-hours trading (Yahoo's prices) and the overnight session (eToro's, as Yahoo has none), as in eToro's 24/5 charts. Yahoo reports no volume outside regular hours, so those candles show eToro's volume (its own trading, on its own scale), and the VWAP starts again where the volume's source changes.",
+                            "1D and 5D charts of US stocks include pre-market and after-hours trading (Yahoo's prices) and the overnight session (eToro's, as Yahoo has none), as in eToro's 24/5 charts. Yahoo reports no volume outside regular hours, so those candles show eToro's volume (its own trading, on its own scale) for stocks eToro trades around the clock, else the exchanges' volume from Nasdaq for the latest day. The VWAP starts again where the volume switches to or from eToro's.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }

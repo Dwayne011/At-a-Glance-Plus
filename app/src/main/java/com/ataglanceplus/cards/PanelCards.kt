@@ -42,26 +42,23 @@ object PanelCards {
     )
 
     /**
-     * The palette for [look]: wallpaper colours (Standard), see-through over a scene, frosted
-     * glass over the Weather wash (dark text on the light washes for [condition] by day or
-     * night), or outlines (always-on).
+     * The palette for [look]: wallpaper colours (Standard, light or dark with the phone's theme),
+     * see-through over a scene, or outlines (always-on).
      */
     fun palette(
         context: Context, look: WeatherLook, aod: Boolean,
         condition: com.ataglanceplus.weather.WeatherCondition? = null, isDay: Boolean = true,
     ): Palette = when {
         aod -> Palette(0, R.drawable.weather_c_panel_aod, R.drawable.weather_c_panel_aod, R.drawable.chip_bg_aod, Style.AOD_TEXT, Style.AOD_TEXT, aod = true)
-        look == WeatherLook.WASH && condition?.washIsLight(isDay) == true -> Palette(
-            R.drawable.weather_wash_frame, R.drawable.weather_wash_panel_light, R.drawable.weather_wash_panel_light, R.drawable.weather_wash_tile_light,
-            0xFF2A2A2A.toInt(), 0xCC3D3D3D.toInt(), aod = false, highlight = 0x59FFFFFF,
-        )
-        look == WeatherLook.WASH -> Palette(
-            R.drawable.weather_wash_frame, R.drawable.weather_wash_panel_dark, R.drawable.weather_wash_panel_dark, R.drawable.weather_wash_tile_dark,
-            0xFFFFFFFF.toInt(), 0xCCFFFFFF.toInt(), aod = false, highlight = 0x2EFFFFFF,
-        )
         look != WeatherLook.STANDARD -> Palette(
             R.drawable.weather_c_frame_scene, R.drawable.weather_c_panel_main_scene, R.drawable.weather_c_panel_chips_scene, R.drawable.weather_c_tile_scene,
             0xFFFFFFFF.toInt(), 0xB3FFFFFF.toInt(), aod = false, highlight = 0x2EFFFFFF,
+        )
+        // Dark mode: Material You's dark tones, light text on deep panels.
+        isDark(context) -> Palette(
+            R.drawable.weather_c_frame, R.drawable.weather_c_panel_main_dark, R.drawable.weather_c_panel_chips_dark, R.drawable.weather_c_tile_dark,
+            context.getColor(android.R.color.system_accent1_50), context.getColor(android.R.color.system_accent1_200), aod = false,
+            highlight = context.getColor(android.R.color.system_accent1_700),
         )
         else -> Palette(
             R.drawable.weather_c_frame, R.drawable.weather_c_panel_main, R.drawable.weather_c_panel_chips, R.drawable.weather_c_tile,
@@ -69,6 +66,10 @@ object PanelCards {
             highlight = context.getColor(android.R.color.system_accent1_50),
         )
     }
+
+    /** Whether the phone is in dark mode (the card follows it; the service re-draws on a change). */
+    fun isDark(context: Context): Boolean =
+        (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
 
     /** Puts [palette]'s frame and panel backgrounds on a two-panel card. */
     fun paint(views: RemoteViews, palette: Palette, mainPanel: Int, chipsPanel: Int) {

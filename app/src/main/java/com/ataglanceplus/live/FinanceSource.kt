@@ -350,7 +350,7 @@ object FinanceSource {
         }
     }
 
-    private val NEW_YORK: java.time.ZoneId = java.time.ZoneId.of("America/New_York")
+    internal val NEW_YORK: java.time.ZoneId = java.time.ZoneId.of("America/New_York")
 
     /** The US session at [time]: pre-market 04:00, regular 09:30, after hours 16:00, overnight 20:00 to 04:00, New York time. */
     fun usSession(time: Long): Session {
@@ -467,9 +467,23 @@ object FinanceSource {
             } else emptyList()
             val overnight = etoro.filter { it.session == Session.OVERNIGHT }
             val etoroAt = etoro.associateBy { it.time }
+            // The candle still forming carries the time of its latest trade (09:59, say), not its
+            // start: matched to eToro's and Nasdaq's by the start of its step.
+            val stepMs = (minutes ?: 0) * 60_000L
+            fun start(time: Long) = if (stepMs > 0) time - Math.floorMod(time, stepMs) else time
+            // Pre-market and after-hours candles Yahoo gives no volume for: eToro's (for the stocks
+            // it trades around the clock), else Nasdaq's for the latest day (the exchanges' own).
+            val nasdaq = if (prePost && us && stepMs > 0 && yahoo.any { it.volume <= 0 && it.session != Session.REGULAR && etoroAt[start(it.time)].let { e -> e == null || e.volume <= 0 } })
+                NasdaqVolume.minutes(symbol) else emptyMap()
             val filled = yahoo.map { c ->
-                val e = etoroAt[c.time]
-                if (c.volume <= 0 && c.session != Session.REGULAR && e != null && e.volume > 0) c.copy(volume = e.volume, etoroVolume = true) else c
+                if (c.volume > 0 || c.session == Session.REGULAR) return@map c
+                val e = etoroAt[start(c.time)]
+                val n = if (nasdaq.isEmpty()) 0L else NasdaqVolume.sum(nasdaq, start(c.time), stepMs)
+                when {
+                    e != null && e.volume > 0 -> c.copy(volume = e.volume, etoroVolume = true)
+                    n > 0 -> c.copy(volume = n)
+                    else -> c
+                }
             }
             val taken = filled.map { it.time }.toHashSet()
             val candles = (filled + overnight.filter { it.time !in taken }).sortedBy { it.time }

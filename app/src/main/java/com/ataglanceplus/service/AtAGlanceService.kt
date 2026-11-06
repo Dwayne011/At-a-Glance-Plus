@@ -129,8 +129,19 @@ class AtAGlanceService : SmartspaceService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    /** The theme the cards were last drawn in: they follow the phone's dark mode. */
+    private var dark: Boolean? = null
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val now = com.ataglanceplus.cards.PanelCards.isDark(this)
+        if (dark != null && dark != now) pushAll()
+        dark = now
+    }
+
     override fun onCreate() {
         super.onCreate()
+        dark = com.ataglanceplus.cards.PanelCards.isDark(this)
         // Started with the screen off (after a restart, say): know it from the start.
         screenOff = !getSystemService(android.os.PowerManager::class.java).isInteractive
         screenOn.value = !screenOff
