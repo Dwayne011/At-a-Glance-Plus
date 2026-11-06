@@ -1202,3 +1202,12 @@ remove them.
 - **More details:** one row that opens the rest: Now (with each connection and the last event),
   Device, Wireless debugging, the last command log and the commands for a computer.
 - The shared and copied report is unchanged and still has everything.
+
+## 0.45.1: System check masks encoded Bluetooth addresses
+
+**Found:** the Buds' metadata rows came through. Key 1 is the model (G1); keys 10, 11 and 12
+hold left, right and case battery as plain numbers (100, 100, 49); keys 13, 14 and 15 hold
+charging as true or false. But Fast Pair's link row (key 16) carries the full device address
+URL-encoded (…%3A…), which the mask did not catch.
+
+**Changes:** the metadata line masks URL-encoded addresses as well.

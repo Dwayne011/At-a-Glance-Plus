@@ -78,7 +78,7 @@ object Activator {
                 // The stored metadata section itself (Pixel prints it differently from AOSP), addresses masked.
                 // Each paired device and its stored metadata rows (numbered keys: 1 model, 10 to 14 the
                 // Buds' left, right and case battery and charging), addresses masked.
-                "dumpsys bluetooth_manager | grep -E '^ *Device: |^ {6}[0-9]+ {2,}' | sed -E 's/([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}/XX:XX/g' | cut -c1-120 | head -60",
+                "dumpsys bluetooth_manager | grep -E '^ *Device: |^ {6}[0-9]+ {2,}' | sed -E 's/([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}/XX:XX/g; s/([0-9A-Fa-f]{2}%3[Aa]){5}[0-9A-Fa-f]{2}/XX%3AXX/g' | cut -c1-120 | head -60",
                 // What the launcher or lock screen opened from At a Glance's press-and-hold menu.
                 "logcat -d -b main,system | grep 'START u0' | grep -iE 'smartspace|googlequicksearchbox|nexuslauncher|systemui|com.google.android.as' | grep -v 'category.LAUNCHER' | tail -8",
             ),
