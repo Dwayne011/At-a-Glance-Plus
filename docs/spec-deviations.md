@@ -1044,3 +1044,38 @@ when approximate is already allowed.
 - The counts of refusals and of what was asked are not backed up.
 
 **Checked:** rendered at 1.3× text; the card's text wraps beside the button and nothing is cut.
+
+## 0.43.0: dark mode, Weather wash removed, precise location label, extended-hours volume
+
+**Asked for:** cards that follow the phone's dark mode and Android theming; the weather's
+location row said Approximate after precise was allowed; Weather wash dropped in favour of
+Animated scenes; volume "None reported" on some stocks.
+
+**Changes:**
+- **Dark mode:** the Standard look uses Material You's dark tones in dark mode: weather panel
+  accent1 800, chips panel accent2 800, tiles accent1 700, text accent1 50 and 200. Daytime
+  scenes (Scenes and Animated scenes) get a deep blue veil (#80101A2E). Night scenes are
+  unchanged. The service redraws the cards when the theme changes. The user approved a preview
+  rendered from the card code.
+- **Weather wash removed:** its look, drawables and generator are gone. A saved Weather wash
+  choice reads as Animated scenes.
+- **Location label:** the weather's location row says Precise or Approximate, matching the
+  permission. Either way, only coordinates rounded to two decimals (about 1 km) are sent to
+  Open-Meteo.
+- **Volume:**
+  - **Found:** Yahoo reports no pre-market or after-hours volume. eToro only has it for the
+    stocks it trades around the clock (not NOK, which it trades in regular hours only).
+  - **Fill from Nasdaq:** those candles now take the exchanges' volume from Nasdaq's public
+    intraday chart (api.nasdaq.com …/chart?charttype=rs). It covers 04:00 to 20:00 New York
+    time, minute by minute, for the latest day only. It is asked for at most once a minute per
+    stock, and only when a candle still lacks volume.
+  - **Same scale:** the volume is on the same scale as regular hours, so the VWAP does not
+    restart for it.
+  - **Forming candle:** the candle still forming (stamped with its latest trade's time) is
+    matched to eToro's and Nasdaq's candles by the start of its step.
+
+**Checked against the live feeds:**
+- NOK: all 112 extended-hours candles of the latest day are filled. The previous day's 98 stay
+  empty, because Nasdaq has only the latest day.
+- ONDS: 2 candles stay empty.
+- AAPL: 1 candle stays empty, the 04:00 candle.
