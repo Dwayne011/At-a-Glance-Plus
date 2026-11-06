@@ -1079,3 +1079,31 @@ Animated scenes; volume "None reported" on some stocks.
   empty, because Nasdaq has only the latest day.
 - ONDS: 2 candles stay empty.
 - AAPL: 1 candle stays empty, the 04:00 candle.
+
+## 0.43.1: Pixel Buds battery for Widgets Plus, faster stock screen
+
+**Asked for:** Widgets Plus (the user's own app, com.widgetsplus) shows Pixel Buds' left, right
+and case battery. Android only prints those in `dumpsys bluetooth_manager`, which needs DUMP, a
+permission only the shell can grant. The user agreed that At a Glance Plus grants it during
+activation (no broadcast receiver), and that System check shows the Buds' battery lines.
+
+**Changes:**
+- **Grant during activation:** when com.widgetsplus is installed and does not hold DUMP, the
+  activation adds `pm grant com.widgetsplus android.permission.DUMP`.
+  - The package and the command are fixed in the code.
+  - The installed app must have exactly one signer, with SHA-256
+    A6:5E:88:7A:4C:DD:8B:1B:AC:2B:7E:49:13:01:8F:BA:17:A1:FE:B4:27:4E:64:1F:FC:02:6F:E2:28:6C:D5:91.
+    Otherwise nothing is granted and the history says so.
+  - The step's result goes in the history ("Let Widgets Plus read Pixel Buds' battery").
+  - Nothing outside the app can trigger it.
+- **System check shows the Buds' battery:** it adds the Bluetooth model names and
+  untethered_left, right and case battery levels from `dumpsys bluetooth_manager`, with no
+  addresses.
+- **System check shows the menu's launches:** it adds the last activity launches by the
+  launcher, SystemUI or Google's At a Glance. This finds what the press-and-hold menu's Settings
+  item opens.
+- **Stock screen no longer waits for Nasdaq:**
+  - **Found:** 0.43.0's Nasdaq volume request takes 2 to 3 seconds and held up the chart.
+  - **Fix:** it now runs in the background; the screen uses the last answer, and the next 15 s
+    refresh picks up a new one.
+  - **Asked less often:** it is only asked for when the latest day has a candle without volume.

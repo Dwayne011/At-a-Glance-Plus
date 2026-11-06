@@ -18,25 +18,36 @@ import java.time.ZoneOffset
 object NasdaqVolume {
 
     private const val TAG = "NasdaqVolume"
-    /** Asked again for a stock at most this often; the stock screen refreshes every 15 seconds. */
+    /** Asked again for a stock at most this often. */
     private const val KEEP_MS = 60_000L
 
     private class Day(val at: Long, val minutes: Map<Long, Long>)
 
     private val cache = HashMap<String, Day>()
 
+    private val asking = HashSet<String>()
+
     /**
-     * Volume per minute (start, epoch ms → shares) for [symbol]'s latest day, or empty when Nasdaq
-     * does not answer or does not list it. Blocking.
+     * Volume per minute (start, epoch ms → shares) for [symbol]'s latest day, as last fetched;
+     * empty until the first answer. Never waits: Nasdaq takes 2 to 3 seconds to answer, so a
+     * stale or missing day is fetched in the background, and the stock screen's next refresh
+     * (every 15 seconds) uses it.
      */
     fun minutes(symbol: String): Map<Long, Long> {
         val key = symbol.uppercase()
-        synchronized(cache) {
-            cache[key]?.takeIf { System.currentTimeMillis() - it.at < KEEP_MS }?.let { return it.minutes }
+        val day = synchronized(cache) { cache[key] }
+        val stale = day == null || System.currentTimeMillis() - day.at >= KEEP_MS
+        if (stale && synchronized(asking) { asking.add(key) }) {
+            Thread {
+                try {
+                    val fresh = fetch(key)
+                    synchronized(cache) { cache[key] = Day(System.currentTimeMillis(), fresh) }
+                } finally {
+                    synchronized(asking) { asking.remove(key) }
+                }
+            }.apply { isDaemon = true; name = "nasdaq-$key" }.start()
         }
-        val fresh = fetch(key)
-        synchronized(cache) { cache[key] = Day(System.currentTimeMillis(), fresh) }
-        return fresh
+        return day?.minutes.orEmpty()
     }
 
     private fun fetch(symbol: String): Map<Long, Long> {

@@ -473,7 +473,13 @@ object FinanceSource {
             fun start(time: Long) = if (stepMs > 0) time - Math.floorMod(time, stepMs) else time
             // Pre-market and after-hours candles Yahoo gives no volume for: eToro's (for the stocks
             // it trades around the clock), else Nasdaq's for the latest day (the exchanges' own).
-            val nasdaq = if (prePost && us && stepMs > 0 && yahoo.any { it.volume <= 0 && it.session != Session.REGULAR && etoroAt[start(it.time)].let { e -> e == null || e.volume <= 0 } })
+            // Asked for only when the latest day (all Nasdaq has) has such a candle.
+            val latestDay = yahoo.lastOrNull()?.let { java.time.Instant.ofEpochMilli(it.time).atZone(NEW_YORK).toLocalDate() }
+            val nasdaq = if (prePost && us && stepMs > 0 && yahoo.any {
+                    it.volume <= 0 && it.session != Session.REGULAR &&
+                        java.time.Instant.ofEpochMilli(it.time).atZone(NEW_YORK).toLocalDate() == latestDay &&
+                        etoroAt[start(it.time)].let { e -> e == null || e.volume <= 0 }
+                })
                 NasdaqVolume.minutes(symbol) else emptyMap()
             val filled = yahoo.map { c ->
                 if (c.volume > 0 || c.session == Session.REGULAR) return@map c

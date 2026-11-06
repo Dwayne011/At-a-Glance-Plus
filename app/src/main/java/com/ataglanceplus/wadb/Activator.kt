@@ -28,7 +28,8 @@ object Activator {
 
     suspend fun run(context: Context, mode: Mode): Outcome {
         val steps = when (mode) {
-            Mode.ACTIVATE -> Commands.activateSteps(context)
+            // Widgets Plus's battery permission rides along, when it is installed and lacks it.
+            Mode.ACTIVATE -> Commands.activateSteps(context) + listOfNotNull(WidgetsPlusGrant.step(context))
             Mode.RESET -> Commands.resetSteps(context) ?: return fail("No Google provider found on this device")
         }
         return execute(
@@ -66,6 +67,11 @@ object Activator {
                 // lines, while the phone's log still holds them (a few hours at most).
                 "logcat -d -b events | grep -E 'am_kill|am_proc_died' | grep $pkg | tail -20",
                 "logcat -d -b main,system | grep -iE 'lowmemorykiller|lmkd' | tail -15",
+                // Pixel Buds' left, right and case battery as Play services stores them (model and
+                // levels only, no addresses).
+                "dumpsys bluetooth_manager | grep -oE 'model_name=[^|]*|untethered_(left|right|case)_battery=[^|]*'",
+                // What the launcher or lock screen opened from At a Glance's press-and-hold menu.
+                "logcat -d -b main,system | grep 'START u0' | grep -iE 'smartspace|googlequicksearchbox|nexuslauncher|systemui' | tail -8",
             ),
             working = "Checking the launcher, SystemUI and At a Glance", done = "System check done; it is below.",
         )
@@ -143,6 +149,7 @@ object Activator {
         step.startsWith("am start") -> "Open the home screen"
         step.startsWith("for i") -> "Wait for the launcher"
         step.startsWith("old=") || step.startsWith("am crash") -> "Restart SystemUI and wait"
+        WidgetsPlusGrant.isGrant(step) -> "Let Widgets Plus read Pixel Buds' battery"
         step.startsWith("pm grant") -> "Grant a permission"
         step.startsWith("cmd notification") -> "Allow notification access"
         step.startsWith("appops") -> "Allow usage access"
