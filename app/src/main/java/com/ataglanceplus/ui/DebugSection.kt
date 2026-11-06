@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -44,9 +45,10 @@ import kotlinx.coroutines.launch
 
 /**
  * Advanced › Debug: everything needed to tell why the cards stopped showing or a place did not
- * trigger, on one page and in one shareable report. The connections now, why Android last
- * stopped the app, how it treats the app in the background, the Wallet places' location state,
- * the system's side (over wireless debugging) and the app's history.
+ * trigger, in one shareable report. On show: errors, why Android last stopped the app, how it
+ * treats the app in the background, the Wallet places' location state, System check and the
+ * app's history. Folded under More details: the connections, the device, wireless debugging, the
+ * last command log and the commands for a computer.
  *
  * The report holds no keys, tokens, account names or coordinates.
  */
@@ -65,47 +67,18 @@ internal fun DebugPage(version: Int, onBack: () -> Unit) {
     @Suppress("UNUSED_EXPRESSION") changed
     val history = remember(version, tick, sessions, geofences, inside) { DebugLog.read(context) }
     val paired = remember(version) { Prefs.isPaired(context) }
+    // Whether System check or the crash log ran while this page was open.
+    var ranHere by remember { androidx.compose.runtime.mutableStateOf(false) }
 
     SettingsPage("Debug", onBack) {
-        SettingRow("Share debug report", "Everything on this page as text, without keys, accounts or locations", icon = Icons.Default.Share, accent = true,
+        SettingRow("Share debug report", "Everything here, details included, as text, without keys, accounts or locations", icon = Icons.Default.Share, accent = true,
             onClick = { share(context, report(context)) })
         SettingRow("Copy debug report", icon = Icons.AutoMirrored.Filled.List, onClick = { copy(context, "At a Glance Plus debug report", report(context)) })
 
-        Subheader("Now")
-        now(context).forEach { (label, value) -> SettingRow(label, value, icon = Icons.Default.Info) }
+        // The one thing worth seeing at once from the rest: the cards are not showing.
         if (sessions.isEmpty()) {
             CheckRow("Not connected", false, "Neither the launcher nor the lock screen is connected: they show Google's At a Glance until you activate again")
-        } else {
-            sessions.values.sortedBy { it.surface }.forEach { s ->
-                CheckRow(
-                    "${s.surface.replaceFirstChar { it.uppercase() }} connected", true,
-                    "${s.clientPackage} · last drawn ${if (s.lastPushAt == 0L) "never" else DebugLog.time(s.lastPushAt)}",
-                )
-            }
         }
-        if (lastEvent.isNotEmpty()) SettingNote("Last event: $lastEvent")
-
-        Subheader("Device")
-        CheckRow("Pixel Launcher installed", com.ataglanceplus.Commands.isPixelLauncherInstalled(context), com.ataglanceplus.Commands.PIXEL_LAUNCHER)
-        when (val provider = remember(version) { com.ataglanceplus.Commands.lookupDefaultProvider(context) }) {
-            is com.ataglanceplus.Commands.Provider.Found -> CheckRow("Google At a Glance provider found", true, provider.component.flattenToShortString())
-            is com.ataglanceplus.Commands.Provider.Missing -> CheckRow("Google At a Glance provider found", false, provider.reason)
-        }
-
-        Subheader("Wireless debugging")
-        val wirelessOn = remember(version, tick) { Wadb.wirelessDebuggingState(context) }
-        val canSelfEnable = remember(version, tick) { Wadb.canSwitchDebuggingOn(context) }
-        CheckRow("Paired with this phone", paired, if (paired) "The phone trusts this app's key" else "Pair once; no computer needed")
-        CheckRow("Wireless debugging on", wirelessOn == true, if (wirelessOn == true) "Developer options › Wireless debugging" else "Android hides this setting from apps; Activate checks it directly")
-        CheckRow(
-            "Can switch it on after a restart", canSelfEnable,
-            when {
-                canSelfEnable -> "Secure-settings permission held"
-                Prefs.debugSwitchBlocked(context) -> "Android no longer lets apps switch it on; turn it on yourself after a restart (a notification reminds you)"
-                else -> "Granted automatically during the first activation"
-            },
-        )
-        CheckRow("Wi-Fi connected", Wadb.isWifiConnected(context), "Wireless debugging only works on Wi-Fi")
 
         Subheader("Errors")
         var errors by remember(version, tick) { androidx.compose.runtime.mutableStateOf(CrashLog.read(context)) }
@@ -152,31 +125,69 @@ internal fun DebugPage(version: Int, onBack: () -> Unit) {
         }
         SettingNote("Play services watches the places and tells the app on arrival and departure, so Android's location indicator names Play services, not this app.")
 
-        Subheader("The system's side")
+        Subheader("System check")
         SettingRow(
             if (busy) "Checking…" else "Check the launcher, SystemUI and At a Glance",
             if (paired) "Over wireless debugging: why they last restarted, which provider At a Glance uses, background limits" else "Pair with this phone first (Advanced)",
             icon = Icons.Default.Build, enabled = paired && !busy,
-            onClick = { scope.launch { Activator.systemCheck(context); tick++ } },
+            onClick = { scope.launch { Activator.systemCheck(context); ranHere = true; tick++ } },
         )
         SettingRow(
             "Read the phone's crash log", "This app's, the launcher's and SystemUI's crashes, into the log below",
             icon = Icons.Default.Build, enabled = paired && !busy,
-            onClick = { scope.launch { Activator.readCrashLog(context); tick++ } },
+            onClick = { scope.launch { Activator.readCrashLog(context); ranHere = true; tick++ } },
         )
-        if (wadbLog.isNotEmpty()) {
-            SettingRow("Command log", "The last activation, check or crash log · tap to copy", icon = Icons.AutoMirrored.Filled.List, onClick = { copy(context, "Command log", wadbLog) })
-            LogText(wadbLog, limit = 12_000)
-        }
+        // The result of a check run just now; an older one is under More details.
+        if (ranHere && wadbLog.isNotEmpty()) CommandLog(wadbLog)
 
-        // The same commands for a computer, folded away until wanted.
-        var commands by remember { androidx.compose.runtime.mutableStateOf(false) }
+        // Everything else, folded away: still in the shared report.
+        var more by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        Subheader("More details")
         SettingRow(
-            if (commands) "Hide the commands for a computer" else "Commands for a computer",
-            "For adb over USB, if wireless debugging is not an option",
-            icon = Icons.Default.Build, onClick = { commands = !commands },
+            if (more) "Hide the details" else "Show the details",
+            "Version and connections, the device, wireless debugging, the last command log and the commands for a computer",
+            icon = Icons.Default.Info, onClick = { more = !more },
         )
-        if (commands) {
+        if (more) {
+            Subheader("Now")
+            now(context).forEach { (label, value) -> SettingRow(label, value, icon = Icons.Default.Info) }
+            sessions.values.sortedBy { it.surface }.forEach { s ->
+                CheckRow(
+                    "${s.surface.replaceFirstChar { it.uppercase() }} connected", true,
+                    "${s.clientPackage} · last drawn ${if (s.lastPushAt == 0L) "never" else DebugLog.time(s.lastPushAt)}",
+                )
+            }
+            if (lastEvent.isNotEmpty()) SettingNote("Last event: $lastEvent")
+
+            Subheader("Device")
+            CheckRow("Pixel Launcher installed", com.ataglanceplus.Commands.isPixelLauncherInstalled(context), com.ataglanceplus.Commands.PIXEL_LAUNCHER)
+            when (val provider = remember(version) { com.ataglanceplus.Commands.lookupDefaultProvider(context) }) {
+                is com.ataglanceplus.Commands.Provider.Found -> CheckRow("Google At a Glance provider found", true, provider.component.flattenToShortString())
+                is com.ataglanceplus.Commands.Provider.Missing -> CheckRow("Google At a Glance provider found", false, provider.reason)
+            }
+
+            Subheader("Wireless debugging")
+            val wirelessOn = remember(version, tick) { Wadb.wirelessDebuggingState(context) }
+            val canSelfEnable = remember(version, tick) { Wadb.canSwitchDebuggingOn(context) }
+            CheckRow("Paired with this phone", paired, if (paired) "The phone trusts this app's key" else "Pair once; no computer needed")
+            CheckRow("Wireless debugging on", wirelessOn == true, if (wirelessOn == true) "Developer options › Wireless debugging" else "Android hides this setting from apps; Activate checks it directly")
+            CheckRow(
+                "Can switch it on after a restart", canSelfEnable,
+                when {
+                    canSelfEnable -> "Secure-settings permission held"
+                    Prefs.debugSwitchBlocked(context) -> "Android no longer lets apps switch it on; turn it on yourself after a restart (a notification reminds you)"
+                    else -> "Granted automatically during the first activation"
+                },
+            )
+            CheckRow("Wi-Fi connected", Wadb.isWifiConnected(context), "Wireless debugging only works on Wi-Fi")
+
+            if (wadbLog.isNotEmpty()) {
+                Subheader("Last command log")
+                CommandLog(wadbLog)
+            }
+
+            Subheader("Commands for a computer")
+            SettingNote("For adb over USB, if wireless debugging is not an option.")
             CommandRow("Activate", com.ataglanceplus.Commands.activateAdb(context))
             com.ataglanceplus.Commands.resetAdb(context)?.let { CommandRow("Back to Google", it) }
             SettingNote("Service component: ${com.ataglanceplus.Commands.serviceComponent(context)} · user ${com.ataglanceplus.Commands.userId()}")
@@ -189,6 +200,14 @@ internal fun DebugPage(version: Int, onBack: () -> Unit) {
         if (history.isEmpty()) SettingNote("Nothing yet.")
         history.take(200).forEach { HistoryEntry(it) }
     }
+}
+
+/** A command's output, with a row to copy it. */
+@Composable
+private fun CommandLog(log: String) {
+    val context = LocalContext.current
+    SettingRow("Command log", "The last activation, check or crash log · tap to copy", icon = Icons.AutoMirrored.Filled.List, onClick = { copy(context, "Command log", log) })
+    LogText(log, limit = 12_000)
 }
 
 /** One history line, as the time and kind over the message. */

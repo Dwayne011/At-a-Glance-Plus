@@ -1182,3 +1182,23 @@ device:
 **Changes:** System check replaces that line. It now lists every device header and every
 metadata row (keys as numbers), with addresses masked and rows cut to 120 characters, at most
 60 lines.
+
+## 0.45.0: Debug page tidied
+
+**Asked for:** a tidier Debug page. The user chose to fold away "Now" (version, phone, memory,
+connections), Device, Wireless debugging, and the command log and adb commands, rather than
+remove them.
+
+**Changes:**
+- **On show, in this order:**
+  - Share and Copy the report;
+  - a "Not connected" warning, only when nothing is connected;
+  - Errors, and Why Android last stopped the app;
+  - Battery and background, and Location for Wallet places;
+  - System check, with the crash log button;
+  - History.
+- **System check's output:** it appears under its buttons only after a run while the page is
+  open.
+- **More details:** one row that opens the rest: Now (with each connection and the last event),
+  Device, Wireless debugging, the last command log and the commands for a computer.
+- The shared and copied report is unchanged and still has everything.
