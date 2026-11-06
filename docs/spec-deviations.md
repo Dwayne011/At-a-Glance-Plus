@@ -1168,3 +1168,17 @@ backs this app's settings up to Google straight away.
 
 **Changes:** System check adds the "Custom Metadata:" section itself, up to 25 lines after it,
 with addresses masked.
+
+## 0.44.2: System check, each device's metadata rows
+
+**Found:** on this Android 17 build, `dumpsys bluetooth_manager` prints the stored metadata per
+device:
+- each device is a block headed `Device: XX:XX:XX:XX:C3:2B [Persist on Disk] {`;
+- inside it is a `Custom Metadata:` table with a `Key  Value` header and a dashed rule;
+- each row has a numbered key and its value.
+
+0.44.1's 25 lines after the first table ended before the Buds' table.
+
+**Changes:** System check replaces that line. It now lists every device header and every
+metadata row (keys as numbers), with addresses masked and rows cut to 120 characters, at most
+60 lines.
