@@ -82,6 +82,24 @@ object Activator {
         )
     }
 
+    /**
+     * Sends this app's settings to the Google account now, rather than when Android next chooses
+     * to (usually overnight). Only this app's backup: `bmgr backupnow` for its own package.
+     */
+    suspend fun backupNow(context: Context): Outcome {
+        android.app.backup.BackupManager.dataChanged(context.packageName)
+        return execute(context, listOf("bmgr backupnow ${context.packageName}"), working = "Backing up to Google", done = "Backup run.")
+    }
+
+    /** What the last [backupNow] reported, from its output in the command log. */
+    fun backupResult(log: String): String = when {
+        Regex("Backup finished with result: Success").containsMatchIn(log) -> "Backed up to your Google account."
+        log.contains("currently disabled", ignoreCase = true) -> "Backup is off on this phone. Turn it on in Settings › System › Backup."
+        log.contains("not eligible", ignoreCase = true) || log.contains("not allowed", ignoreCase = true) -> "Android didn't allow a backup of this app right now."
+        else -> Regex("result: (\\w+)").findAll(log).lastOrNull()?.groupValues?.get(1)?.let { "Backup didn't finish ($it). Try again later." }
+            ?: "Backup didn't report a result. Try again later."
+    }
+
     /** Reads the phone's crash log (this app, the launcher and SystemUI) into the command log. */
     suspend fun readCrashLog(context: Context): Outcome =
         execute(context, listOf("logcat -d -b crash -t 300"), working = "Reading the crash log", done = "Crash log read; it is below.")
@@ -156,6 +174,7 @@ object Activator {
         step.startsWith("old=") || step.startsWith("am crash") -> "Restart SystemUI and wait"
         WidgetsPlusGrant.isGrant(step) -> "Let Widgets Plus read Pixel Buds' battery"
         step.startsWith("pm grant") -> "Grant a permission"
+        step.startsWith("bmgr backupnow") -> "Back up to Google"
         step.startsWith("cmd notification") -> "Allow notification access"
         step.startsWith("appops") -> "Allow usage access"
         else -> step.split(' ').take(3).joinToString(" ").take(40)

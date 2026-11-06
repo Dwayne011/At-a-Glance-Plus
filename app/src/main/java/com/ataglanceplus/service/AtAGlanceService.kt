@@ -365,6 +365,8 @@ class AtAGlanceService : SmartspaceService() {
         val config = sessions[sessionId] ?: return
         val aod = config.uiSurface == SURFACE_LOCKSCREEN && (screenOff || Prefs.aodPreview(this))
         // A card that fails to build must not take the whole app down: log it and show weather alone.
+        // No hold ring on the lock screen.
+        com.ataglanceplus.cards.Style.onLockScreen = config.uiSurface == SURFACE_LOCKSCREEN
         val targets = try {
             val data = cardData(sessionId)
             CardDeck.build(this, config.uiSurface, config.smartspaceTargetCount, aod, data).also {
@@ -373,6 +375,8 @@ class AtAGlanceService : SmartspaceService() {
         } catch (e: Exception) {
             CrashLog.record(this, "Building cards for ${config.uiSurface}", e)
             listOf(WeatherCard.build(this, config.uiSurface, aod, WeatherRepository.weather.value, WeatherRepository.status.value))
+        } finally {
+            com.ataglanceplus.cards.Style.onLockScreen = false
         }
         try {
             updateSmartspaceTargets(sessionId, targets)

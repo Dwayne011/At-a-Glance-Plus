@@ -33,7 +33,7 @@ object SettingsBackup {
     )
     private val PREFIXES = listOf("chip_app_", "chip_size_", "gmail_labels_")
 
-    private fun included(key: String) = key in KEYS || PREFIXES.any { key.startsWith(it) }
+    fun included(key: String) = key in KEYS || PREFIXES.any { key.startsWith(it) }
 
     /** The settings as JSON text, each value with its type so it is restored exactly. */
     fun export(context: Context): String {
@@ -94,14 +94,7 @@ object SettingsBackup {
         return count
     }
 
-    /** Writes the snapshot that the Google backup takes (it backs up this file only). */
-    fun writeSnapshot(context: Context) {
-        val file = File(context.filesDir, SNAPSHOT)
-        file.parentFile?.mkdirs()
-        file.writeText(export(context))
-    }
-
-    /** After a restore from the Google account: applies the restored snapshot, then removes it. */
+    /** After a restore of an Auto Backup copy (before 0.44.0): applies its snapshot, then removes it. */
     fun applySnapshot(context: Context) {
         val file = File(context.filesDir, SNAPSHOT)
         if (!file.exists()) return

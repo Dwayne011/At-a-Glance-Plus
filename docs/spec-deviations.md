@@ -1130,3 +1130,24 @@ activation (no broadcast receiver), and that System check shows the Buds' batter
 - whether its "Enabled Profile Services", "ScanMode" and "Metadata:" sections are there.
 
 Neither prints addresses.
+
+## 0.44.0: no hold ring on the lock screen, "Back up to Google now"
+
+**Asked for:** remove the hold ring round the cards on the lock screen only; a button that
+backs this app's settings up to Google straight away.
+
+**Changes:**
+- **Hold ring:** while the service draws the lock screen's cards, Style.onLockScreen is set,
+  and holdBar hides the ring there. It stays on the home screen. The press-and-hold menu itself
+  belongs to the launcher and SystemUI and is unchanged.
+- **Backup type:** Google backup moves from Auto Backup (fullBackupOnly) to key-value backup.
+  - **Found:** Auto Backup skips an app while it is in a foreground-equivalent state, which the
+    card service always is, and stops the app while it backs it up. A manual backup would
+    therefore have closed the app and dropped the cards back to Google's.
+  - **How it works now:** the agent sends the same allowlisted settings (SettingsBackup.export)
+    as one entry, and restores them through SettingsBackup.import. A restore of an older Auto
+    Backup copy still applies its snapshot (onRestoreFinished). The app calls
+    BackupManager.dataChanged when a backed-up setting changes, and at each start.
+- **Back up to Google now:** a new row on the Backup page runs `bmgr backupnow com.ataglanceplus`
+  over wireless debugging. Only this app is backed up. The page shows the result read from
+  bmgr's output, and the history notes it.

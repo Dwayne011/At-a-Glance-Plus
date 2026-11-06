@@ -35,10 +35,11 @@ object Style {
      * Picks the hold ring for the user's touch-and-hold delay (Accessibility settings), so it
      * closes round the card as the launcher's menu opens: amber on the pinned weather card, red
      * elsewhere.
-     * Hidden on the always-on display, where nothing can be pressed.
+     * Hidden on the always-on display, where nothing can be pressed, and on the lock screen,
+     * where the user turned it off ([onLockScreen]).
      */
     fun holdBar(views: RemoteViews, pinned: Boolean, aod: Boolean, id: Int = R.id.hold_bar) {
-        if (aod) {
+        if (aod || onLockScreen) {
             views.setViewVisibility(id, android.view.View.GONE)
             return
         }
@@ -50,6 +51,9 @@ object Style {
         }
         views.setImageViewResource(id, res)
     }
+
+    /** Set by the service while it draws the lock screen's cards (on the main thread, one surface at a time). */
+    @Volatile var onLockScreen = false
 
     /** An activity, opened only after the phone is unlocked. */
     fun gated(context: Context, intent: Intent, requestCode: Int): PendingIntent {

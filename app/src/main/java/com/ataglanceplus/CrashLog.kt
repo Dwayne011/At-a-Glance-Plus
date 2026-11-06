@@ -9,9 +9,17 @@ import java.util.Date
 
 /** Starts the crash log as soon as the app's process starts, before any screen or service. */
 class App : Application() {
+    /** Tells Android's backup when a backed-up setting changes (held here so it isn't collected). */
+    private val backupListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == null || com.ataglanceplus.backup.SettingsBackup.included(key)) android.app.backup.BackupManager.dataChanged(packageName)
+    }
+
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        Prefs.get(this).registerOnSharedPreferenceChangeListener(backupListener)
+        // Once at each start too, so the first key-value backup (from 0.44.0) is not waiting on a change.
+        android.app.backup.BackupManager.dataChanged(packageName)
         // The history notes each start, with why Android stopped the app before (off the main thread).
         Thread { DebugLog.processStarted(this) }.start()
     }

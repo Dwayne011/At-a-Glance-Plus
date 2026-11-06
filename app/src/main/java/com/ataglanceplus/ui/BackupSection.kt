@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ataglanceplus.backup.SettingsBackup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,6 +51,25 @@ internal fun BackupPage(onBack: () -> Unit) {
             "Backed up with the phone",
             "Your settings are kept in your Google account by the phone's own backup (Settings › System › Backup) and come back on a reinstall or a new phone.",
             icon = Icons.Default.CheckCircle,
+        )
+        // Android backs up when it chooses (usually overnight); this asks it to now, over wireless debugging.
+        val busy by com.ataglanceplus.wadb.Wadb.busy.collectAsStateWithLifecycle()
+        var backingUp by remember { mutableStateOf(false) }
+        SettingRow(
+            if (backingUp) "Backing up…" else "Back up to Google now",
+            "Sends these settings to your Google account straight away, over wireless debugging (Wi-Fi needed)",
+            icon = Icons.Default.Refresh,
+            enabled = !busy && !backingUp && com.ataglanceplus.Prefs.isPaired(context),
+            onClick = {
+                backingUp = true
+                scope.launch {
+                    val outcome = com.ataglanceplus.wadb.Activator.backupNow(context)
+                    status = if (outcome is com.ataglanceplus.wadb.Activator.Outcome.Failure) outcome.reason
+                    else com.ataglanceplus.wadb.Activator.backupResult(com.ataglanceplus.wadb.Wadb.log.value)
+                    com.ataglanceplus.DebugLog.add(context, com.ataglanceplus.DebugLog.Kind.ACTIVATION, "Back up to Google: $status")
+                    backingUp = false
+                }
+            },
         )
         Subheader("By hand")
         SettingRow("Export settings", "Save them to a file", icon = Icons.Default.Share,
