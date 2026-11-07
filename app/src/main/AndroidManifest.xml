@@ -9,6 +9,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Lets launchers that cannot bind to the Smartspace service read the cards instead. -->
+    <permission
+        android:name="com.ataglanceplus.permission.READ_GLANCE"
+        android:protectionLevel="normal" />
     <!-- Weather for the date line: city-level location only, refreshed in the background. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -231,6 +235,22 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- The cards for third-party launchers (Pixel Launcher Plus), see launcher/GlanceProvider. -->
+        <provider
+            android:name=".launcher.GlanceProvider"
+            android:authorities="com.ataglanceplus.glance"
+            android:exported="true"
+            android:readPermission="com.ataglanceplus.permission.READ_GLANCE" />
+
+        <receiver
+            android:name=".launcher.TapReceiver"
+            android:exported="true"
+            android:permission="com.ataglanceplus.permission.READ_GLANCE">
+            <intent-filter>
+                <action android:name="com.ataglanceplus.action.LAUNCHER_TAP" />
             </intent-filter>
         </receiver>
 

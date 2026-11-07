@@ -359,6 +359,21 @@ class AtAGlanceService : SmartspaceService() {
         sessions.entries.toList().forEach { (id, config) ->
             if (!screenOff || config.uiSurface != SURFACE_HOME) push(id)
         }
+        if (!screenOff) publishLauncherCards()
+    }
+
+    /**
+     * Builds the home-screen deck for launchers that read it through the content provider
+     * instead of a Smartspace session (see [com.ataglanceplus.launcher.GlanceProvider]).
+     */
+    private fun publishLauncherCards() {
+        val targets = try {
+            CardDeck.build(this, SURFACE_HOME, com.ataglanceplus.launcher.LauncherCards.CARD_COUNT, false, cardData(null))
+        } catch (e: Exception) {
+            CrashLog.record(this, "Building cards for launchers", e)
+            return
+        }
+        com.ataglanceplus.launcher.LauncherCards.publish(this, targets)
     }
 
     private fun push(sessionId: SmartspaceSessionId) {
@@ -388,7 +403,7 @@ class AtAGlanceService : SmartspaceService() {
         Log.d(TAG, "pushed ${targets.size} target(s) to ${config.uiSurface}")
     }
 
-    private fun cardData(sessionId: SmartspaceSessionId) = CardData(
+    private fun cardData(sessionId: SmartspaceSessionId?) = CardData(
         weather = WeatherRepository.weather.value,
         weatherStatus = WeatherRepository.status.value,
         nav = NotificationHub.nav.value,
@@ -401,7 +416,7 @@ class AtAGlanceService : SmartspaceService() {
         sports = runCatching { SportsRules.showing(this, SportsSource.games.value, SportsSource.races.value) }.getOrDefault(emptyList()),
         message = message,
         messageRemainingMs = (messageUntil - System.currentTimeMillis()).coerceAtLeast(0L),
-        messageEntering = sessionId !in islandSeen,
+        messageEntering = sessionId != null && sessionId !in islandSeen,
         wallet = runCatching {
             val ids = com.ataglanceplus.wallet.WalletRules.activePassIds(
                 this, System.currentTimeMillis(), com.ataglanceplus.wallet.WalletGeofences.cachedLocation,
