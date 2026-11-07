@@ -1211,3 +1211,15 @@ charging as true or false. But Fast Pair's link row (key 16) carries the full de
 URL-encoded (…%3A…), which the mask did not catch.
 
 **Changes:** the metadata line masks URL-encoded addresses as well.
+
+## 0.45.2: System check, the earbuds' record and Bluetooth events
+
+**Asked for (user agreed):** Widgets Plus wants to show the Buds and their case all the time,
+even in the closed case. To learn what Android reports then, System check prints two things,
+found as the device whose metadata key 17 is "Untethered Headset" (no address in the app):
+- **The earbuds' record:** the whole stored block, without key 16, which holds the full
+  address.
+- **The earbuds' events:** their last 40 Bluetooth events (connects, disconnects, metadata
+  changes), found by the address as Android masks it in the dump.
+
+Both mask full and URL-encoded addresses. Checked against a sample dump with the same layout.
