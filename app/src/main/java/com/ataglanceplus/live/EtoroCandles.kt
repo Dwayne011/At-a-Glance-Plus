@@ -23,6 +23,9 @@ object EtoroCandles {
     private const val LIST_URL = "https://api.etorostatic.com/sapi/instrumentsmetadata/V1.1/instruments"
     private const val CANDLES_URL = "https://candle.etoro.com/candles/desc.json/"
     private const val INDEX_FILE = "etoro_instruments.json"
+    /** Each symbol's logo (eToro's 150 px market avatar), kept beside the index. */
+    private const val LOGO_FILE = "etoro_logos.json"
+    @Volatile private var logoIndex: Map<String, String>? = null
     private const val KEEP_MS = 30L * 24 * 60 * 60_000
     /** A symbol not in the index is looked for again after this long (a new listing). */
     private const val RETRY_MS = 24L * 60 * 60_000
@@ -43,6 +46,11 @@ object EtoroCandles {
                 runCatching { file.writeText(JSONObject(fresh as Map<*, *>).toString()) }
                 index = fresh
             }
+            pendingLogos?.let { logos ->
+                runCatching { File(context.filesDir, LOGO_FILE).writeText(JSONObject(logos as Map<*, *>).toString()) }
+                logoIndex = logos
+                pendingLogos = null
+            }
         }
         val current = index ?: return null
         return wanted.firstNotNullOfOrNull { current[it] }
@@ -54,6 +62,57 @@ object EtoroCandles {
         o.keys().asSequence().associateWith { o.getInt(it) }
     }.getOrNull()
 
+    @Volatile private var pendingLogos: Map<String, String>? = null
+
+    /** The biggest PNG among an instrument's "Images" (an array of {Width, Uri}), or null. */
+    private fun largestPng(reader: JsonReader): String? {
+        if (reader.peek() != android.util.JsonToken.BEGIN_ARRAY) { reader.skipValue(); return null }
+        var best: String? = null
+        var bestWidth = -1.0
+        reader.beginArray()
+        while (reader.hasNext()) {
+            var width = 0.0
+            var uri: String? = null
+            reader.beginObject()
+            while (reader.hasNext()) {
+                when (reader.nextName()) {
+                    "Width" -> width = runCatching { reader.nextDouble() }.getOrDefault(0.0)
+                    "Uri" -> uri = if (reader.peek() == android.util.JsonToken.NULL) { reader.nextNull(); null } else reader.nextString()
+                    else -> reader.skipValue()
+                }
+            }
+            reader.endObject()
+            if (uri != null && uri.endsWith(".png") && width > bestWidth) { best = uri; bestWidth = width }
+        }
+        reader.endArray()
+        return best
+    }
+
+    /**
+     * [symbol]'s logo address (Yahoo's spelling), from eToro's instrument list, or null. Blocking:
+     * the first call after an update reads the list again (once) to collect the logos.
+     */
+    fun logoUrl(context: Context, symbol: String): String? {
+        val wanted = listOf(symbol.uppercase(), symbol.uppercase().replace('-', '.'))
+        val file = File(context.filesDir, LOGO_FILE)
+        val map = logoIndex ?: runCatching {
+            if (!file.exists()) null else JSONObject(file.readText()).let { o -> o.keys().asSequence().associateWith { o.getString(it) } }
+        }.getOrNull()?.also { logoIndex = it }
+        if (map == null && System.currentTimeMillis() - lastTry > RETRY_MS) {
+            lastTry = System.currentTimeMillis()
+            download()?.let { fresh ->
+                runCatching { File(context.filesDir, INDEX_FILE).writeText(JSONObject(fresh as Map<*, *>).toString()) }
+                index = fresh
+            }
+        }
+        pendingLogos?.let { logos ->
+            runCatching { file.writeText(JSONObject(logos as Map<*, *>).toString()) }
+            logoIndex = logos
+            pendingLogos = null
+        }
+        return wanted.firstNotNullOfOrNull { logoIndex?.get(it) }
+    }
+
     /** The whole list, read as it streams in so its 14 MB never sit in memory at once. */
     private fun download(): Map<String, Int>? {
         val connection = (URL(LIST_URL).openConnection() as HttpURLConnection).apply {
@@ -63,6 +122,7 @@ object EtoroCandles {
         return try {
             if (connection.responseCode != 200) return null
             val out = HashMap<String, Int>()
+            val logos = HashMap<String, String>()
             JsonReader(connection.inputStream.bufferedReader()).use { reader ->
                 reader.beginObject()
                 while (reader.hasNext()) {
@@ -71,21 +131,27 @@ object EtoroCandles {
                     while (reader.hasNext()) {
                         var id: Int? = null
                         var symbol: String? = null
+                        var logo: String? = null
                         reader.beginObject()
                         while (reader.hasNext()) {
                             when (reader.nextName()) {
                                 "InstrumentID" -> id = reader.nextInt()
                                 "SymbolFull" -> symbol = if (reader.peek() == android.util.JsonToken.NULL) { reader.nextNull(); null } else reader.nextString()
+                                "Images" -> logo = largestPng(reader)
                                 else -> reader.skipValue()
                             }
                         }
                         reader.endObject()
-                        if (id != null && !symbol.isNullOrEmpty()) out.putIfAbsent(symbol.uppercase(), id)
+                        if (id != null && !symbol.isNullOrEmpty()) {
+                            out.putIfAbsent(symbol.uppercase(), id)
+                            if (logo != null) logos.putIfAbsent(symbol.uppercase(), logo)
+                        }
                     }
                     reader.endArray()
                 }
                 reader.endObject()
             }
+            if (logos.isNotEmpty()) pendingLogos = logos
             out.takeIf { it.isNotEmpty() }
         } catch (e: Exception) {
             Log.w(TAG, "instrument list failed", e)

@@ -754,7 +754,7 @@ private val DOWN = Color(0xFFD03B3B)
  * its candles and VWAP over that range, and the day's figures. Links on to Google Finance.
  */
 @Composable
-private fun StockDashboard(initial: String) {
+internal fun StockDashboard(initial: String) {
     val context = LocalContext.current
     val tickers = remember { Prefs.financeTickers(context).ifEmpty { listOf(initial) } }
     var symbol by remember { mutableStateOf(initial) }
@@ -807,7 +807,12 @@ private fun StockDashboard(initial: String) {
             source.portfolio.value?.holdings?.firstOrNull { it.symbol?.uppercase() in wanted && it.open.isNotEmpty() }
         }
     }
-    ScreenTitle("Stocks")
+    // The company's logo (eToro's), the screen's one picture.
+    val logo by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, symbol) {
+        value = withContext(Dispatchers.IO) {
+            com.ataglanceplus.live.EtoroCandles.logoUrl(context, symbol)?.let { com.ataglanceplus.live.SportsSource.sharpLogo(context, it) }
+        }?.asImageBitmap()
+    }
     if (tickers.size > 1) PillRow(tickers, tickers.indexOf(symbol)) { symbol = tickers[it] }
     when (val state = load) {
         Load.Loading -> Text("Loading…", color = SportSub)
@@ -830,6 +835,7 @@ private fun StockDashboard(initial: String) {
                 value = "${money(extended?.price ?: q.price)} ${q.currency}",
                 rising = (extended?.change ?: change) >= 0,
                 modifier = Modifier.stockSwipe(tickers, symbol) { symbol = it },
+                logo = logo,
             ) {
                 if (extended != null) {
                     Text(
@@ -928,11 +934,39 @@ private fun StockDashboard(initial: String) {
                     Text("No prices for this range yet.", style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            FinancePanel("Today") {
-                Stat("Previous close", money(q.previousClose))
-                if (h.dayLow != null && h.dayHigh != null) Stat("Day's range", "${money(h.dayLow)} – ${money(h.dayHigh)}")
-                if (h.yearLow != null && h.yearHigh != null) Stat("52-week range", "${money(h.yearLow)} – ${money(h.yearHigh)}")
-                h.volume?.let { Stat("Volume", numbers.format(it)) }
+            // Where the price sits in its 52-week range, beside volume, the day's range and the previous close.
+            GlassPair {
+                if (h.yearLow != null && h.yearHigh != null && h.yearHigh > h.yearLow) Glass(Modifier.weight(1f).fillMaxHeight()) {
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        val at = ((q.price - h.yearLow) / (h.yearHigh - h.yearLow)).toFloat().coerceIn(0f, 1f)
+                        Ring(at, if (at >= 0.5f) GlassUp else GlassDown, "${(at * 100).toInt()}%")
+                        Label("of its 52-week range")
+                        Text("${money(h.yearLow)} – ${money(h.yearHigh)}", color = GlassText, fontSize = 11.5.sp, maxLines = 1)
+                    }
+                }
+                Glass(Modifier.weight(1f).fillMaxHeight()) {
+                    h.volume?.let { Label("Volume"); Figure(compactShares(it, locale), size = 18.sp) }
+                    if (h.dayLow != null && h.dayHigh != null) { Label("Day's range"); Figure("${money(h.dayLow)} – ${money(h.dayHigh)}", size = 15.sp) }
+                    Label("Previous close"); Figure(money(q.previousClose), size = 15.sp)
+                }
+            }
+            // The user's other stocks: a stripe for the day's move, a small chart, price and move.
+            val others = com.ataglanceplus.live.FinanceSource.quotes.collectAsStateWithLifecycle().value.filter { it.symbol != q.symbol && it.symbol in tickers }
+            if (others.isNotEmpty()) Glass(Modifier.fillMaxWidth()) {
+                Label("Your other stocks")
+                others.forEach { o ->
+                    val up = o.change >= 0
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { symbol = o.symbol }.padding(vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Stripe(if (up) GlassUp else GlassDown)
+                        Text(o.symbol, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(56.dp), maxLines = 1)
+                        Sparkline(o.points, if (up) GlassUp else GlassDown, Modifier.weight(1f).height(22.dp))
+                        Text(money(o.price), color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                        Text(String.format(locale, "%+.1f%%", o.changePercent), color = if (up) GlassUp else GlassDown, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
+                    }
+                }
             }
             OpenButton("Open in Google Finance", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(com.ataglanceplus.live.FinanceSource.googleFinanceUrl(q))))
             }
@@ -1252,42 +1286,43 @@ private val DOWN_TEXT = Color(0xFFFF7B72)
  * Material parts (dialogs, buttons, the charts' greys) taking the same colours.
  */
 @Composable
-private fun FinanceScreen(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    val scheme = androidx.compose.material3.darkColorScheme(
-        primary = SportAccent, onPrimary = Color(0xFF0A2A5C), secondaryContainer = SportHigh, onSecondaryContainer = Color.White,
-        background = SportBg, onBackground = SportText, surface = SportBg, onSurface = SportText, onSurfaceVariant = SportSub,
-        surfaceContainerLowest = SportBg, surfaceContainerLow = SportCard, surfaceContainer = SportCard,
-        surfaceContainerHigh = SportHigh, surfaceContainerHighest = SportHigh,
-        outline = Color(0x40FFFFFF), outlineVariant = Color(0x24FFFFFF), error = Color(0xFFFF8A80),
-    )
-    MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography) {
-        CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides SportText) {
-            Column(
-                modifier = Modifier.fillMaxSize().background(SportBg).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                content = content,
-            )
-        }
+internal fun FinanceScreen(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    GlassScreen(Tints.Money, accent = SportAccent) {
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = content,
+        )
     }
 }
 
-/** The headline: what it is, the value large, then its moves, on a wash of green or red. */
+/** The headline tile: the logo (the screen's one picture), what it is, the value large, then its moves. */
 @Composable
 private fun FinanceHero(
     name: String, detail: String, value: String, rising: Boolean,
-    modifier: Modifier = Modifier, moves: @Composable () -> Unit,
+    modifier: Modifier = Modifier, logo: androidx.compose.ui.graphics.ImageBitmap? = null, moves: @Composable () -> Unit,
 ) {
     val tone = if (rising) UP else DOWN
     Column(
         modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-            .background(Brush.verticalGradient(listOf(tone.copy(alpha = 0.22f), SportHigh)))
-            .border(1.dp, SportBorder, RoundedCornerShape(20.dp))
-            .padding(horizontal = 18.dp, vertical = 16.dp),
+            .background(Brush.verticalGradient(listOf(tone.copy(alpha = 0.16f), GlassFill)))
+            .border(1.dp, GlassEdge, RoundedCornerShape(20.dp))
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(detail, color = SportSub, fontSize = 12.5.sp)
-        Text(value, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp, bottom = 2.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (logo != null) {
+                Box(Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.9f)), contentAlignment = Alignment.Center) {
+                    Image(logo, contentDescription = null, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
+                }
+                Spacer(Modifier.width(12.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(detail, color = GlassSub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Figure(value, size = 32.sp, modifier = Modifier.padding(top = 6.dp, bottom = 2.dp))
         moves()
     }
 }
@@ -1342,7 +1377,7 @@ private fun StockDots(tickers: List<String>, symbol: String) {
 @Composable
 private fun FinancePanel(title: String, action: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(SportHigh).padding(14.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(GlassFill).border(1.dp, GlassEdge, RoundedCornerShape(20.dp)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1369,7 +1404,7 @@ private fun CandleMenu(chosen: Int?, onChoose: (Int?) -> Unit) {
     Box {
         Text(
             "Candles: ${candleLabel(chosen)} ▾", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1,
-            modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(SportCard)
+            modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.10f))
                 .border(1.dp, SportBorder, RoundedCornerShape(16.dp))
                 .clickable { open = true }.padding(horizontal = 12.dp, vertical = 6.dp),
         )
@@ -1420,7 +1455,7 @@ private val CANDLE_UP = Color(0xFF2EBD85)
 private val CANDLE_DOWN = Color(0xFFF6465D)
 /** The overnight session's tint, band and price tag. */
 private val OVERNIGHT = Color(0xFF8E7CFF)
-private val READOUT_BG = Color(0xFF232836)
+private val READOUT_BG = Color(0x47000000)
 private val TAG_GREY = Color(0xFF3A404D)
 
 /** Candles drawn as one: indices [from] to [to] of the chart's candles, from [time] to [end]. */
@@ -1850,14 +1885,45 @@ private fun EtoroDashboard() {
             fun money(v: Double) = (if (v < 0) "−" else "") + "$" + String.format(locale, "%,.2f", kotlin.math.abs(v))
             fun change(amount: Double, percent: Double) =
                 (if (amount >= 0) "▲ +" else "▼ −") + "$" + String.format(locale, "%,.2f", kotlin.math.abs(amount)) + String.format(locale, " (%+.2f%%)", percent)
-            FinanceHero(name = "Portfolio", detail = "Updated ${clock(context, Instant.ofEpochMilli(p.at))}", value = money(p.equity), rising = p.pnl >= 0) {
+            val appIcon = remember {
+                runCatching { context.packageManager.getApplicationIcon(com.ataglanceplus.cards.ChipSpec.ETORO_PKG) }.getOrNull()
+                    ?.let { d -> androidx.core.graphics.createBitmap(128, 128).also { b -> d.setBounds(0, 0, 128, 128); d.draw(android.graphics.Canvas(b)) }.asImageBitmap() }
+            }
+            FinanceHero(name = "eToro portfolio", detail = "Updated ${clock(context, Instant.ofEpochMilli(p.at))}", value = money(p.equity), rising = p.pnl >= 0, logo = appIcon) {
                 Text("${change(p.pnl, p.pnlPercent)} on open positions", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = if (p.pnl >= 0) UP_TEXT else DOWN_TEXT)
             }
-            FinancePanel("Summary") {
-                Stat("Invested", money(p.invested))
-                Stat("Profit/loss", (if (p.pnl >= 0) "+" else "") + money(p.pnl))
-                Stat("Available cash", money(p.cash))
-                Stat("Updated", clock(context, Instant.ofEpochMilli(p.at)))
+            // Today: the change in profit/loss since the first reading this app recorded today, with
+            // its course through the day; beside it, how many holdings are in profit.
+            val today = java.time.LocalDate.now()
+            val todays = history.filter { Instant.ofEpochMilli(it.at).atZone(ZoneId.systemDefault()).toLocalDate() == today }
+            GlassPair {
+                Glass(Modifier.weight(1f).fillMaxHeight()) {
+                    Label("Today")
+                    if (todays.size >= 2) {
+                        val dayPnl = p.pnl - todays.first().pnl
+                        Figure((if (dayPnl >= 0) "+" else "") + money(dayPnl), size = 20.sp, colour = if (dayPnl >= 0) GlassUp else GlassDown)
+                        Sparkline(todays.map { it.pnl }, if (dayPnl >= 0) GlassUp else GlassDown, Modifier.fillMaxWidth().height(34.dp))
+                        Label("since ${clock(context, Instant.ofEpochMilli(todays.first().at))}")
+                    } else {
+                        Text("Builds up through the day as the app checks your account.", color = GlassSub, fontSize = 12.sp)
+                    }
+                }
+                val holdings = p.holdings
+                if (holdings.isNotEmpty()) Glass(Modifier.weight(1f).fillMaxHeight()) {
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        val inProfit = holdings.count { it.pnl > 0 }
+                        Ring(inProfit.toFloat() / holdings.size, GlassUp, "$inProfit/${holdings.size}")
+                        Label("holdings in profit")
+                    }
+                }
+            }
+            GlassPair {
+                Glass(Modifier.weight(1f)) { Label("Invested"); Figure(money(p.invested), size = 16.sp) }
+                Glass(Modifier.weight(1f)) {
+                    Label("Profit/loss")
+                    Figure((if (p.pnl >= 0) "+" else "") + money(p.pnl), size = 16.sp, colour = if (p.pnl >= 0) GlassUp else GlassDown)
+                }
+                Glass(Modifier.weight(1f)) { Label("Cash"); Figure(money(p.cash), size = 16.sp) }
             }
 
             FinancePanel("Value over time") {
@@ -1903,17 +1969,18 @@ private fun EtoroDashboard() {
                 if (ordered.isEmpty()) Text("No open positions.", style = MaterialTheme.typography.bodyMedium)
                 ordered.forEach { row ->
                     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Stripe(if (row.pnl >= 0) GlassUp else GlassDown, 30.dp)
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(row.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 row.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(money(row.value), style = MaterialTheme.typography.bodyLarge)
-                                Text(change(row.pnl, row.pnlPercent), style = MaterialTheme.typography.bodySmall, color = if (row.pnl >= 0) UP else DOWN)
+                                Text(change(row.pnl, row.pnlPercent), style = MaterialTheme.typography.bodySmall, color = if (row.pnl >= 0) GlassUp else GlassDown)
                             }
                         }
-                        Text("Invested ${money(row.invested)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Invested ${money(row.invested)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
                     }
                 }
             }
@@ -2262,40 +2329,10 @@ private fun teamLogo(url: String?): androidx.compose.ui.graphics.ImageBitmap? {
     return logo
 }
 
-/** The swipeable pill tab bar (spec 2.2): equal pills, the selected one raised. */
+/** Pill tabs, the chosen one filled with the screen's accent (the frosted look's [GlassTabs]). */
 @Composable
 private fun SegmentedPills(tabs: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(SportCard)
-            .border(1.dp, SportBorder, RoundedCornerShape(16.dp))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        tabs.forEachIndexed { index, title ->
-            val on = index == selected
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (on) SportHigh else Color.Transparent)
-                    .clickable { onSelect(index) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    title,
-                    color = if (on) Color.White else SportSub,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                )
-            }
-        }
-    }
+    GlassTabs(tabs, selected, MaterialTheme.colorScheme.primary, onSelect)
 }
 
 /** A dashboard header line (spec: 22sp medium). */

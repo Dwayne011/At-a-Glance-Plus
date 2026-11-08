@@ -230,3 +230,20 @@ internal fun CompareBar(label: String, left: String, right: String, leftShare: F
 internal fun Color.lift(fraction: Float): Color = Color(
     red = red + (1 - red) * fraction, green = green + (1 - green) * fraction, blue = blue + (1 - blue) * fraction, alpha = 1f,
 )
+
+/** A small line chart of [values] (oldest first), no axes. */
+@Composable
+internal fun Sparkline(values: List<Double>, colour: Color, modifier: Modifier) {
+    if (values.size < 2) { Box(modifier); return }
+    val low = values.min()
+    val span = (values.max() - low).takeIf { it > 0 } ?: 1.0
+    Canvas(modifier) {
+        val path = androidx.compose.ui.graphics.Path()
+        values.forEachIndexed { i, v ->
+            val x = size.width * i / (values.size - 1)
+            val y = size.height * (1f - ((v - low) / span).toFloat())
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path, colour, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+    }
+}

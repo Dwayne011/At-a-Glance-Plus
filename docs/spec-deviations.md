@@ -1385,3 +1385,30 @@ low res".
   - Rendered at phone width with today's Brazilian Grand Prix from Jolpica: weekend, race
     classification with numbers, and drivers' standings.
   - Car numbers matched the source (NOR 1, VER 3, ANT 12…).
+
+## 0.49.0: stocks and eToro in the frosted Bento look
+
+**Changes:**
+- **Glass, as on the other screens:**
+  - Stocks and eToro use the blue Money tint behind glass tiles.
+  - Pill tabs (ranges, tickers, sorting) are glass pills in the accent.
+  - The candle-size menu and the chart's readout are translucent.
+- **Stock screen:**
+  - **Top tile:** the company's logo (the screen's one picture), from eToro's instrument list.
+    That list is now read for each symbol's 150 px market avatar too (etoro_logos.json, fetched
+    once), and the logo is shown at 256 px.
+  - **52-week tile:** a ring for where the price sits in its 52-week range, with the range under
+    it.
+  - **Beside it:** volume, the day's range and the previous close.
+  - **Your other stocks:** each of the user's other tickers with a stripe for the day's move, a
+    small chart of today, the price and the move. Tapping one switches to it.
+- **eToro screen:**
+  - **Top tile:** eToro's app icon in the top tile.
+  - **Today:** the change in profit/loss since the first reading the app recorded today, with a
+    small chart of its course. It is computed from the app's own readings, so it fills in
+    through the day.
+  - **Holdings in profit:** a ring (for example 6/9).
+  - **Figures:** invested, profit/loss and cash in three small tiles.
+  - **Positions:** a green or red stripe for each position, with no logos in lists.
+- **Checked:** rendered at phone width with Yahoo's live NOK, AAPL and ONDS and eToro's NOK logo.
+  The eToro screen needs the user's keys, so it was checked by building only.
