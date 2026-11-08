@@ -1261,3 +1261,23 @@ been watched.
 - **What counts as near:** a place within 2 km of the last fix, plus how far the phone could
   have travelled since (at 15 m/s, capped at 15 min), so a drive to the shop counts.
 - **Elsewhere:** as before, a Wi-Fi and cell location at most every 15 minutes.
+
+## 0.46.1: delivery and ride notifications, matched more widely and described in the history
+
+**Reported:** orders and trips from Uber, Uber Eats, Deliveroo, Just Eat and the like do not
+show as Live Updates.
+
+**Found:** since 0.41.0, these apps' notifications counted only when Android marked them as
+ongoing, and group summaries were always skipped. Not every app posts its order or trip that
+way.
+
+**Changes:**
+- **What counts:** a notification from one of these apps with words in it counts when any of
+  these hold:
+  - it is ongoing, or can't be swiped away;
+  - it is marked as progress, status, navigation or service;
+  - it carries a progress bar, a running clock or a status chip.
+- **Group summaries:** a summary alone in its group counts too.
+- **Left out:** messages, offers, recommendations, social, email and calls.
+- **History:** each new notification from these apps is described once, as Live: its kind and
+  flags, and whether it was shown. Never its words.

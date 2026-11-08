@@ -130,7 +130,13 @@ object NotificationHub {
 
     fun update(context: Context, active: List<StatusBarNotification>, posted: StatusBarNotification?) {
         val own = context.packageName
-        val usable = active.filter { it.packageName != own && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
+        // Group summaries repeat their children, so they are skipped, except a delivery or ride
+        // app's summary that is alone in its group (the order or trip itself, posted that way).
+        val usable = active.filter { sbn ->
+            sbn.packageName != own && (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 ||
+                (sbn.packageName in TRIP_APPS && active.none { it !== sbn && it.packageName == sbn.packageName && it.groupKey == sbn.groupKey }))
+        }
+        noteTripApps(context, active.filter { it.packageName in TRIP_APPS })
 
         val timer = usable.firstNotNullOfOrNull { timerFrom(it) }
         // Navigation: marked as such, or any ongoing Google Maps notification (public-transport
@@ -212,10 +218,61 @@ object NotificationHub {
         "taxi.android.client", "com.citymapper.app.release", "uk.co.dominos.android",
     )
 
-    /** An ongoing notification with something to say from a delivery or ride app. */
-    private fun isTrip(sbn: StatusBarNotification): Boolean =
-        sbn.packageName in TRIP_APPS && sbn.isOngoing &&
-            (title(sbn.notification).isNotEmpty() || text(sbn.notification).isNotEmpty())
+    /**
+     * A delivery or ride app's order or trip: a notification with something to say that is
+     * ongoing or can't be swiped away, or is marked as progress or status, or carries a progress
+     * bar, a running clock or a status chip. Not all these apps post it as an ongoing
+     * notification. Their messages, offers and other notifications are left out.
+     */
+    private fun isTrip(sbn: StatusBarNotification): Boolean {
+        if (sbn.packageName !in TRIP_APPS) return false
+        val n = sbn.notification
+        if (title(n).isEmpty() && text(n).isEmpty()) return false
+        if (n.category in NOT_TRIPS) return false
+        return sbn.isOngoing || n.flags and Notification.FLAG_NO_CLEAR != 0 ||
+            n.category in TRIP_CATEGORIES ||
+            n.extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0) > 0 ||
+            n.extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE) ||
+            n.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) ||
+            !n.shortCriticalText.isNullOrBlank()
+    }
+
+    private val TRIP_CATEGORIES = setOf(Notification.CATEGORY_PROGRESS, Notification.CATEGORY_STATUS, Notification.CATEGORY_NAVIGATION, Notification.CATEGORY_SERVICE)
+    private val NOT_TRIPS = setOf(
+        Notification.CATEGORY_MESSAGE, Notification.CATEGORY_PROMO, Notification.CATEGORY_RECOMMENDATION,
+        Notification.CATEGORY_SOCIAL, Notification.CATEGORY_EMAIL, Notification.CATEGORY_CALL,
+    )
+
+    /** Delivery and ride app notifications already described in the history. */
+    private val seenTrip = mutableSetOf<String>()
+
+    /**
+     * Describes each new notification from a delivery or ride app in the history once: its kind
+     * and flags and whether it is shown, so one that should be shown and isn't can be told
+     * apart. Never its words (a driver's name, an address).
+     */
+    private fun noteTripApps(context: Context, notifications: List<StatusBarNotification>) {
+        notifications.filter { it.key !in seenTrip }.forEach { sbn ->
+            val n = sbn.notification
+            val parts = listOfNotNull(
+                if (sbn.isOngoing) "ongoing" else "not ongoing",
+                "can't be swiped away".takeIf { n.flags and Notification.FLAG_NO_CLEAR != 0 },
+                "group summary".takeIf { n.flags and Notification.FLAG_GROUP_SUMMARY != 0 },
+                n.category?.let { "category $it" },
+                template(n).substringAfterLast('$').takeIf { it.isNotEmpty() }?.let { "style $it" },
+                "progress bar".takeIf { n.extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0) > 0 || n.extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE) },
+                "promoted".takeIf { n.flags and Notification.FLAG_PROMOTED_ONGOING != 0 },
+                "no words".takeIf { title(n).isEmpty() && text(n).isEmpty() },
+            )
+            val shown = isLiveUpdate(n) || isTrip(sbn)
+            com.ataglanceplus.DebugLog.add(
+                context, com.ataglanceplus.DebugLog.Kind.LIVE,
+                "Notification from ${appLabel(context, sbn.packageName)}: ${parts.joinToString(", ")} · ${if (shown) "shown" else "not shown"}",
+            )
+        }
+        seenTrip.retainAll(notifications.map { it.key }.toSet())
+        seenTrip.addAll(notifications.map { it.key })
+    }
 
     private fun isLiveUpdate(n: Notification): Boolean =
         n.flags and Notification.FLAG_PROMOTED_ONGOING != 0 ||
