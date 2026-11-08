@@ -1243,3 +1243,21 @@ been watched.
   - "Places: not checked yet"
   - "Checked when the cards connect, the rules change, the screen comes on or this page opens"
   - "None yet in this run of the app; if Android gives none, the history says why"
+
+## 0.46.0: a fresh location at unlock near a Wallet place
+
+**Reported:** the user was in Tesco for a while before its pass showed.
+
+**Found:**
+- **Play services is slow to report arrivals.** Its geofences report an arrival when it next
+  checks location, every few minutes in the background, and longer when the phone is still or
+  indoors.
+- **The app's own check was held back.** It takes a location at unlock, but since 0.39.2 at
+  most every 15 minutes, to save battery.
+
+**Changes:**
+- **Near a place:** at unlock, the app takes a fresh, precise location (GPS as well), at most
+  once a minute, then redraws the cards.
+- **What counts as near:** a place within 2 km of the last fix, plus how far the phone could
+  have travelled since (at 15 m/s, capped at 15 min), so a drive to the shop counts.
+- **Elsewhere:** as before, a Wi-Fi and cell location at most every 15 minutes.

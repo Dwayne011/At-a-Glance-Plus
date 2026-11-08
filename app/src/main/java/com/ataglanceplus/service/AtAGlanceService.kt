@@ -472,9 +472,18 @@ class AtAGlanceService : SmartspaceService() {
         if (now - financeFetchedAt > Prefs.financeRefreshMinutes(this) * 60_000L) restartFinance()
         if (now - sportsScheduledAt > SPORTS_SCHEDULE_MS || now - sportsCheckedAt > SPORTS_STALE_MS) restartSports()
         if (com.ataglanceplus.wallet.GoogleAccount.isSignedIn(this)) {
-            // A location for the pass rules at most every 15 minutes, not at every unlock.
+            // A location for the pass rules at most every 15 minutes, not at every unlock; but near
+            // one of the places, at every unlock (at most once a minute) and precisely, so the pass
+            // shows as soon as the phone is unlocked there, however long Play services takes to
+            // notice the arrival. Near: within 2 km of the last fix, plus how far the phone could
+            // have gone since it (at 15 m/s, about 34 mph), so a drive to the shop still counts.
             val fix = com.ataglanceplus.wallet.WalletGeofences.cachedLocation
-            if (fix == null || now - fix.time > WALLET_LOCATION_MS) com.ataglanceplus.wallet.WalletGeofences.refreshLocation(this)
+            val travelled = fix?.let { (now - it.time).coerceIn(0L, WALLET_LOCATION_MS) / 1000f * WALLET_TRAVEL_MPS } ?: 0f
+            val near = fix != null && com.ataglanceplus.wallet.WalletGeofences.nearAPlace(this, fix, WALLET_NEAR_M + travelled)
+            when {
+                fix == null || now - fix.time > WALLET_LOCATION_MS -> com.ataglanceplus.wallet.WalletGeofences.refreshLocation(this, precise = near)
+                near && now - fix.time > WALLET_NEAR_EVERY_MS -> com.ataglanceplus.wallet.WalletGeofences.refreshLocation(this, precise = true)
+            }
             // Places not watched yet (a permission given in Android's settings, location turned
             // back on): try registering them again.
             if (com.ataglanceplus.wallet.WalletGeofences.status.value?.ok != true) com.ataglanceplus.wallet.WalletGeofences.refresh(this)
@@ -552,5 +561,11 @@ class AtAGlanceService : SmartspaceService() {
         private const val TRACK_BAR_MS = 30_000L
         private const val NAV_TRIP_MS = 15_000L
         private const val WALLET_LOCATION_MS = 15 * 60_000L
+        /** Near a place, a fresh location at unlock if the last is older than this. */
+        private const val WALLET_NEAR_EVERY_MS = 60_000L
+        /** How close to a place counts as near. */
+        private const val WALLET_NEAR_M = 2_000f
+        /** The speed assumed since the last fix, for what could be near now. */
+        private const val WALLET_TRAVEL_MPS = 15f
     }
 }

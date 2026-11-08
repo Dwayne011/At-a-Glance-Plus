@@ -188,14 +188,26 @@ object WalletGeofences {
         note(location)
     }
 
-    /** Fetches a current location into [cachedLocation] and bumps [changed]. */
+    /** Whether [location] is within [metres] of any place in the Wallet rules. */
+    fun nearAPlace(context: Context, location: Location, metres: Float): Boolean = runCatching {
+        val out = FloatArray(1)
+        WalletRules.allPlaces(context).any { (_, p) ->
+            Location.distanceBetween(location.latitude, location.longitude, p.lat, p.lng, out)
+            out[0] <= metres
+        }
+    }.getOrDefault(false)
+
+    /**
+     * Fetches a current location into [cachedLocation] and bumps [changed]. [precise] near a place
+     * (GPS as well, for a shop's doorway); otherwise Wi-Fi and cell, which costs less.
+     */
     @SuppressLint("MissingPermission")
-    fun refreshLocation(context: Context) {
+    fun refreshLocation(context: Context, precise: Boolean = false) {
         if (!hasLocation(context)) return
         val app = context.applicationContext
         val client = LocationServices.getFusedLocationProviderClient(app)
         runCatching {
-            client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
+            client.getCurrentLocation(if (precise) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
                 .addOnSuccessListener { location ->
                     if (location != null) {
                         cachedLocation = location
