@@ -1223,3 +1223,23 @@ found as the device whose metadata key 17 is "Untethered Headset" (no address in
   changes), found by the address as Android masks it in the dump.
 
 Both mask full and URL-encoded addresses. Checked against a sample dump with the same layout.
+
+## 0.45.3: Debug page checks the places and takes a fix itself
+
+**Reported:** Debug said "Places: not registered since the app started" and "Last location fix:
+None since the app started".
+
+**Found:** the places' state and the last fix are kept only in memory. The card service fills
+them in: on start, on screen-on (a fix at most every 15 min) and when the rules change. Opened
+right after the app restarted (an update, say), the page showed nothing for either. Play
+services keeps the geofences registered across the app's restarts, so places may still have
+been watched.
+
+**Changes:**
+- **On opening:** when signed in to Wallet, the Debug page registers the places if this run of
+  the app hasn't, and asks for a location fix if there is none from the last 15 min. The app is
+  in front, so location is allowed at once.
+- **Wording:**
+  - "Places: not checked yet"
+  - "Checked when the cards connect, the rules change, the screen comes on or this page opens"
+  - "None yet in this run of the app; if Android gives none, the history says why"

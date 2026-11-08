@@ -67,6 +67,16 @@ internal fun DebugPage(version: Int, onBack: () -> Unit) {
     @Suppress("UNUSED_EXPRESSION") changed
     val history = remember(version, tick, sessions, geofences, inside) { DebugLog.read(context) }
     val paired = remember(version) { Prefs.isPaired(context) }
+    // The places' state and the last fix live only in memory, from the card service: on opening,
+    // with the app in front (so location is allowed at once), register the places and take a
+    // fix if this run of the app has neither, so the page shows how things stand now.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (com.ataglanceplus.wallet.GoogleAccount.isSignedIn(context)) {
+            if (WalletGeofences.status.value == null) WalletGeofences.refresh(context)
+            val fix = WalletGeofences.cachedLocation
+            if (fix == null || System.currentTimeMillis() - fix.time > 15 * 60_000L) WalletGeofences.refreshLocation(context)
+        }
+    }
     // Whether System check or the crash log ran while this page was open.
     var ranHere by remember { androidx.compose.runtime.mutableStateOf(false) }
 
@@ -279,15 +289,15 @@ private fun location(context: Context, status: WalletGeofences.Status?, inside: 
     out += Triple("Allowed all the time: ${if (WalletGeofences.hasBackground(context)) "yes" else "no"}", WalletGeofences.hasBackground(context), "Needed to notice arriving while the app is closed")
     out += Triple("Location on: ${if (WalletGeofences.locationOn(context)) "yes" else "no"}", WalletGeofences.locationOn(context), "The phone's location switch")
     out += Triple(
-        when { status == null -> "Places: not registered since the app started"; status.ok -> "Places: ${status.message}"; else -> "Places not watched" },
+        when { status == null -> "Places: not checked yet"; status.ok -> "Places: ${status.message}"; else -> "Places not watched" },
         status?.ok,
-        status?.let { (if (it.ok) "" else it.message + " · ") + "at " + DebugLog.time(it.at) } ?: "Registered when the cards connect, the rules change or the screen comes on",
+        status?.let { (if (it.ok) "" else it.message + " · ") + "at " + DebugLog.time(it.at) } ?: "Checked when the cards connect, the rules change, the screen comes on or this page opens",
     )
     val fix = WalletGeofences.cachedLocation
     out += Triple(
         "Last location fix",
         null,
-        fix?.let { "${DebugLog.time(it.time)} · accurate to ${it.accuracy.toInt()} m" } ?: "None since the app started",
+        fix?.let { "${DebugLog.time(it.time)} · accurate to ${it.accuracy.toInt()} m" } ?: "None yet in this run of the app; if Android gives none, the history says why",
     )
     WalletSource.ensureLoaded(context)
     val passes = WalletSource.passes.value.associateBy { it.id }
