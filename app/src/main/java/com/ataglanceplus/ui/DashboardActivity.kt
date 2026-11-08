@@ -227,6 +227,11 @@ class DashboardActivity : ComponentActivity() {
          * extras, so the kind also goes in the data (each dashboard's intent differs), and any
          * dashboard left open is cleared rather than brought back in place of the one tapped.
          */
+        /** A dashboard opened from another one, on top of it, so Back returns there. */
+        fun onTop(context: Context, kind: String): Intent =
+            Intent(context, DashboardActivity::class.java).putExtra(EXTRA_KIND, kind)
+                .setData(android.net.Uri.fromParts("dashboard", kind, null))
+
         fun intent(context: Context, kind: String): Intent =
             Intent(context, DashboardActivity::class.java).putExtra(EXTRA_KIND, kind)
                 .setData(android.net.Uri.fromParts("dashboard", kind, null))
@@ -2579,16 +2584,23 @@ private fun TimelineTab(d: com.ataglanceplus.live.GameDetail) {
 private fun ScheduleTab(games: List<com.ataglanceplus.live.Game>, eventId: String, team: com.ataglanceplus.live.Followed?, hidden: Boolean) {
     val upcoming = games.filter { it.state == "pre" && it.eventId != eventId }.sortedBy { it.start }.take(6)
     val results = games.filter { it.state == "post" && it.eventId != eventId }.sortedByDescending { it.start }.take(6)
+    val context = LocalContext.current
+    // Each game opens its own screen: a result with its final stats, a fixture with its line-ups
+    // when known. Back returns here.
+    val open = { game: com.ataglanceplus.live.Game ->
+        val kind = DashboardActivity.KIND_GAME_PREFIX + game.eventId
+        context.startActivity(DashboardActivity.onTop(context, kind))
+    }
     if (upcoming.isNotEmpty()) {
         Text("Next games", color = SportSub, style = MaterialTheme.typography.labelLarge)
         upcoming.forEach {
-            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp)) { FixtureRow(it, team, hidden) }
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).clickable { open(it) }.padding(12.dp)) { FixtureRow(it, team, hidden) }
         }
     }
     if (results.isNotEmpty()) {
-        Text("Results", color = SportSub, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
+        Text("Results · tap one for its stats", color = SportSub, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
         results.forEach {
-            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp)) { FixtureRow(it, team, hidden) }
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).clickable { open(it) }.padding(12.dp)) { FixtureRow(it, team, hidden) }
         }
     }
     if (upcoming.isEmpty() && results.isEmpty()) Text("No other fixtures.", color = SportSub)

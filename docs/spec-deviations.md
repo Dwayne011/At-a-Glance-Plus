@@ -1281,3 +1281,19 @@ way.
 - **Left out:** messages, offers, recommendations, social, email and calls.
 - **History:** each new notification from these apps is described once, as Live: its kind and
   flags, and whether it was shown. Never its words.
+
+## 0.46.2: past results open their final stats
+
+**Asked for:** tapping a previous result should show the game's final stats.
+
+**Found:** the Schedule tab of a game's screen listed results and next games, but they were not
+tappable.
+
+**Changes:**
+- **Tappable games:** each result and each upcoming game now opens that game's own screen, on
+  top of this one (DashboardActivity.onTop), so Back returns.
+- **What a finished game shows:** its Leaders, Team Stats, Box Score, Line-ups and Timeline tabs
+  where ESPN has them. Checked: ESPN's summary for a finished Premier League game (1 Nov) still
+  carries 28 team stats a side, both rosters and 32 key events.
+- **Hidden scores:** a result for a team whose scores are hidden stays hidden until revealed.
+- **Label:** the results list is headed "Results · tap one for its stats".
