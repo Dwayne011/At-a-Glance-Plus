@@ -128,6 +128,7 @@ object F1Results {
                 pitStops = if (race) line.optInt("NumberOfPitStops") else null,
                 status = if (retired) "Retired" else null,
                 qualifying = if (qualifying) (0 until 3).map { parts.getOrNull(it).orEmpty() } else emptyList(),
+                number = driver?.optString("RacingNumber")?.ifEmpty { null } ?: number,
             )
         }.sortedBy { it.first }.map { it.second }.toList()
         if (rows.isEmpty()) return null
@@ -165,7 +166,7 @@ object F1Results {
                 .put("points", r.points).put("fastestLap", r.fastestLap).put("colour", r.colour).put("gap", r.gap).put("laps", r.laps)
                 .put("bestLap", r.bestLap).put("sectors", JSONArray(r.sectors)).put("sectorFastest", JSONArray(r.sectorFastest))
                 .put("topSpeed", r.topSpeed).put("stints", JSONArray(r.stints.map { JSONArray().put(it.first).put(it.second) }))
-                .put("pitStops", r.pitStops).put("grid", r.grid).put("status", r.status).put("qualifying", JSONArray(r.qualifying))
+                .put("pitStops", r.pitStops).put("grid", r.grid).put("status", r.status).put("qualifying", JSONArray(r.qualifying)).put("number", r.number)
         }))
 
     private fun fromJson(o: JSONObject): JolpicaSource.SessionResult {
@@ -185,7 +186,7 @@ object F1Results {
                     sectorFastest = r.optJSONArray("sectorFastest")?.let { a -> (0 until a.length()).map { a.optBoolean(it) } }.orEmpty(),
                     topSpeed = r.int("topSpeed"),
                     stints = r.optJSONArray("stints")?.let { a -> (0 until a.length()).map { a.getJSONArray(it).let { p -> p.optString(0) to p.optInt(1) } } }.orEmpty(),
-                    pitStops = r.int("pitStops"), grid = r.int("grid"), status = r.str("status"), qualifying = r.optJSONArray("qualifying").strings(),
+                    pitStops = r.int("pitStops"), grid = r.int("grid"), status = r.str("status"), qualifying = r.optJSONArray("qualifying").strings(), number = r.str("number"),
                 )
             },
         )

@@ -18,7 +18,7 @@ object JolpicaSource {
     private const val BASE = "https://api.jolpi.ca/ergast/f1"
     private const val KEEP_MS = 5 * 60_000L
 
-    data class DriverStanding(val position: Int, val code: String, val name: String, val team: String, val teamId: String, val points: String, val wins: Int)
+    data class DriverStanding(val position: Int, val code: String, val name: String, val team: String, val teamId: String, val points: String, val wins: Int, val number: String? = null)
     data class TeamStanding(val position: Int, val name: String, val teamId: String, val points: String, val wins: Int)
 
     /**
@@ -47,6 +47,8 @@ object JolpicaSource {
         val status: String? = null,
         /** Qualifying: the best time in Q1, Q2 and Q3 ("" where it did not run). */
         val qualifying: List<String> = emptyList(),
+        /** The car's number. */
+        val number: String? = null,
     )
 
     /** [final]: the classification is official; a capture from the feed just after the flag may still change. */
@@ -88,6 +90,7 @@ object JolpicaSource {
                 teamId = team?.optString("constructorId").orEmpty(),
                 points = s.optString("points"),
                 wins = s.optInt("wins"),
+                number = driver.optString("permanentNumber").ifEmpty { null },
             )
         }
     }
@@ -142,6 +145,7 @@ object JolpicaSource {
                 grid = r.optString("grid").toIntOrNull(),
                 status = r.optString("status").ifEmpty { null },
                 qualifying = if (key == "QualifyingResults") listOf("Q1", "Q2", "Q3").map { r.optString(it) } else emptyList(),
+                number = r.optString("number").ifEmpty { driver.optString("permanentNumber") }.ifEmpty { null },
             )
         }
         return SessionResult(title, rows)

@@ -112,6 +112,7 @@ object OpenF1Source {
                 pitStops = if (race) stints[number]?.size?.minus(1)?.coerceAtLeast(0) else null,
                 status = status,
                 qualifying = if (qualifying) (r.opt("duration") as? JSONArray)?.let { a -> (0 until 3).map { if (it < a.length() && !a.isNull(it)) lap(a.get(it)) else "" } }.orEmpty() else emptyList(),
+                number = number.takeIf { it > 0 }?.toString(),
             )
         }
         return JolpicaSource.SessionResult(title, out).also { results[key] = it }

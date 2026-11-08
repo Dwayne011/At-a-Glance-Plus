@@ -384,6 +384,33 @@ object SportsSource {
      */
     fun logoNow(context: Context, url: String?): Bitmap? = url?.let { logos[it] ?: fetchLogo(context, it) }
 
+    private val sharpLogos = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
+
+    /**
+     * [url]'s logo at 256 px for the dashboards (the cards' copy is 96 px, kept small for the
+     * launcher, and looked soft at dashboard size). Memory, then disk, then ESPN. Blocking.
+     */
+    fun sharpLogo(context: Context, url: String?): Bitmap? {
+        url ?: return null
+        sharpLogos[url]?.let { return it }
+        val dir = File(context.cacheDir, "logos256").apply { mkdirs() }
+        val file = File(dir, url.hashCode().toUInt().toString() + ".png")
+        val bitmap = if (file.exists()) BitmapFactory.decodeFile(file.path) else runCatching {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 10_000 }
+            try {
+                connection.inputStream.use { BitmapFactory.decodeStream(it) }
+            } finally {
+                connection.disconnect()
+            }
+        }.getOrNull()?.let { full ->
+            val sharp = if (full.width > 256) full.scale(256, 256 * full.height / full.width) else full
+            runCatching { file.outputStream().use { sharp.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+            sharp
+        }
+        if (bitmap != null) sharpLogos[url] = bitmap
+        return bitmap
+    }
+
     private fun fetchLogo(context: Context, url: String): Bitmap? {
         val dir = File(context.cacheDir, "logos").apply { mkdirs() }
         val file = File(dir, url.hashCode().toUInt().toString() + ".png")

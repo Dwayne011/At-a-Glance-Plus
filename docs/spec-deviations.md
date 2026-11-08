@@ -1350,3 +1350,38 @@ tappable.
 - **Logo backing:** logos sit on neutral frosted glass, not on the team's colour (Liverpool's red
   crest vanished on red). Without a logo, the abbreviation still sits on the team's colour.
 - **Checked:** rendered with ESPN's logos for Liverpool, Arsenal, the Bulls and the 76ers.
+
+## 0.48.0: F1 in the frosted Bento look, car numbers, live leaderboard tab, sharp logos
+
+**Asked for:** F1 next in the Bento redesign, with car numbers, a live leaderboard tab during
+sessions, race-day weather and countdown tiles, and pole and winner. Also: "why do logos look
+low res".
+
+**Changes:**
+- **F1 weekend** (green-tinted GlassScreen):
+  - **Track tile:** the circuit outline (the screen's one picture) with the Grand Prix, circuit,
+    city and race time.
+  - **Next and weather tiles:** the session on now (LIVE) or next, with its countdown. Beside
+    it, race-day weather at the circuit (temperature, conditions, rain chance, wind), only while
+    the race is still to come.
+  - **Pole and winner:** tiles with a team stripe, code, car number, name and time, as they
+    become known.
+  - **Sessions:** every session, tappable as before.
+- **Live tab:** while a session is on, a Live tab holds its leaderboard (F1 live timing: map,
+  flag, clock, full order with tyres) and opens first. Weekend · Live · Standings.
+- **Car numbers:** a number column in the team's colour in live timing, every classification
+  (race, qualifying, practice) and the drivers' standings.
+  - Live timing: RacingNumber.
+  - Jolpica: results "number", standings "permanentNumber".
+  - OpenF1: driver_number.
+  - Results captured from F1's feed and stored results keep it too.
+- **Look:** session pages, summaries, previews and standings use glass panels and glass tabs.
+- **Sharp logos:**
+  - **Found:** every logo was cut to 96 px to keep the home-screen cards small for the
+    launcher, and the dashboard drew those at about 120 px, so they looked soft.
+  - **Fix:** dashboards now use a separate 256 px copy (SportsSource.sharpLogo, its own disk
+    cache), showing the small one meanwhile. The cards keep 96 px.
+- **Checked:**
+  - Rendered at phone width with today's Brazilian Grand Prix from Jolpica: weekend, race
+    classification with numbers, and drivers' standings.
+  - Car numbers matched the source (NOR 1, VER 3, ANT 12…).

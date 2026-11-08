@@ -2251,12 +2251,13 @@ private fun Color.dim(fraction: Float): Color = Color(
     red = red * (1 - fraction), green = green * (1 - fraction), blue = blue * (1 - fraction), alpha = 1f,
 )
 
-/** A team's logo: at once if already loaded, else fetched (off the main thread) and shown when it arrives. */
+/** A team's logo, sharp: fetched off the main thread and shown when it arrives. */
 @Composable
 private fun teamLogo(url: String?): androidx.compose.ui.graphics.ImageBitmap? {
     val context = LocalContext.current
+    // The small card copy at once if there is one, then the sharp 256 px one.
     val logo by produceState(com.ataglanceplus.live.SportsSource.logo(url)?.asImageBitmap(), url) {
-        if (value == null && url != null) value = withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsSource.logoNow(context, url) }?.asImageBitmap()
+        if (url != null) withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsSource.sharpLogo(context, url) }?.asImageBitmap()?.let { value = it }
     }
     return logo
 }
@@ -2730,54 +2731,154 @@ private fun F1EventDashboard(eventId: String) {
     var revealed by rememberSaveable { mutableStateOf(false) }
     val hidden = !revealed && com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)
     androidx.activity.compose.BackHandler(enabled = opened != null) { opened = null }
-    Column(modifier = Modifier.fillMaxSize().background(SportBg).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        when (val state = load) {
-            Load.Loading -> { ScreenTitle("Formula 1"); Text("Loading…", color = SportSub) }
-            is Load.Missing -> { ScreenTitle("Formula 1"); Text(state.why, color = SportSub) }
-            is Load.Ready -> {
-                val sessions = state.data
-                val first = sessions.first()
-                val raceDay = (sessions.firstOrNull { it.session.equals("Race", ignoreCase = true) } ?: sessions.last()).start
-                    .let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() }
-                val session = sessions.firstOrNull { it.session == opened }
-                if (session != null) {
-                    F1SessionScreen(context, session, raceDay, hidden = hidden, onReveal = { revealed = true }) { opened = null }
-                    return@Column
-                }
-                ScreenTitle(first.eventName)
-                F1Hero(first)
-                if (hidden) RevealBar("Results are hidden for Formula 1.") { revealed = true }
-                val next = sessions.firstOrNull { it.state == "pre" } ?: sessions.firstOrNull { it.state == "in" }
-                if (next != null) F1UpNext(context, next)
-                val standings by produceState<Pair<List<com.ataglanceplus.live.JolpicaSource.DriverStanding>?, List<com.ataglanceplus.live.JolpicaSource.TeamStanding>?>?>(null, refresh.generation) {
-                    value = withContext(Dispatchers.IO) {
-                        com.ataglanceplus.live.JolpicaSource.driverStandings() to com.ataglanceplus.live.JolpicaSource.teamStandings()
+    GlassScreen(Tints.F1, accent = F1Mint) {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            when (val state = load) {
+                Load.Loading -> { ScreenTitle("Formula 1"); Text("Loading…", color = GlassSub) }
+                is Load.Missing -> { ScreenTitle("Formula 1"); Text(state.why, color = GlassSub) }
+                is Load.Ready -> {
+                    val sessions = state.data
+                    val first = sessions.first()
+                    val raceSession = sessions.firstOrNull { it.session.equals("Race", ignoreCase = true) || it.session.equals("R", true) } ?: sessions.last()
+                    val raceDay = Instant.ofEpochMilli(raceSession.start).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                    val session = sessions.firstOrNull { it.session == opened }
+                    if (session != null) {
+                        F1SessionScreen(context, session, raceDay, hidden = hidden, onReveal = { revealed = true }) { opened = null }
+                        return@Column
                     }
-                }
-                val tabs = listOf("Weekend", "Standings")
-                val pager = rememberPagerState(pageCount = { tabs.size })
-                val scope = rememberCoroutineScope()
-                SegmentedPills(tabs, pager.currentPage.coerceIn(0, tabs.lastIndex)) { idx -> scope.launch { pager.animateScrollToPage(idx) } }
-                HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f)) { page ->
-                    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        when (tabs.getOrNull(page)) {
-                            "Weekend" -> {
-                                // The live session stands out; with none on, the next one does.
-                                val live = sessions.firstOrNull { it.state == "in" }
-                                sessions.forEach { s ->
-                                    Box(Modifier.clip(RoundedCornerShape(14.dp)).clickable { opened = s.session }) {
-                                        F1SessionRow(context, s, isNext = live == null && s == next, isLive = s == live)
-                                    }
-                                }
-                                Text("Tap a session: live timing while it is on, the results after, a preview before.", color = SportSub, fontSize = 11.sp)
-                            }
-                            "Standings" -> if (hidden) Text("The standings are hidden with the results. Reveal them above.", color = SportSub) else F1Standings(standings)
+                    val live = sessions.firstOrNull { it.state == "in" }
+                    val next = sessions.firstOrNull { it.state == "pre" }
+                    val standings by produceState<Pair<List<com.ataglanceplus.live.JolpicaSource.DriverStanding>?, List<com.ataglanceplus.live.JolpicaSource.TeamStanding>?>?>(null, refresh.generation) {
+                        value = withContext(Dispatchers.IO) {
+                            com.ataglanceplus.live.JolpicaSource.driverStandings() to com.ataglanceplus.live.JolpicaSource.teamStandings()
                         }
                     }
+                    // While a session is on, its live leaderboard is a tab of its own, and opens first.
+                    val tabs = listOfNotNull("Weekend", if (live != null) "Live" else null, "Standings")
+                    val pager = rememberPagerState(initialPage = if (live != null) 1 else 0, pageCount = { tabs.size })
+                    val scope = rememberCoroutineScope()
+                    GlassTabs(tabs, pager.currentPage.coerceIn(0, tabs.lastIndex), F1Mint) { idx -> scope.launch { pager.animateScrollToPage(idx) } }
+                    if (hidden) RevealBar("Results are hidden for Formula 1.") { revealed = true }
+                    HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f)) { page ->
+                        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            when (tabs.getOrNull(page)) {
+                                "Weekend" -> F1Weekend(context, sessions, raceSession, raceDay, live, next, hidden) { opened = it }
+                                "Live" -> if (live != null) {
+                                    Label("${f1SessionName(live.session)} · live leaderboard")
+                                    F1LiveSession(context, live)
+                                }
+                                "Standings" -> if (hidden) Text("The standings are hidden with the results. Reveal them above.", color = GlassSub) else F1Standings(standings)
+                            }
+                        }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OpenButton("Open in Google", com.ataglanceplus.cards.LiveCards.googleSearch(context, "F1 ${first.eventName}"))
+                        first.link?.let { OpenButton("ESPN", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it))) }
+                    }
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OpenButton("Open in Google", com.ataglanceplus.cards.LiveCards.googleSearch(context, "F1 ${first.eventName}"))
-                    first.link?.let { OpenButton("ESPN", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it))) }
+            }
+        }
+    }
+}
+
+/**
+ * The weekend at a glance: the track (the screen's one picture) with its name and the race time,
+ * what is next or on with its countdown, race-day weather at the circuit, pole and winner as
+ * they become known, then every session.
+ */
+@Composable
+internal fun F1Weekend(
+    context: Context, sessions: List<com.ataglanceplus.live.RaceSession>, race: com.ataglanceplus.live.RaceSession, raceDay: java.time.LocalDate,
+    live: com.ataglanceplus.live.RaceSession?, next: com.ataglanceplus.live.RaceSession?, hidden: Boolean, open: (String) -> Unit,
+) {
+    val first = sessions.first()
+    val preview by produceState<com.ataglanceplus.live.F1Preview.Preview?>(null, race.start) {
+        value = withContext(Dispatchers.IO) { com.ataglanceplus.live.F1Preview.load(raceDay, race.start) }
+    }
+    val results by produceState<List<com.ataglanceplus.live.JolpicaSource.SessionResult>>(emptyList(), raceDay) {
+        value = withContext(Dispatchers.IO) { runCatching { com.ataglanceplus.live.JolpicaSource.weekendResults(raceDay) }.getOrDefault(emptyList()) }
+    }
+    Glass(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val outline = com.ataglanceplus.cards.CircuitIcons.find(first.circuitCity, first.circuitName, aod = false)
+            Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) {
+                if (outline != null) androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(outline), contentDescription = null, modifier = Modifier.size(88.dp), tint = F1Mint)
+                else Text("F1", color = F1Mint, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp)
+            }
+            Column(Modifier.padding(start = 10.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Label(first.eventName)
+                Figure(first.circuitName ?: first.eventName, size = 18.sp)
+                first.circuitCity?.let { Label(it) }
+                Text("Race ${dayAndDate(Instant.ofEpochMilli(race.start).atZone(ZoneId.systemDefault()).toLocalDate())} · ${clock(context, Instant.ofEpochMilli(race.start))}",
+                    color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+    }
+    // What's on or next, and the race-day weather; nothing once the weekend is over.
+    if (live != null || next != null) GlassPair {
+        Glass(Modifier.weight(1f).fillMaxHeight()) {
+            if (live != null) {
+                Label("On now")
+                Figure(f1SessionName(live.session), size = 16.sp)
+                Text("● LIVE", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(LiveRed).padding(horizontal = 7.dp, vertical = 2.dp))
+            } else if (next != null) {
+                Label("Next: ${f1SessionName(next.session)}")
+                Figure(countdownTo(next.start).removePrefix("in "), size = 24.sp)
+                Label(clock(context, Instant.ofEpochMilli(next.start)))
+            }
+        }
+        // Weather only while the race is still to come.
+        if (race.state == "pre") Glass(Modifier.weight(1f).fillMaxHeight()) {
+            Label("Race-day weather")
+            val f = preview?.forecast
+            if (f == null) Text(if (preview == null) "Loading…" else "Forecast not out yet", color = GlassSub, fontSize = 12.5.sp)
+            else {
+                Figure("${f.temperature.toInt()}° · ${com.ataglanceplus.weather.WeatherCondition.fromWmo(f.code).label}", size = 16.sp)
+                Text(listOfNotNull(f.rainChance?.let { "Rain $it%" }, f.windKmh?.let { "Wind ${it.toInt()} km/h" }).joinToString(" · "), color = GlassText, fontSize = 12.sp)
+            }
+        }
+    }
+    if (!hidden) {
+        val pole = results.firstOrNull { it.title == "Qualifying" }?.rows?.firstOrNull()
+        val winner = results.firstOrNull { it.title == "Race" }?.rows?.firstOrNull()
+        if (pole != null || winner != null) GlassPair {
+            listOfNotNull(pole?.let { "Pole" to it }, winner?.let { "Winner" to it }).forEach { (label, r) ->
+                Glass(Modifier.weight(1f).fillMaxHeight()) {
+                    Label(label)
+                    val colour = Color(r.colour ?: com.ataglanceplus.live.JolpicaSource.teamColour(r.teamId))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Stripe(colour, 30.dp)
+                        Column {
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Figure(r.code, size = 20.sp)
+                                r.number?.let { Text(" $it", color = colour.lift(0.3f), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold) }
+                            }
+                            Label(r.name)
+                        }
+                    }
+                    r.time.takeIf { it.contains(":") || (label == "Pole" && it.contains(".")) }?.let { Text(it, color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold) }
+                }
+            }
+        }
+    }
+    Glass(Modifier.fillMaxWidth()) {
+        Label("Sessions · tap one for timing, results or a preview")
+        sessions.forEach { s ->
+            val isRace = s.session.equals("Race", true) || s.session.equals("R", true)
+            val start = Instant.ofEpochMilli(s.start)
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { open(s.session) }.padding(vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(when { s == live -> LiveRed; s == next -> F1Mint; isRace -> Color(0xFFFFB74D); else -> Color(0x55FFFFFF) }))
+                Text(f1SessionName(s.session), color = if (isRace) Color(0xFFFFE082) else Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 10.dp).weight(1f), maxLines = 1)
+                when (s.state) {
+                    "in" -> Text("● LIVE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(LiveRed).padding(horizontal = 7.dp, vertical = 2.dp))
+                    "post" -> Text("Done", color = GlassSub, fontSize = 12.sp)
+                    else -> Text("${day(start.atZone(ZoneId.systemDefault()).toLocalDate())} ${clock(context, start)}", color = GlassText, fontSize = 12.sp)
                 }
             }
         }
@@ -2788,10 +2889,10 @@ private fun F1EventDashboard(eventId: String) {
 @Composable
 private fun RevealBar(text: String, onReveal: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(14.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(GlassFill).border(1.dp, GlassEdge, RoundedCornerShape(20.dp)).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, color = SportSub, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        Text(text, color = GlassSub, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(onClick = onReveal) { Text("Reveal") }
     }
 }
@@ -2829,7 +2930,7 @@ private fun TyreBadge(compound: String, laps: Int?) {
             Text(letter, color = colour, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
         // A set width, so the rings line up down the column whether the age has one digit or two.
-        if (laps != null) Text("$laps", color = SportText, fontSize = 11.5.sp, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 4.dp).width(18.dp))
+        if (laps != null) Text("$laps", color = GlassText, fontSize = 11.5.sp, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 4.dp).width(18.dp))
     }
 }
 
@@ -2843,7 +2944,7 @@ private fun TyreCell(compound: String, laps: Int?) {
                 Text(letter, color = colour, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
-        Text(laps?.toString().orEmpty(), color = SportText, fontSize = 11.5.sp, maxLines = 1, softWrap = false, modifier = Modifier.weight(1f),
+        Text(laps?.toString().orEmpty(), color = GlassText, fontSize = 11.5.sp, maxLines = 1, softWrap = false, modifier = Modifier.weight(1f),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
@@ -2852,15 +2953,15 @@ private fun TyreCell(compound: String, laps: Int?) {
 @Composable
 private fun F1TableHeader(first: String, second: String, third: String) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 2.dp)) {
-        Text("Pos", color = SportSub, fontSize = 10.5.sp, modifier = Modifier.width(24.dp))
-        Text("Driver", color = SportSub, fontSize = 10.5.sp, modifier = Modifier.padding(start = 12.dp).weight(1f))
-        Text(first, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.width(76.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
-        Text(second, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.width(64.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        Text("Pos", color = GlassSub, fontSize = 10.5.sp, modifier = Modifier.width(24.dp))
+        Text("Driver", color = GlassSub, fontSize = 10.5.sp, modifier = Modifier.padding(start = 12.dp + 22.dp).weight(1f), maxLines = 1)
+        Text(first, color = GlassSub, fontSize = 10.5.sp, modifier = Modifier.width(76.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        Text(second, color = GlassSub, fontSize = 10.5.sp, modifier = Modifier.width(64.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
         // "Tyre · Laps" splits into two halves, each over its own figure (see [TyreCell]).
         val halves = third.split(" · ")
         Row(Modifier.padding(start = 8.dp).width(64.dp)) {
             halves.forEach { h ->
-                Text(h, color = SportSub, fontSize = 10.5.sp, modifier = Modifier.weight(1f), maxLines = 1, softWrap = false,
+                Text(h, color = GlassSub, fontSize = 10.5.sp, modifier = Modifier.weight(1f), maxLines = 1, softWrap = false,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
@@ -2869,13 +2970,16 @@ private fun F1TableHeader(first: String, second: String, third: String) {
 
 /** A timing row: position, team bar, driver code, two figures, then [third] (a tyre, laps or points). */
 @Composable
-private fun F1TimingLine(position: String, colour: Int, code: String, faded: Boolean, first: String, second: String, third: @Composable () -> Unit) {
+private fun F1TimingLine(position: String, colour: Int, code: String, faded: Boolean, first: String, second: String, number: String? = null, third: @Composable () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(position, color = SportSub, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(24.dp))
+        Text(position, color = GlassSub, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(24.dp))
         Box(Modifier.size(width = 4.dp, height = 16.dp).clip(RoundedCornerShape(2.dp)).background(Color(colour)))
+        // The car number, in the team's colour.
+        Text(number.orEmpty(), color = Color(colour).lift(0.3f), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End,
+            modifier = Modifier.width(22.dp), maxLines = 1)
         Text(code, color = if (faded) SportSub else Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp).weight(1f), maxLines = 1)
         Text(first, color = if (faded) SportSub else Color.White, fontSize = 12.5.sp, modifier = Modifier.width(76.dp), maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.End)
-        Text(second, color = SportSub, fontSize = 12.sp, modifier = Modifier.width(64.dp), maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        Text(second, color = GlassSub, fontSize = 12.sp, modifier = Modifier.width(64.dp), maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.End)
         // Centred under its title, as the figures in it are narrower than the title.
         Box(Modifier.padding(start = 8.dp).width(64.dp), contentAlignment = Alignment.Center) { third() }
     }
@@ -2901,8 +3005,8 @@ private fun F1LiveSession(context: Context, session: com.ataglanceplus.live.Race
     val live by com.ataglanceplus.live.LiveTiming.state.collectAsStateWithLifecycle()
     val state = live
     if (state == null || state.cars.isEmpty()) {
-        Text("Connecting to F1 live timing…", color = SportSub)
-        if (session.top.isNotEmpty()) Text("Running order so far: " + session.top.joinToString(" · "), color = SportSub, fontSize = 12.5.sp)
+        Text("Connecting to F1 live timing…", color = GlassSub)
+        if (session.top.isNotEmpty()) Text("Running order so far: " + session.top.joinToString(" · "), color = GlassSub, fontSize = 12.5.sp)
         return
     }
     val (flag, flagColour) = when (state.trackStatus) {
@@ -2923,7 +3027,7 @@ private fun F1LiveSession(context: Context, session: com.ataglanceplus.live.Race
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("● $flag", color = flagColour, fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(flagColour.copy(alpha = 0.18f)).padding(horizontal = 9.dp, vertical = 4.dp))
-        Text(clockText, color = SportText, fontSize = 13.5.sp, modifier = Modifier.padding(start = 10.dp))
+        Text(clockText, color = GlassText, fontSize = 13.5.sp, modifier = Modifier.padding(start = 10.dp))
     }
     // The map is redrawn every frame or so, moving each car on at its pace between the feed's updates.
     val px = with(androidx.compose.ui.platform.LocalDensity.current) { 240.dp.roundToPx() }
@@ -2945,7 +3049,7 @@ private fun F1LiveSession(context: Context, session: com.ataglanceplus.live.Race
         }
     }
     Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(GlassFill).border(1.dp, GlassEdge, RoundedCornerShape(20.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (state.race) F1TableHeader("Interval", "Last lap", "Tyre · Laps") else F1TableHeader("Best lap", "Gap", "Tyre · Laps")
@@ -2961,10 +3065,10 @@ private fun F1LiveSession(context: Context, session: com.ataglanceplus.live.Race
                 car.position == 1 -> "Fastest"
                 else -> car.figure
             }
-            F1TimingLine("${car.position}", car.colour, car.code, car.out, first, second) { TyreCell(car.tyre, car.tyreAge.takeIf { car.tyre.isNotEmpty() }) }
+            F1TimingLine("${car.position}", car.colour, car.code, car.out, first, second, car.number) { TyreCell(car.tyre, car.tyreAge.takeIf { car.tyre.isNotEmpty() }) }
         }
     }
-    Text("Tyres: S soft, M medium, H hard, I intermediate, W wet. Laps: laps on that set of tyres.", color = SportSub, fontSize = 11.sp)
+    Text("Tyres: S soft, M medium, H hard, I intermediate, W wet. Laps: laps on that set of tyres.", color = GlassSub, fontSize = 11.sp)
 }
 
 /** After the session: a summary, then the full classification; tap a driver for sectors, speed and tyres. */
@@ -2978,8 +3082,8 @@ private fun F1FinishedSession(session: com.ataglanceplus.live.RaceSession, raceD
         }
     }
     when (val r = result) {
-        Load.Loading -> Text("Loading…", color = SportSub)
-        is Load.Missing -> Text(r.why, color = SportSub)
+        Load.Loading -> Text("Loading…", color = GlassSub)
+        is Load.Missing -> Text(r.why, color = GlassSub)
         is Load.Ready -> {
             val name = session.session.lowercase()
             val kind = when {
@@ -2993,11 +3097,11 @@ private fun F1FinishedSession(session: com.ataglanceplus.live.RaceSession, raceD
     }
 }
 
-private enum class F1Kind { Practice, Qualifying, Race }
+internal enum class F1Kind { Practice, Qualifying, Race }
 
 /** The session at a glance: the winner or fastest lap, the top speed, laps run. */
 @Composable
-private fun F1Summary(result: com.ataglanceplus.live.JolpicaSource.SessionResult, kind: F1Kind) {
+internal fun F1Summary(result: com.ataglanceplus.live.JolpicaSource.SessionResult, kind: F1Kind) {
     val rows = result.rows
     val lines = buildList {
         val first = rows.firstOrNull()
@@ -3018,12 +3122,12 @@ private fun F1Summary(result: com.ataglanceplus.live.JolpicaSource.SessionResult
     }
     if (lines.isEmpty()) return
     Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(14.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(GlassFill).border(1.dp, GlassEdge, RoundedCornerShape(20.dp)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         lines.forEach { (label, value) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(label, color = SportSub, fontSize = 12.5.sp, modifier = Modifier.width(96.dp))
+                Text(label, color = GlassSub, fontSize = 12.5.sp, modifier = Modifier.width(96.dp))
                 Text(value, color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
             }
         }
@@ -3032,11 +3136,11 @@ private fun F1Summary(result: com.ataglanceplus.live.JolpicaSource.SessionResult
 
 /** Every driver, with the figures that matter for the session; each opens to its detail. */
 @Composable
-private fun F1Classification(result: com.ataglanceplus.live.JolpicaSource.SessionResult, kind: F1Kind) {
+internal fun F1Classification(result: com.ataglanceplus.live.JolpicaSource.SessionResult, kind: F1Kind) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     val detail = result.rows.any { it.sectors.isNotEmpty() || it.stints.isNotEmpty() || it.topSpeed != null || it.qualifying.any { q -> q.isNotEmpty() } || it.grid != null }
     Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(GlassFill).border(1.dp, GlassEdge, RoundedCornerShape(20.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         when (kind) {
@@ -3058,21 +3162,21 @@ private fun F1Classification(result: com.ataglanceplus.live.JolpicaSource.Sessio
             Column(Modifier.clip(RoundedCornerShape(8.dp)).then(if (detail) Modifier.clickable { open = if (open == label) null else label } else Modifier)) {
                 when (kind) {
                     F1Kind.Race -> F1TimingLine(r.position, colour, label, r.status != null && r.status != "Finished" && !r.status.startsWith("+"),
-                        r.time, (r.bestLap.orEmpty()) + if (r.fastestLap) " ⏱" else "") {
-                        Text(r.points?.takeIf { it != "0" }.orEmpty(), color = SportText, fontSize = 12.sp)
+                        r.time, (r.bestLap.orEmpty()) + if (r.fastestLap) " ⏱" else "", r.number) {
+                        Text(r.points?.takeIf { it != "0" }.orEmpty(), color = GlassText, fontSize = 12.sp)
                     }
-                    F1Kind.Qualifying -> F1TimingLine(r.position, colour, label, false, r.time, gap) {
-                        Text(r.qualifying.indexOfLast { it.isNotEmpty() }.takeIf { it >= 0 }?.let { "Q${it + 1}" } ?: r.points.orEmpty(), color = SportText, fontSize = 12.sp)
+                    F1Kind.Qualifying -> F1TimingLine(r.position, colour, label, false, r.time, gap, r.number) {
+                        Text(r.qualifying.indexOfLast { it.isNotEmpty() }.takeIf { it >= 0 }?.let { "Q${it + 1}" } ?: r.points.orEmpty(), color = GlassText, fontSize = 12.sp)
                     }
-                    F1Kind.Practice -> F1TimingLine(r.position, colour, label, false, r.time, gap) {
-                        Text(r.laps?.toString().orEmpty(), color = SportText, fontSize = 12.sp)
+                    F1Kind.Practice -> F1TimingLine(r.position, colour, label, false, r.time, gap, r.number) {
+                        Text(r.laps?.toString().orEmpty(), color = GlassText, fontSize = 12.sp)
                     }
                 }
                 if (open == label) F1DriverDetail(r, kind)
             }
         }
     }
-    if (detail) Text("Tap a driver for sectors, speed and tyres.", color = SportSub, fontSize = 11.sp)
+    if (detail) Text("Tap a driver for sectors, speed and tyres.", color = GlassSub, fontSize = 11.sp)
 }
 
 /** One driver's detail: best sectors (the session's fastest in purple), top speed, tyres, and the race or qualifying story. */
@@ -3093,7 +3197,7 @@ private fun F1DriverDetail(r: com.ataglanceplus.live.JolpicaSource.ResultRow, ki
                 r.laps?.let { "$it laps" },
                 r.pitStops?.let { "$it stop${if (it == 1) "" else "s"}" },
                 r.status?.takeIf { it != "Finished" && !it.startsWith("+") },
-            ).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" · "), color = SportText, fontSize = 12.5.sp) }
+            ).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" · "), color = GlassText, fontSize = 12.5.sp) }
         }
         if (kind == F1Kind.Qualifying && r.qualifying.any { it.isNotEmpty() }) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -3110,7 +3214,7 @@ private fun F1DriverDetail(r: com.ataglanceplus.live.JolpicaSource.ResultRow, ki
             r.topSpeed?.let { F1Figure("Speed trap", "$it km/h") }
         }
         if (r.stints.isNotEmpty()) {
-            Text("Tyres", color = SportSub, fontSize = 11.sp)
+            Text("Tyres", color = GlassSub, fontSize = 11.sp)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 r.stints.forEach { (compound, laps) -> TyreBadge(compound, laps) }
             }
@@ -3121,7 +3225,7 @@ private fun F1DriverDetail(r: com.ataglanceplus.live.JolpicaSource.ResultRow, ki
 @Composable
 private fun F1Figure(label: String, value: String, colour: Color = Color.White) {
     Column {
-        Text(label, color = SportSub, fontSize = 10.5.sp)
+        Text(label, color = GlassSub, fontSize = 10.5.sp)
         Text(value, color = colour, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
@@ -3134,150 +3238,83 @@ private fun F1UpcomingSession(context: Context, session: com.ataglanceplus.live.
     }
     val start = Instant.ofEpochMilli(session.start)
     Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(14.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(GlassFill).border(1.dp, GlassEdge, RoundedCornerShape(20.dp)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(countdownTo(session.start).replaceFirstChar { it.uppercase() }, color = F1Mint, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text("${dayAndDate(start.atZone(ZoneId.systemDefault()).toLocalDate())} · ${clock(context, start)} your time", color = Color.White, fontSize = 14.sp)
         preview?.utcOffsetSeconds?.let { offset ->
             val local = start.atOffset(java.time.ZoneOffset.ofTotalSeconds(offset))
-            Text("${"%02d:%02d".format(local.hour, local.minute)} at the track", color = SportSub, fontSize = 12.5.sp)
+            Text("${"%02d:%02d".format(local.hour, local.minute)} at the track", color = GlassSub, fontSize = 12.5.sp)
         }
     }
     val p = preview
     if (p == null) {
-        Text("Loading the forecast…", color = SportSub)
+        Text("Loading the forecast…", color = GlassSub)
         return
     }
     p.forecast?.let { f ->
         Column(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(14.dp),
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(GlassFill).border(1.dp, GlassEdge, RoundedCornerShape(20.dp)).padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text("Forecast at the circuit", color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
             val condition = com.ataglanceplus.weather.WeatherCondition.fromWmo(f.code).label
-            Text("$condition · ${f.temperature.toInt()}°", color = SportText, fontSize = 14.sp)
-            Text(listOfNotNull(f.rainChance?.let { "Rain $it%" }, f.windKmh?.let { "Wind ${it.toInt()} km/h" }).joinToString(" · "), color = SportSub, fontSize = 12.5.sp)
+            Text("$condition · ${f.temperature.toInt()}°", color = GlassText, fontSize = 14.sp)
+            Text(listOfNotNull(f.rainChance?.let { "Rain $it%" }, f.windKmh?.let { "Wind ${it.toInt()} km/h" }).joinToString(" · "), color = GlassSub, fontSize = 12.5.sp)
         }
     }
     Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(14.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(GlassFill).border(1.dp, GlassEdge, RoundedCornerShape(20.dp)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(p.circuit, color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
-        Text(p.place, color = SportSub, fontSize = 12.5.sp)
-        p.lastWinner?.let { Text("${p.lastYear} winner: $it", color = SportText, fontSize = 13.sp) }
-        p.lastPole?.let { Text("${p.lastYear} pole: $it", color = SportText, fontSize = 13.sp) }
+        Text(p.place, color = GlassSub, fontSize = 12.5.sp)
+        p.lastWinner?.let { Text("${p.lastYear} winner: $it", color = GlassText, fontSize = 13.sp) }
+        p.lastPole?.let { Text("${p.lastYear} pole: $it", color = GlassText, fontSize = 13.sp) }
     }
 }
 
 /** A table row: position, a bar in the team's colour, the driver (or team), then the figures on the right. */
 @Composable
-private fun F1Row(position: String, teamId: String, code: String, name: String, figure: String, extra: String?, colour: Int? = null) {
+private fun F1Row(position: String, teamId: String, code: String, name: String, figure: String, extra: String?, colour: Int? = null, number: String? = null) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(position, color = SportSub, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(24.dp))
-        Box(Modifier.size(width = 4.dp, height = 16.dp).clip(RoundedCornerShape(2.dp)).background(Color(colour ?: com.ataglanceplus.live.JolpicaSource.teamColour(teamId))))
+        Text(position, color = GlassSub, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(24.dp))
+        val bar = Color(colour ?: com.ataglanceplus.live.JolpicaSource.teamColour(teamId))
+        Box(Modifier.size(width = 4.dp, height = 16.dp).clip(RoundedCornerShape(2.dp)).background(bar))
+        if (code.isNotEmpty()) Text(number.orEmpty(), color = bar.lift(0.3f), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End,
+            modifier = Modifier.width(26.dp), maxLines = 1)
         if (code.isNotEmpty()) Text(code, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp).width(40.dp))
         Text(name, color = if (code.isEmpty()) Color.White else SportSub, modifier = Modifier.padding(start = if (code.isEmpty()) 8.dp else 0.dp).weight(1f), fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(figure, color = Color.White, fontSize = 12.5.sp, modifier = Modifier.padding(start = 8.dp))
-        if (extra != null) Text(extra, color = SportSub, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp).width(54.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        if (extra != null) Text(extra, color = GlassSub, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp).width(54.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
     }
 }
 
 /** The championship: drivers or teams, with points and wins. */
 @Composable
-private fun F1Standings(
+internal fun F1Standings(
     standings: Pair<List<com.ataglanceplus.live.JolpicaSource.DriverStanding>?, List<com.ataglanceplus.live.JolpicaSource.TeamStanding>?>?,
 ) {
     var teams by remember { mutableStateOf(false) }
     if (standings == null) {
-        Text("Loading…", color = SportSub)
+        Text("Loading…", color = GlassSub)
         return
     }
     val (drivers, constructors) = standings
     if (drivers == null && constructors == null) {
-        Text("The standings could not be loaded. Try again in a moment.", color = SportSub)
+        Text("The standings could not be loaded. Try again in a moment.", color = GlassSub)
         return
     }
-    SegmentedPills(listOf("Drivers", "Teams"), if (teams) 1 else 0) { teams = it == 1 }
+    GlassTabs(listOf("Drivers", "Teams"), if (teams) 1 else 0, F1Mint) { teams = it == 1 }
     Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).padding(12.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(GlassFill).border(1.dp, GlassEdge, RoundedCornerShape(20.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         if (teams) {
             constructors.orEmpty().forEach { t -> F1Row("${t.position}", t.teamId, "", t.name, "${t.points} pts", if (t.wins > 0) "${t.wins} won" else null) }
         } else {
-            drivers.orEmpty().forEach { d -> F1Row("${d.position}", d.teamId, d.code, d.team, "${d.points} pts", if (d.wins > 0) "${d.wins} won" else null) }
-        }
-    }
-}
-
-@Composable
-private fun F1Hero(session: com.ataglanceplus.live.RaceSession) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF10382C), Color(0xFF0D1F1B), Color(0xFF121722))))
-            .border(1.dp, Color(0x406DD58C), RoundedCornerShape(24.dp)).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val outline = com.ataglanceplus.cards.CircuitIcons.find(session.circuitCity, session.circuitName, aod = false)
-        Box(
-            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(Color(0x1F6DD58C)).border(1.dp, Color(0x4D6DD58C), RoundedCornerShape(18.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (outline != null) androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(outline), contentDescription = null, modifier = Modifier.size(44.dp), tint = F1Mint)
-            else Text("F1", color = F1Mint, fontWeight = FontWeight.ExtraBold)
-        }
-        Column(modifier = Modifier.padding(start = 14.dp)) {
-            Text(session.circuitName ?: session.eventName, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            session.circuitCity?.let { Text(it, color = Color(0xFFA8C7B8), fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp)) }
-        }
-    }
-}
-
-@Composable
-private fun F1UpNext(context: Context, session: com.ataglanceplus.live.RaceSession) {
-    val label = if (session.state == "in") "Now: ${f1SessionName(session.session)}" else "Next: ${f1SessionName(session.session)}"
-    val countdown = if (session.state == "in") "LIVE" else countdownTo(session.start)
-    Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0x266DD58C)).border(1.dp, Color(0x596DD58C), RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 9.dp),
-        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("⏱ $label", color = Color(0xFFD2FCE1), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
-        Text(countdown, color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(F1Emerald).padding(horizontal = 8.dp, vertical = 3.dp))
-    }
-}
-
-@Composable
-private fun F1SessionRow(context: Context, session: com.ataglanceplus.live.RaceSession, isNext: Boolean, isLive: Boolean = false) {
-    val race = session.session.equals("Race", true) || session.session.equals("R", true)
-    val dot = when { isLive -> LiveRed; isNext -> F1Mint; race -> Color(0xFFFFB74D); else -> Color(0xFF4A505C) }
-    val start = Instant.ofEpochMilli(session.start)
-    Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-            .background(if (isLive) Color(0x2EFF5252) else if (isNext) Color(0x246DD58C) else if (race) Color(0x14FFB74D) else Color(0x08FFFFFF))
-            .border(if (isLive) 1.5.dp else 1.dp, if (isLive) Color(0xB3FF6B6B) else if (isNext) Color(0x666DD58C) else Color.Transparent, RoundedCornerShape(14.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dot))
-            Column(modifier = Modifier.padding(start = 10.dp)) {
-                Text(f1SessionName(session.session), color = if (race) Color(0xFFFFE082) else Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
-                if (isLive) Text("On now · tap for live timing", color = Color(0xFFFF8989), fontSize = 11.sp)
-                else if (isNext) Text("Up next", color = F1Mint, fontSize = 11.sp)
-            }
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            if (session.state == "in") {
-                Text("● LIVE", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(LiveRed).padding(horizontal = 7.dp, vertical = 2.dp))
-            } else {
-                Text(if (session.state == "post") "Finished" else dayAndDate(start.atZone(ZoneId.systemDefault()).toLocalDate()),
-                    color = SportText, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
-            }
-            if (session.state == "pre") Text(clock(context, start), color = SportSub, fontSize = 11.5.sp)
+            drivers.orEmpty().forEach { d -> F1Row("${d.position}", d.teamId, d.code, d.team, "${d.points} pts", if (d.wins > 0) "${d.wins} won" else null, number = d.number) }
         }
     }
 }
