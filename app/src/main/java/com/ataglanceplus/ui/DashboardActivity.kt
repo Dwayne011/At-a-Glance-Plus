@@ -1973,7 +1973,7 @@ private fun FixtureRow(game: com.ataglanceplus.live.Game, team: com.ataglanceplu
     val them = if (home) game.away else game.home
     val date = Instant.ofEpochMilli(game.start)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        val logo = remember(them.logoUrl) { com.ataglanceplus.live.SportsSource.logo(them.logoUrl)?.asImageBitmap() }
+        val logo = teamLogo(them.logoUrl)
         if (logo != null) Image(logo, contentDescription = null, modifier = Modifier.size(28.dp)) else Spacer(Modifier.size(28.dp))
         Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
             Text((if (home) "vs " else "at ") + them.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -2251,9 +2251,15 @@ private fun Color.dim(fraction: Float): Color = Color(
     red = red * (1 - fraction), green = green * (1 - fraction), blue = blue * (1 - fraction), alpha = 1f,
 )
 
+/** A team's logo: at once if already loaded, else fetched (off the main thread) and shown when it arrives. */
 @Composable
-private fun teamLogo(url: String?): androidx.compose.ui.graphics.ImageBitmap? =
-    remember(url) { com.ataglanceplus.live.SportsSource.logo(url)?.asImageBitmap() }
+private fun teamLogo(url: String?): androidx.compose.ui.graphics.ImageBitmap? {
+    val context = LocalContext.current
+    val logo by produceState(com.ataglanceplus.live.SportsSource.logo(url)?.asImageBitmap(), url) {
+        if (value == null && url != null) value = withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsSource.logoNow(context, url) }?.asImageBitmap()
+    }
+    return logo
+}
 
 /** The swipeable pill tab bar (spec 2.2): equal pills, the selected one raised. */
 @Composable
@@ -2414,7 +2420,8 @@ internal fun GameHero(game: com.ataglanceplus.live.Game, d: com.ataglanceplus.li
 private fun HeroSide(side: com.ataglanceplus.live.Side, record: String?, colour: Color) {
     Column(Modifier.width(80.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val logo = teamLogo(side.logoUrl)
-        Box(Modifier.size(50.dp).clip(CircleShape).background(colour.copy(alpha = 0.25f)).border(2.dp, Color(0x33FFFFFF), CircleShape), contentAlignment = Alignment.Center) {
+        // A logo sits on neutral frosted glass (a red crest vanishes on red); without one, the abbreviation on the team's colour.
+        Box(Modifier.size(50.dp).clip(CircleShape).background(if (logo != null) Color.White.copy(alpha = 0.16f) else colour.copy(alpha = 0.3f)).border(2.dp, Color(0x33FFFFFF), CircleShape), contentAlignment = Alignment.Center) {
             if (logo != null) Image(logo, contentDescription = null, modifier = Modifier.size(34.dp))
             else Text(side.abbr, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
         }

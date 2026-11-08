@@ -1332,3 +1332,21 @@ tappable.
   (NBA).
 
 **Next:** F1, stocks, eToro and health in the same look, with the new tiles.
+
+## 0.47.1: team logos load when a game is opened
+
+**Reported:** the mockups showed teams without logos.
+
+**Found:**
+- **The mockup gap was the test, not the app:** the test that drew those screens had no logo
+  images. The app shows ESPN's.
+- **But a crest could stay missing:** the logos were only loaded with the fixtures, and the
+  screen read them once, so a game opened before they finished kept the abbreviation.
+
+**Changes:**
+- **Logos load when needed:** teamLogo now fetches a missing logo off the main thread
+  (SportsSource.logoNow: memory, then the disk cache, then ESPN) and shows it when it arrives,
+  in the score tile and in fixture rows.
+- **Logo backing:** logos sit on neutral frosted glass, not on the team's colour (Liverpool's red
+  crest vanished on red). Without a logo, the abbreviation still sits on the team's colour.
+- **Checked:** rendered with ESPN's logos for Liverpool, Arsenal, the Bulls and the 76ers.

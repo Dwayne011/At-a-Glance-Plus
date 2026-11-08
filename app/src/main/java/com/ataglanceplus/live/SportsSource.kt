@@ -374,25 +374,34 @@ object SportsSource {
     fun logo(url: String?): Bitmap? = url?.let { logos[it] }
 
     private fun loadLogos(context: Context) {
-        val dir = File(context.cacheDir, "logos").apply { mkdirs() }
         val urls = _games.value.values.flatten().flatMap { listOf(it.home.logoUrl, it.away.logoUrl) }.filterNotNull().distinct()
-        urls.filter { !logos.containsKey(it) }.forEach { url ->
-            val file = File(dir, url.hashCode().toUInt().toString() + ".png")
-            val bitmap = if (file.exists()) BitmapFactory.decodeFile(file.path) else runCatching {
-                val connection = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 10_000 }
-                try {
-                    connection.inputStream.use { BitmapFactory.decodeStream(it) }
-                } finally {
-                    connection.disconnect()
-                }
-            }.getOrNull()?.let { full ->
-                // Cards carry their images to the launcher on every update: keep them small.
-                val small = if (full.width > 96) full.scale(96, 96 * full.height / full.width) else full
-                runCatching { file.outputStream().use { small.compress(Bitmap.CompressFormat.PNG, 100, it) } }
-                small
+        urls.filter { !logos.containsKey(it) }.forEach { url -> fetchLogo(context, url) }
+    }
+
+    /**
+     * [url]'s logo now: from memory, the disk cache or the network (blocking), for a screen opened
+     * before the logos finished loading. Null when it can't be had.
+     */
+    fun logoNow(context: Context, url: String?): Bitmap? = url?.let { logos[it] ?: fetchLogo(context, it) }
+
+    private fun fetchLogo(context: Context, url: String): Bitmap? {
+        val dir = File(context.cacheDir, "logos").apply { mkdirs() }
+        val file = File(dir, url.hashCode().toUInt().toString() + ".png")
+        val bitmap = if (file.exists()) BitmapFactory.decodeFile(file.path) else runCatching {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 10_000; readTimeout = 10_000 }
+            try {
+                connection.inputStream.use { BitmapFactory.decodeStream(it) }
+            } finally {
+                connection.disconnect()
             }
-            if (bitmap != null) logos[url] = bitmap
+        }.getOrNull()?.let { full ->
+            // Cards carry their images to the launcher on every update: keep them small.
+            val small = if (full.width > 96) full.scale(96, 96 * full.height / full.width) else full
+            runCatching { file.outputStream().use { small.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+            small
         }
+        if (bitmap != null) logos[url] = bitmap
+        return bitmap
     }
 
     // --- Helpers ---
