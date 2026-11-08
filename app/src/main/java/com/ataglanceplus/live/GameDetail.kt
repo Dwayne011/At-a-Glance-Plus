@@ -20,16 +20,22 @@ data class GameDetail(
     val events: List<Event>,
     /** Scoring plays for sports that list them (American football, hockey, baseball). */
     val scoring: List<Event>,
-    /** Each team's leaders (home first): "Points", "J. Tatum", "40". */
-    val leaders: List<Pair<String, List<Triple<String, String, String>>>>,
+    /** Each team's leaders (home first): "Points", "J. Tatum", "40", his number. */
+    val leaders: List<Pair<String, List<Leader>>>,
+    /** Score by period (quarters, halves, innings), home first; empty where the feed has none. */
+    val periods: List<List<String>> = emptyList(),
+    /** Each team's season record ("8-3"), home first, where the feed gives one. */
+    val records: List<String?> = emptyList(),
 ) {
     data class BoxScore(val team: String, val labels: List<String>, val players: List<PlayerLine>)
-    data class PlayerLine(val name: String, val starter: Boolean, val stats: List<String>)
+    /** One player's line, with his shirt or jersey number and position where the feed gives them. */
+    data class PlayerLine(val name: String, val starter: Boolean, val stats: List<String>, val number: String? = null, val position: String? = null)
+    data class Leader(val category: String, val name: String, val value: String, val number: String? = null)
     data class Lineup(val team: String, val formation: String?, val starters: List<Player>, val subs: List<Player>)
     data class Player(val name: String, val number: String?, val position: String?, val subbedIn: Boolean, val subbedOut: Boolean)
 
     /** Something that happened: when, what, who (and who assisted), and for which team. */
-    data class Event(val clock: String, val kind: Kind, val text: String, val team: String?, val scoring: Boolean)
+    data class Event(val clock: String, val kind: Kind, val text: String, val team: String?, val scoring: Boolean, val number: String? = null)
 
     enum class Kind { GOAL, YELLOW, RED, SUB, SCORE, OTHER }
 
@@ -66,10 +72,13 @@ data class GameDetail(
                     val players = (0 until athletes.length()).map { athletes.getJSONObject(it) }.mapNotNull { a ->
                         val values = a.optJSONArray("stats") ?: return@mapNotNull null
                         if (values.length() == 0) return@mapNotNull null // did not play
+                        val athlete = a.optJSONObject("athlete")
                         GameDetail.PlayerLine(
-                            a.optJSONObject("athlete")?.optString("shortName")?.ifEmpty { null } ?: a.optJSONObject("athlete")?.optString("displayName").orEmpty(),
+                            athlete?.optString("shortName")?.ifEmpty { null } ?: athlete?.optString("displayName").orEmpty(),
                             a.optBoolean("starter"),
                             (0 until values.length()).map { values.optString(it) },
+                            athlete?.optString("jersey")?.ifEmpty { null },
+                            athlete?.optJSONObject("position")?.optString("abbreviation")?.ifEmpty { null },
                         )
                     }
                     BoxScore(abbr(team.optJSONObject("team")), labels, players)
@@ -91,6 +100,20 @@ data class GameDetail(
                 else Lineup(abbr(r.optJSONObject("team")), r.optString("formation").ifEmpty { null }, starters, subs)
             }
 
+            // Shirt numbers by player id, for goals and cards (their entries carry only the id).
+            val jerseys = HashMap<String, String>()
+            root.optJSONArray("rosters")?.let { rs ->
+                for (i in 0 until rs.length()) {
+                    val roster = rs.getJSONObject(i).optJSONArray("roster") ?: continue
+                    for (j in 0 until roster.length()) {
+                        val p = roster.getJSONObject(j)
+                        val id = p.optJSONObject("athlete")?.optString("id").orEmpty()
+                        val jersey = p.optString("jersey")
+                        if (id.isNotEmpty() && jersey.isNotEmpty()) jerseys[id] = jersey
+                    }
+                }
+            }
+
             val key = root.optJSONArray("keyEvents")
             val events = (0 until (key?.length() ?: 0)).map { key!!.getJSONObject(it) }.mapNotNull { e ->
                 val type = e.optJSONObject("type")?.optString("type").orEmpty()
@@ -107,7 +130,8 @@ data class GameDetail(
                     Kind.SUB -> if (people.size >= 2) "${people[0]} on, ${people[1]} off" else people.firstOrNull()
                     else -> people.firstOrNull()
                 } ?: e.optString("shortText")
-                Event(e.optJSONObject("clock")?.optString("displayValue").orEmpty(), kind, text, e.optJSONObject("team")?.optString("displayName"), kind == Kind.GOAL)
+                val firstId = e.optJSONArray("participants")?.optJSONObject(0)?.optJSONObject("athlete")?.optString("id")
+                Event(e.optJSONObject("clock")?.optString("displayValue").orEmpty(), kind, text, e.optJSONObject("team")?.optString("displayName"), kind == Kind.GOAL, firstId?.let { jerseys[it] })
             }
 
             val plays = root.optJSONArray("scoringPlays")
@@ -123,12 +147,20 @@ data class GameDetail(
                     val categories = t.optJSONArray("leaders") ?: return@mapNotNull null
                     val rows = (0 until categories.length()).map { categories.getJSONObject(it) }.mapNotNull { c ->
                         val top = c.optJSONArray("leaders")?.optJSONObject(0) ?: return@mapNotNull null
-                        Triple(c.optString("displayName"), top.optJSONObject("athlete")?.optString("displayName").orEmpty(), top.optString("displayValue"))
+                        val athlete = top.optJSONObject("athlete")
+                        Leader(c.optString("displayName"), athlete?.optString("displayName").orEmpty(), top.optString("displayValue"), athlete?.optString("jersey")?.ifEmpty { null })
                     }
                     if (rows.isEmpty()) null else abbr(t.optJSONObject("team")) to rows
                 }
 
-            return GameDetail(teamStats, boxScores, lineups, events, scoring, leaders)
+            val competitors = homeFirst(root.optJSONObject("header")?.optJSONArray("competitions")?.optJSONObject(0)?.optJSONArray("competitors"))
+            val periods = competitors.map { c ->
+                val lines = c.optJSONArray("linescores")
+                (0 until (lines?.length() ?: 0)).map { lines!!.getJSONObject(it).let { l -> l.optString("displayValue").ifEmpty { l.optString("value") } } }
+            }.takeIf { it.size == 2 && it.all { p -> p.isNotEmpty() } }.orEmpty()
+            val records = competitors.map { c -> c.optJSONArray("record")?.optJSONObject(0)?.optString("summary")?.ifEmpty { null } }
+
+            return GameDetail(teamStats, boxScores, lineups, events, scoring, leaders, periods, records)
         }
     }
 }

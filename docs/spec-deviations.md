@@ -1297,3 +1297,38 @@ tappable.
   carries 28 team stats a side, both rosters and 32 key events.
 - **Hidden scores:** a result for a team whose scores are hidden stays hidden until revealed.
 - **Label:** the results list is headed "Results · tap one for its stats".
+
+## 0.47.0: frosted Bento dashboards, part 1 (games)
+
+**Asked for:**
+- The dashboards in the frosted Bento look (mockup "Bento, pictures only where they count",
+  approved), with a Material You backdrop tinted per dashboard.
+- One picture per screen, in the top tile; lists use colour stripes.
+- Shirt, jersey and car numbers for every sport.
+
+**Changes:**
+- **Design kit:** new ui/GlassUi.kt.
+  - **Backdrop (GlassScreen):** four soft pools of colour, blurred. They come from the
+    dashboard's tint mixed with the wallpaper's dynamic dark primary, tertiary and secondary,
+    under a slight dark veil.
+  - **Pieces:** glass tiles (8.5% white, 14% white edge, 20 dp corners), paired tiles, colour
+    stripes, team-coloured numbers, progress rings, pill tabs, compare bars, figures that shrink
+    to fit, and labels put into sentence case.
+- **Game screens (every ESPN sport):**
+  - **Tabs:** Stats · Box score · Line-ups · Timeline · Schedule, above a top tile with both
+    crests, names, season records and the score.
+  - **Stats:** the score by period (quarters, periods, halves), a ring (possession, or the home
+    side's main percentage), two key figures, goals with scorer numbers, leaders with numbers,
+    and every team stat with values; rows where both sides are 0 are left out.
+  - **Box score:** one team at a time, starters and bench, a stripe and number on each player.
+  - **Line-ups:** football teams on a pitch by formation, with shirt numbers (both teams); other
+    sports as lists with numbers and positions; substitutes, cards and benches with numbers.
+  - **Timeline:** each moment with the team stripe and player number.
+- **Data:**
+  - GameDetail now keeps jersey numbers and positions for box scores and leaders.
+  - Goals and cards get their scorers' numbers from the rosters, by player id.
+  - Period scores and records are read from the summary's header.
+- **Checked:** rendered with ESPN's summaries for Liverpool v Arsenal (eng.1) and Bulls v 76ers
+  (NBA).
+
+**Next:** F1, stocks, eToro and health in the same look, with the new tiles.

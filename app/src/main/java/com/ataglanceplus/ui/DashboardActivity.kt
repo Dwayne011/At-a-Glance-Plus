@@ -12,6 +12,9 @@ import com.ataglanceplus.live.FinanceSource.Session
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1961,44 +1964,6 @@ private suspend fun ensureSports(context: Context) {
     }
 }
 
-@Composable
-private fun PlayerRow(p: com.ataglanceplus.live.GameDetail.Player) {
-    Row {
-        Text(p.number.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(28.dp))
-        Text(p.name + when {
-            p.subbedIn -> "  ↑"
-            p.subbedOut -> "  ↓"
-            else -> ""
-        }, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        Text(p.position.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-/** One team's box score: a fixed name column and the sport's stat columns, scrolling sideways. */
-@Composable
-private fun BoxScoreTable(box: com.ataglanceplus.live.GameDetail.BoxScore) {
-    ChartCard("Box score · ${box.team}") {
-        Row {
-            Column(modifier = Modifier.width(120.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Player", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                box.players.forEach { p ->
-                    Text(p.name, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        fontWeight = if (p.starter) androidx.compose.ui.text.font.FontWeight.Medium else null)
-                }
-            }
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                box.labels.forEachIndexed { c, label ->
-                    Column(modifier = Modifier.width(48.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        box.players.forEach { p -> Text(p.stats.getOrElse(c) { "" }, style = MaterialTheme.typography.bodySmall, maxLines = 1) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
 /** A fixture or result from the followed team's side: when, home or away, the opponent, and the score with W, D or L. */
 @Composable
 private fun FixtureRow(game: com.ataglanceplus.live.Game, team: com.ataglanceplus.live.Followed?, hidden: Boolean = false) {
@@ -2280,10 +2245,6 @@ private fun Color.saturation(): Float {
     return if (max == 0f) 0f else (max - min) / max
 }
 
-/** Mixes a colour toward white. */
-private fun Color.lift(fraction: Float): Color = Color(
-    red = red + (1 - red) * fraction, green = green + (1 - green) * fraction, blue = blue + (1 - blue) * fraction, alpha = 1f,
-)
 
 /** Mixes a colour toward black, for the hero's tonal wash. */
 private fun Color.dim(fraction: Float): Color = Color(
@@ -2349,152 +2310,116 @@ private fun GameMatchDashboard(eventId: String) {
         else Load.Ready(Prefs.sportsFollowed(context).firstOrNull { it.key == key } to all.getValue(key))
         refresh.loaded = refresh.generation
     }
-    Column(modifier = Modifier.fillMaxSize().background(SportBg).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        when (val state = load) {
-            Load.Loading -> { ScreenTitle("Game"); Text("Loading…", color = SportSub) }
-            is Load.Missing -> { ScreenTitle("Game"); Text(state.why, color = SportSub) }
-            is Load.Ready -> {
-                val (team, games) = state.data
-                val game = games.first { it.eventId == eventId }
-                var revealed by remember { mutableStateOf(false) }
-                val hidden = !revealed && com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)
-                val detail by produceState<com.ataglanceplus.live.GameDetail?>(null, game.eventId, refresh.generation) {
-                    while (true) {
-                        value = withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsSource.detail(game) } ?: value
-                        if (game.state != "in") break
-                        kotlinx.coroutines.delay(30_000)
+    when (val state = load) {
+        Load.Loading, is Load.Missing -> GlassScreen(Tints.Money) {
+            Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ScreenTitle("Game")
+                Text(if (state is Load.Missing) state.why else "Loading…", color = GlassSub)
+            }
+        }
+        is Load.Ready -> {
+            val (team, games) = state.data
+            val game = games.first { it.eventId == eventId }
+            val (homeColour, awayColour) = teamColours(game)
+            var revealed by remember { mutableStateOf(false) }
+            val hidden = !revealed && com.ataglanceplus.live.SportsSource.scoresHidden(context, eventId)
+            val detail by produceState<com.ataglanceplus.live.GameDetail?>(null, game.eventId, refresh.generation) {
+                while (true) {
+                    value = withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsSource.detail(game) } ?: value
+                    if (game.state != "in") break
+                    kotlinx.coroutines.delay(30_000)
+                }
+            }
+            val colours = GameColours(game, homeColour, awayColour)
+            GlassScreen(listOf(homeColour.dim(0.15f), awayColour.dim(0.15f), Color(0xFF1B2440)), accent = homeColour.lift(0.45f)) {
+                Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val d = detail
+                    val tabs = buildList {
+                        if (!hidden && d != null) {
+                            if (d.teamStats.isNotEmpty() || d.leaders.isNotEmpty() || d.periods.isNotEmpty() || d.events.any { it.kind == com.ataglanceplus.live.GameDetail.Kind.GOAL }) add("Stats")
+                            if (d.boxScores.isNotEmpty()) add("Box score")
+                            if (d.lineups.isNotEmpty()) add("Line-ups")
+                            if (d.events.isNotEmpty() || d.scoring.isNotEmpty()) add("Timeline")
+                        } else if (d != null && d.lineups.isNotEmpty()) add("Line-ups")
+                        add("Schedule")
                     }
-                }
-                ScreenTitle(team?.name ?: game.leagueName)
-                MatchHero(game, hidden)
-                if (hidden) RevealBar("Results are hidden for this team.") { revealed = true }
-                val d = detail
-                val tabs = buildList {
-                    if (!hidden && d != null) {
-                        if (d.leaders.isNotEmpty()) add("Leaders")
-                        if (d.teamStats.isNotEmpty()) add("Team Stats")
-                        if (d.boxScores.isNotEmpty()) add("Box Score")
-                        if (d.lineups.isNotEmpty()) add("Line-ups")
-                        if (d.events.isNotEmpty() || d.scoring.isNotEmpty()) add("Timeline")
-                    } else if (d != null && d.lineups.isNotEmpty()) add("Line-ups")
-                    add("Schedule")
-                }
-                val pager = rememberPagerState(pageCount = { tabs.size })
-                val scope = rememberCoroutineScope()
-                if (tabs.size > 1) {
-                    SegmentedPills(tabs, pager.currentPage.coerceIn(0, tabs.lastIndex)) { idx -> scope.launch { pager.animateScrollToPage(idx) } }
-                }
-                HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f)) { page ->
-                    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        when (tabs.getOrNull(page)) {
-                            "Leaders" -> if (d != null) LeadersTab(d, game)
-                            "Team Stats" -> if (d != null) TeamStatsTab(d, game)
-                            "Box Score" -> if (d != null) BoxScoreTab(d, game)
-                            "Line-ups" -> if (d != null) d.lineups.forEachIndexed { i, l -> LineupCard(l, i == 0) }
-                            "Timeline" -> if (d != null) TimelineTab(d)
-                            "Schedule" -> ScheduleTab(games, eventId, team, hidden)
+                    val pager = rememberPagerState(pageCount = { tabs.size })
+                    val scope = rememberCoroutineScope()
+                    if (tabs.size > 1) GlassTabs(tabs, pager.currentPage.coerceIn(0, tabs.lastIndex), homeColour.lift(0.45f)) { idx -> scope.launch { pager.animateScrollToPage(idx) } }
+                    GameHero(game, d, hidden, colours)
+                    if (hidden) RevealBar("Results are hidden for this team.") { revealed = true }
+                    HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f)) { page ->
+                        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            when (tabs.getOrNull(page)) {
+                                "Stats" -> if (d != null) GameStatsTab(d, game, colours)
+                                "Box score" -> if (d != null) BoxScoreTab(d, colours)
+                                "Line-ups" -> if (d != null) LineupsTab(d, game, colours)
+                                "Timeline" -> if (d != null) TimelineTab(d, colours)
+                                "Schedule" -> ScheduleTab(games, eventId, team, hidden)
+                            }
                         }
                     }
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OpenButton("Open in Google", com.ataglanceplus.cards.LiveCards.googleSearch(context, "${game.home.name} vs ${game.away.name}"))
-                    game.link?.let { OpenButton("ESPN", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it))) }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OpenButton("Open in Google", com.ataglanceplus.cards.LiveCards.googleSearch(context, "${game.home.name} vs ${game.away.name}"))
+                        game.link?.let { OpenButton("ESPN", Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it))) }
+                    }
                 }
             }
         }
     }
 }
 
+/** The two teams' colours, and which one a feed's team name or abbreviation means. */
+internal class GameColours(val game: com.ataglanceplus.live.Game, val home: Color, val away: Color) {
+    fun of(team: String?): Color = when {
+        team == null -> GlassSub
+        team.equals(game.home.abbr, true) || team.equals(game.home.name, true) -> home
+        team.equals(game.away.abbr, true) || team.equals(game.away.name, true) -> away
+        game.home.name.contains(team, true) || team.contains(game.home.name, true) -> home
+        game.away.name.contains(team, true) || team.contains(game.away.name, true) -> away
+        else -> GlassSub
+    }
+    fun abbrOf(team: String?): String = when (of(team)) { home -> game.home.abbr; away -> game.away.abbr; else -> team.orEmpty() }
+}
+
+/** The top tile: both crests (the screen's one picture), names and records, the score and its state. */
 @Composable
-private fun MatchHero(game: com.ataglanceplus.live.Game, hidden: Boolean) {
+internal fun GameHero(game: com.ataglanceplus.live.Game, d: com.ataglanceplus.live.GameDetail?, hidden: Boolean, colours: GameColours) {
     val context = LocalContext.current
-    val (homeColour, awayColour) = teamColours(game)
     val scored = game.state != "pre" && !hidden
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(Brush.linearGradient(listOf(homeColour.dim(0.72f), Color(0xFF161B26), awayColour.dim(0.72f))))
-            .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(24.dp))
-            .padding(vertical = 16.dp, horizontal = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        HeroTeam(game.home, "HOME", homeColour, Color(0xFFF2B8B5))
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(game.leagueName.uppercase(), color = SportSub, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            when {
-                scored -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(game.home.score ?: "0", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold)
-                    Text("–", color = Color(0xFF64748B), fontSize = 22.sp, modifier = Modifier.padding(horizontal = 9.dp))
-                    Text(game.away.score ?: "0", color = SportText, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+    Glass(Modifier.fillMaxWidth(), padding = 14.dp) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            HeroSide(game.home, d?.records?.getOrNull(0), colours.home)
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                Text(game.leagueName, color = GlassSub, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 11.5.sp, stepSize = 0.5.sp))
+                when {
+                    scored -> Figure("${game.home.score ?: "0"} – ${game.away.score ?: "0"}", size = 32.sp, align = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    game.state == "pre" -> Figure(clock(context, Instant.ofEpochMilli(game.start)), size = 28.sp, align = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    else -> Figure("– : –", size = 28.sp, colour = GlassSub, align = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 }
-                game.state == "pre" -> Text(clock(context, Instant.ofEpochMilli(game.start)), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                else -> Text("– : –", color = SportSub, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                val live = game.state == "in"
+                Text(
+                    when (game.state) { "in" -> "LIVE · ${game.status}"; "post" -> game.status; else -> dayAndDate(Instant.ofEpochMilli(game.start).atZone(ZoneId.systemDefault()).toLocalDate()) },
+                    color = if (live) Color(0xFFFF8989) else GlassSub, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(if (live) Color(0x33E03A3E) else Color(0x22000000)).padding(horizontal = 10.dp, vertical = 3.dp),
+                )
             }
-            val live = game.state == "in"
-            Text(
-                when (game.state) { "in" -> "LIVE · ${game.status}"; "post" -> game.status; else -> dayAndDate(Instant.ofEpochMilli(game.start).atZone(ZoneId.systemDefault()).toLocalDate()) },
-                color = if (live) Color(0xFFFF8989) else SportSub,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (live) Color(0x33E03A3E) else Color(0x33000000))
-                    .padding(horizontal = 10.dp, vertical = 3.dp),
-            )
+            HeroSide(game.away, d?.records?.getOrNull(1), colours.away)
         }
-        HeroTeam(game.away, "AWAY", awayColour, Color(0xFFC4C6D0))
     }
 }
 
 @Composable
-private fun HeroTeam(side: com.ataglanceplus.live.Side, place: String, ring: Color, pill: Color) {
-    Column(modifier = Modifier.width(86.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+private fun HeroSide(side: com.ataglanceplus.live.Side, record: String?, colour: Color) {
+    Column(Modifier.width(80.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val logo = teamLogo(side.logoUrl)
-        Box(
-            modifier = Modifier.size(48.dp).clip(CircleShape).background(ring.dim(0.1f)).border(2.dp, Color(0x33FFFFFF), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(Modifier.size(50.dp).clip(CircleShape).background(colour.copy(alpha = 0.25f)).border(2.dp, Color(0x33FFFFFF), CircleShape), contentAlignment = Alignment.Center) {
             if (logo != null) Image(logo, contentDescription = null, modifier = Modifier.size(34.dp))
-            else Text(side.abbr, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+            else Text(side.abbr, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
         }
-        Text(side.name, color = SportText, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, lineHeight = 15.sp)
-        Text(place, color = pill, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.clip(RoundedCornerShape(9.dp)).background(pill.copy(alpha = 0.18f)).padding(horizontal = 8.dp, vertical = 2.dp))
-    }
-}
-
-@Composable
-private fun LeadersTab(d: com.ataglanceplus.live.GameDetail, game: com.ataglanceplus.live.Game) {
-    val home = d.leaders.getOrNull(0)?.second.orEmpty()
-    val away = d.leaders.getOrNull(1)?.second.orEmpty()
-    val categories = home.map { it.first }.ifEmpty { away.map { it.first } }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(game.home.abbr, color = Color(0xFFFF8989), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text("LEADERS", color = SportSub, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text(game.away.abbr, color = Color(0xFFFFE082), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-    }
-    categories.forEach { category ->
-        val h = home.firstOrNull { it.first == category }
-        val a = away.firstOrNull { it.first == category }
-        Row(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(SportHigh).padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Each value sits beside its player; a long name shortens before it pushes the value away.
-            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Text(h?.second ?: "–", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Text(h?.third ?: "–", color = SportAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
-            }
-            Text(category, color = SportSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
-            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                Text(a?.third ?: "–", color = SportAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
-                Text(a?.second ?: "–", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            }
-        }
+        Text(side.name, color = GlassText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, lineHeight = 14.sp)
+        record?.let { Label(it) }
     }
 }
 
@@ -2504,78 +2429,259 @@ private fun statValue(s: String): Float {
     return Regex("""\d+(?:\.\d+)?""").find(s)?.value?.toFloatOrNull() ?: 0f
 }
 
+/** Period headings for the score table: quarters, periods, innings or halves. */
+private fun periodLabel(sport: String, index: Int, count: Int): String = when (sport) {
+    "basketball", "football" -> if (index < 4) "Q${index + 1}" else if (count > 5) "OT${index - 3}" else "OT"
+    "hockey" -> if (index < 3) "P${index + 1}" else "OT"
+    "soccer" -> if (index < 2) "${index + 1}H" else "ET"
+    else -> "${index + 1}"
+}
+
+/**
+ * Stats: the score by period, the headline share as a ring (possession, or the home side's
+ * shooting), two key figures, goals or leaders with shirt numbers, then every team stat.
+ */
 @Composable
-private fun TeamStatsTab(d: com.ataglanceplus.live.GameDetail, game: com.ataglanceplus.live.Game) {
-    val (homeColour, awayColour) = teamColours(game)
-    d.teamStats.forEach { (label, homeText, awayText) ->
-        val h = statValue(homeText)
-        val a = statValue(awayText)
-        val total = h + a
-        val homeShare = if (total <= 0f) 0.5f else (h / total).coerceIn(0.05f, 0.95f)
-        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(homeText, color = SportText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Text(label, color = SportSub, fontSize = 12.sp)
-                Text(awayText, color = SportText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+internal fun GameStatsTab(d: com.ataglanceplus.live.GameDetail, game: com.ataglanceplus.live.Game, colours: GameColours) {
+    if (d.periods.size == 2) {
+        Glass(Modifier.fillMaxWidth()) {
+            val count = maxOf(d.periods[0].size, d.periods[1].size)
+            Row(Modifier.fillMaxWidth()) {
+                Spacer(Modifier.width(64.dp))
+                (0 until count).forEach { Text(periodLabel(game.sport, it, count), color = GlassSub, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f)) }
+                Text("T", color = GlassText, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.width(40.dp))
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF262B36)),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Box(modifier = Modifier.weight(homeShare).fillMaxHeight().background(homeColour))
-                Box(modifier = Modifier.weight(1f - homeShare).fillMaxHeight().background(awayColour))
+            listOf(game.home to colours.home, game.away to colours.away).forEachIndexed { i, (side, colour) ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.width(64.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Stripe(colour, 14.dp); Text(side.abbr, color = GlassText, fontSize = 12.sp)
+                    }
+                    (0 until count).forEach { Text(d.periods[i].getOrElse(it) { "" }, color = GlassText, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f)) }
+                    Text(side.score.orEmpty(), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.width(40.dp))
+                }
+            }
+        }
+    }
+    if (d.teamStats.isNotEmpty()) {
+        val share = d.teamStats.firstOrNull { it.first.contains("possession", true) }
+            ?: d.teamStats.firstOrNull { it.second.contains("%") || it.first.contains("%") || it.first.contains("percent", true) }
+        val shareIsPossession = share?.first?.contains("possession", true) == true
+        val preferred = listOf("shots on target", "on goal", "shots", "corner", "rebound", "3pt", "three", "total yards", "turnover", "hits", "saves")
+        val key = preferred.mapNotNull { p -> d.teamStats.firstOrNull { it.first.contains(p, true) && it != share } }.distinct().take(2)
+            .ifEmpty { d.teamStats.filter { it != share }.take(2) }
+        GlassPair {
+            if (share != null) Glass(Modifier.weight(1f).fillMaxHeight()) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    val h = statValue(share.second)
+                    val a = statValue(share.third)
+                    val fraction = if (shareIsPossession) h / maxOf(h + a, 1f) else h / 100f
+                    Ring(fraction, colours.home, "${share.second.substringBefore('%').trim()}%")
+                    Label(if (shareIsPossession) "${game.home.abbr} possession" else "${game.home.abbr} ${niceLabel(share.first).lowercase()}")
+                }
+            }
+            if (key.isNotEmpty()) Glass(Modifier.weight(1f).fillMaxHeight()) {
+                key.forEach { (label, h, a) ->
+                    Label(niceLabel(label))
+                    Figure("$h  v  $a", size = 17.sp)
+                }
+            }
+        }
+    }
+    val goals = d.events.filter { it.kind == com.ataglanceplus.live.GameDetail.Kind.GOAL }
+    if (goals.isNotEmpty()) Glass(Modifier.fillMaxWidth()) {
+        Label("Goals")
+        goals.forEach { g ->
+            StripeRow(colours.of(g.team), g.number) {
+                Text(g.text, color = GlassText, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Label(colours.abbrOf(g.team))
+                Text("⚽ ${g.clock}", color = GlassSub, fontSize = 12.sp)
+            }
+        }
+    }
+    if (d.leaders.isNotEmpty()) Glass(Modifier.fillMaxWidth()) {
+        Label("Leaders")
+        val categories = d.leaders.flatMap { (_, rows) -> rows.map { it.category } }.distinct()
+        categories.forEach { category ->
+            d.leaders.forEach { (team, rows) ->
+                rows.firstOrNull { it.category == category }?.let { l ->
+                    StripeRow(colours.of(team), l.number, showNumber = true) {
+                        Text(l.name, color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text("${l.value} ${category.lowercase()}", color = GlassText, fontSize = 12.sp, maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+    if (d.teamStats.isNotEmpty()) Glass(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth()) {
+            Text(game.home.abbr, color = colours.home.lift(0.3f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Label("Team stats", Modifier.weight(1f).padding(horizontal = 8.dp))
+            Text(game.away.abbr, color = colours.away.lift(0.3f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+        // Rows where both sides have nothing (no red cards, no technical fouls) are left out.
+        d.teamStats.filter { (_, h, a) -> statValue(h) > 0f || statValue(a) > 0f }.forEach { (label, h, a) ->
+            val hv = statValue(h)
+            val av = statValue(a)
+            CompareBar(niceLabel(label), h, a, if (hv + av <= 0f) 0.5f else hv / (hv + av), colours.home, colours.away)
+        }
+    }
+}
+
+/** Box score: one team at a time; each player with his number and the team stripe (dimmer for the bench). */
+@Composable
+internal fun BoxScoreTab(d: com.ataglanceplus.live.GameDetail, colours: GameColours) {
+    var which by remember { mutableIntStateOf(0) }
+    if (d.boxScores.size > 1) GlassTabs(d.boxScores.map { it.team }, which, colours.of(d.boxScores[which].team).lift(0.45f)) { which = it }
+    val box = d.boxScores.getOrNull(which) ?: return
+    val colour = colours.of(box.team)
+    val starters = box.players.filter { it.starter }
+    val bench = box.players.filter { !it.starter }
+    val rowHeight = 26.dp
+    Glass(Modifier.fillMaxWidth()) {
+        Row {
+            Column(Modifier.width(150.dp)) {
+                @Composable fun heading(t: String) = Box(Modifier.height(rowHeight), contentAlignment = Alignment.CenterStart) { Label(t) }
+                @Composable fun name(p: com.ataglanceplus.live.GameDetail.PlayerLine, c: Color) = Row(Modifier.height(rowHeight), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Stripe(c, 14.dp); Number(p.number, c.lift(0.3f), 22.dp)
+                    Text(p.name, color = GlassText, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (starters.isNotEmpty()) { heading("Starters"); starters.forEach { name(it, colour) } }
+                if (bench.isNotEmpty()) { heading(if (starters.isEmpty()) "Players" else "Bench"); bench.forEach { name(it, colour.copy(alpha = 0.55f)) } }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                box.labels.forEachIndexed { c, label ->
+                    Column(Modifier.width(44.dp), horizontalAlignment = Alignment.End) {
+                        @Composable fun cell(t: String, bold: Boolean = false, head: Boolean = false) = Box(Modifier.height(rowHeight), contentAlignment = Alignment.CenterEnd) {
+                            Text(t, color = if (head) GlassSub else if (bold) Color.White else GlassText, fontSize = if (head) 11.sp else 12.sp, fontWeight = if (bold) FontWeight.Bold else null, maxLines = 1)
+                        }
+                        val main = label.equals("PTS", true) || label.equals("G", true)
+                        if (starters.isNotEmpty()) { cell(label, head = true); starters.forEach { cell(it.stats.getOrElse(c) { "" }, main) } }
+                        if (bench.isNotEmpty()) { cell(if (starters.isEmpty()) label else "", head = true); bench.forEach { cell(it.stats.getOrElse(c) { "" }, main) } }
+                    }
+                }
             }
         }
     }
 }
 
+/**
+ * Line-ups: football teams on a pitch by formation with shirt numbers, other sports as lists with
+ * numbers and positions; then substitutes and cards.
+ */
 @Composable
-private fun BoxScoreTab(d: com.ataglanceplus.live.GameDetail, game: com.ataglanceplus.live.Game) {
-    if (d.boxScores.size < 2) { d.boxScores.forEach { BoxScoreTable(it) }; return }
-    var showHome by remember { mutableStateOf(true) }
-    Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF0E1118)).padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        listOf(true, false).forEach { home ->
-            val on = showHome == home
-            Box(
-                modifier = Modifier.weight(1f).clip(RoundedCornerShape(9.dp))
-                    .background(if (on) SportHigh else Color.Transparent).clickable { showHome = home }.padding(vertical = 7.dp),
-                contentAlignment = Alignment.Center,
-            ) { Text(if (home) game.home.name else game.away.name, color = if (on) Color.White else SportSub, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+internal fun LineupsTab(d: com.ataglanceplus.live.GameDetail, game: com.ataglanceplus.live.Game, colours: GameColours) {
+    val pitch = game.sport == "soccer" && d.lineups.size == 2 && d.lineups.all { it.formation != null && it.starters.size == 11 }
+    val teamColour = { i: Int -> if (i == 0) colours.home else colours.away }
+    Glass(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Stripe(colours.home, 18.dp)
+            Text(" ${d.lineups.getOrNull(0)?.formation ?: game.home.abbr}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Label("Line-ups", Modifier.weight(1f).padding(horizontal = 8.dp))
+            Text("${d.lineups.getOrNull(1)?.formation ?: game.away.abbr} ", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Stripe(colours.away, 18.dp)
         }
     }
-    BoxScoreTable(if (showHome) d.boxScores[0] else d.boxScores[1])
-}
-
-@Composable
-private fun LineupCard(lineup: com.ataglanceplus.live.GameDetail.Lineup, home: Boolean) {
-    ChartCard(listOfNotNull(lineup.team, if (home) "Home" else "Away", lineup.formation).joinToString(" · ")) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { lineup.starters.forEach { PlayerRow(it) } }
-        if (lineup.subs.isNotEmpty()) {
-            Text("Substitutes", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { lineup.subs.forEach { PlayerRow(it) } }
+    if (pitch) {
+        Glass(Modifier.fillMaxWidth(), padding = 6.dp) { Pitch(d.lineups[0], d.lineups[1], colours.home, colours.away) }
+    } else {
+        d.lineups.forEachIndexed { i, l ->
+            Glass(Modifier.fillMaxWidth()) {
+                Label(if (i == 0) game.home.name else game.away.name)
+                l.starters.forEach { p -> StripeRow(teamColour(i), p.number, showNumber = true) {
+                    Text(p.name, color = GlassText, fontSize = 12.5.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    p.position?.let { Label(it) }
+                } }
+            }
+        }
+    }
+    val subsOn = d.lineups.mapIndexed { i, l -> l.subs.filter { it.subbedIn }.map { i to it } }.flatten()
+    val cards = d.events.filter { it.kind == com.ataglanceplus.live.GameDetail.Kind.YELLOW || it.kind == com.ataglanceplus.live.GameDetail.Kind.RED }
+    if (subsOn.isNotEmpty() || cards.isNotEmpty()) GlassPair {
+        if (subsOn.isNotEmpty()) Glass(Modifier.weight(1f).fillMaxHeight()) {
+            Label("Subs on")
+            subsOn.forEach { (i, p) -> StripeRow(teamColour(i), p.number, showNumber = true) { Text(p.name.substringAfterLast(' '), color = GlassText, fontSize = 12.sp, maxLines = 1) } }
+        }
+        if (cards.isNotEmpty()) Glass(Modifier.weight(1f).fillMaxHeight()) {
+            Label("Cards")
+            cards.forEach { c -> StripeRow(colours.of(c.team), c.number, showNumber = true) {
+                Text((if (c.kind == com.ataglanceplus.live.GameDetail.Kind.RED) "🟥 " else "🟨 ") + c.text.trim().substringAfterLast(' '), color = GlassText, fontSize = 12.sp, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(c.clock, color = GlassSub, fontSize = 11.sp, maxLines = 1)
+            } }
+        }
+    }
+    // Benches, when the feed lists them, under the pitch.
+    if (pitch) d.lineups.forEachIndexed { i, l ->
+        val unused = l.subs.filter { !it.subbedIn }
+        if (unused.isNotEmpty()) Glass(Modifier.fillMaxWidth()) {
+            Label("${if (i == 0) game.home.abbr else game.away.abbr} bench")
+            unused.chunked(2).forEach { pair -> Row { pair.forEach { p -> Box(Modifier.weight(1f)) { StripeRow(teamColour(i).copy(alpha = 0.55f), p.number, showNumber = true) {
+                Text(p.name.substringAfterLast(' '), color = GlassText, fontSize = 12.sp, maxLines = 1)
+            } } }; if (pair.size == 1) Spacer(Modifier.weight(1f)) } }
         }
     }
 }
 
+/**
+ * Both teams on one pitch: home attacking down from the top, away up from the bottom. Each row of
+ * the formation ("4-3-3") is a line of shirts, in the feed's formation order.
+ */
 @Composable
-private fun TimelineTab(d: com.ataglanceplus.live.GameDetail) {
-    val rows = (d.events + d.scoring)
-    rows.forEach { e ->
-        Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SportHigh).padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Text(e.clock, color = SportSub, fontSize = 12.sp, modifier = Modifier.width(52.dp))
-            Text(
-                when (e.kind) {
-                    com.ataglanceplus.live.GameDetail.Kind.GOAL -> "⚽ "
-                    com.ataglanceplus.live.GameDetail.Kind.YELLOW -> "🟨 "
-                    com.ataglanceplus.live.GameDetail.Kind.RED -> "🟥 "
-                    com.ataglanceplus.live.GameDetail.Kind.SUB -> "⇄ "
-                    else -> ""
-                } + e.text + (e.team?.let { " · $it" } ?: ""),
-                color = SportText, fontSize = 13.sp, modifier = Modifier.weight(1f),
-            )
+private fun Pitch(home: com.ataglanceplus.live.GameDetail.Lineup, away: com.ataglanceplus.live.GameDetail.Lineup, homeColour: Color, awayColour: Color) {
+    fun lines(l: com.ataglanceplus.live.GameDetail.Lineup): List<List<com.ataglanceplus.live.GameDetail.Player>> {
+        val counts = listOf(1) + (l.formation ?: "").split('-').mapNotNull { it.trim().toIntOrNull() }
+        if (counts.sum() != l.starters.size) return listOf(l.starters.take(1), l.starters.drop(1))
+        var i = 0
+        return counts.map { n -> l.starters.subList(i, i + n).also { i += n } }
+    }
+    val top = lines(home)
+    val bottom = lines(away).reversed()
+    val line = Color.White.copy(alpha = 0.25f)
+    BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(0.78f).clip(RoundedCornerShape(14.dp)).background(Color(0x661F6B3A))) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = size.width; val h = size.height
+            drawRect(line, style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+            drawLine(line, Offset(0f, h / 2), Offset(w, h / 2), 2f)
+            drawCircle(line, w * 0.12f, Offset(w / 2, h / 2), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+            drawRect(line, Offset(w * 0.28f, 0f), androidx.compose.ui.geometry.Size(w * 0.44f, h * 0.11f), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+            drawRect(line, Offset(w * 0.28f, h * 0.89f), androidx.compose.ui.geometry.Size(w * 0.44f, h * 0.11f), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+        }
+        val dot = 24.dp
+        @Composable fun place(rows: List<List<com.ataglanceplus.live.GameDetail.Player>>, fromY: Float, toY: Float, colour: Color) {
+            rows.forEachIndexed { r, row ->
+                val y = fromY + (toY - fromY) * (if (rows.size == 1) 0.5f else r.toFloat() / (rows.size - 1))
+                row.forEachIndexed { c, p ->
+                    val x = (c + 1f) / (row.size + 1f)
+                    Box(
+                        Modifier.offset(x = maxWidth * x - dot / 2, y = maxHeight * y - dot / 2).size(dot).clip(CircleShape).background(colour).border(1.5.dp, Color.White, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(p.number.orEmpty(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+                }
+            }
+        }
+        place(top, 0.05f, 0.44f, homeColour)
+        place(bottom, 0.56f, 0.95f, awayColour)
+    }
+}
+
+/** The match in order: each moment with its team's stripe and the player's number. */
+@Composable
+internal fun TimelineTab(d: com.ataglanceplus.live.GameDetail, colours: GameColours) {
+    Glass(Modifier.fillMaxWidth()) {
+        (d.events + d.scoring).forEach { e ->
+            StripeRow(colours.of(e.team), e.number, showNumber = d.events.any { it.number != null }) {
+                Text(e.clock, color = GlassSub, fontSize = 12.sp, modifier = Modifier.width(48.dp), maxLines = 1)
+                Text(
+                    when (e.kind) {
+                        com.ataglanceplus.live.GameDetail.Kind.GOAL -> "⚽ "
+                        com.ataglanceplus.live.GameDetail.Kind.YELLOW -> "🟨 "
+                        com.ataglanceplus.live.GameDetail.Kind.RED -> "🟥 "
+                        com.ataglanceplus.live.GameDetail.Kind.SUB -> "⇄ "
+                        else -> ""
+                    } + e.text,
+                    color = GlassText, fontSize = 12.5.sp, modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }
@@ -2588,22 +2694,17 @@ private fun ScheduleTab(games: List<com.ataglanceplus.live.Game>, eventId: Strin
     // Each game opens its own screen: a result with its final stats, a fixture with its line-ups
     // when known. Back returns here.
     val open = { game: com.ataglanceplus.live.Game ->
-        val kind = DashboardActivity.KIND_GAME_PREFIX + game.eventId
-        context.startActivity(DashboardActivity.onTop(context, kind))
+        context.startActivity(DashboardActivity.onTop(context, DashboardActivity.KIND_GAME_PREFIX + game.eventId))
     }
     if (upcoming.isNotEmpty()) {
-        Text("Next games", color = SportSub, style = MaterialTheme.typography.labelLarge)
-        upcoming.forEach {
-            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).clickable { open(it) }.padding(12.dp)) { FixtureRow(it, team, hidden) }
-        }
+        Label("Next games")
+        upcoming.forEach { Glass(Modifier.fillMaxWidth(), onClick = { open(it) }) { FixtureRow(it, team, hidden) } }
     }
     if (results.isNotEmpty()) {
-        Text("Results · tap one for its stats", color = SportSub, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
-        results.forEach {
-            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SportHigh).clickable { open(it) }.padding(12.dp)) { FixtureRow(it, team, hidden) }
-        }
+        Label("Results · tap one for its stats", Modifier.padding(top = 6.dp))
+        results.forEach { Glass(Modifier.fillMaxWidth(), onClick = { open(it) }) { FixtureRow(it, team, hidden) } }
     }
-    if (upcoming.isEmpty() && results.isEmpty()) Text("No other fixtures.", color = SportSub)
+    if (upcoming.isEmpty() && results.isEmpty()) Text("No other fixtures.", color = GlassSub)
 }
 
 @Composable
