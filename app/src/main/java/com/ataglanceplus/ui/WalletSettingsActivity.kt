@@ -49,7 +49,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -118,10 +117,8 @@ class WalletSettingsActivity : ComponentActivity() {
         enableEdgeToEdge()
         WalletSource.ensureLoaded(this)
         setContent {
-            val context = LocalContext.current
-            val scheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-            MaterialTheme(colorScheme = scheme) {
-                Surface(modifier = Modifier.fillMaxSize()) {
+            FrostTheme {
+                Box(Modifier.fillMaxSize().background(LocalFrost.current.veil)) {
                     Box(Modifier.safeDrawingPadding()) { WalletScreens { finish() } }
                 }
             }
@@ -244,12 +241,12 @@ private fun PassList(version: Int, onBack: () -> Unit, onOpen: (String) -> Unit,
     val rules = remember(version, passes) { passes.associate { it.id to ruleOf(context, it) } }
     var cardOn by remember { mutableStateOf(Prefs.cardEnabled(context, CardType.WALLET)) }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    FrostScrollPage {
         TopBar("Wallet passes", onBack)
-        SettingRow("Show Wallet passes", "On the home and lock screen", trailing = {
-            Switch(checked = cardOn, onCheckedChange = { cardOn = it; Prefs.setCardEnabled(context, CardType.WALLET, it) })
+        Subheader("Wallet card")
+        SettingRow("Show Wallet passes", if (cardOn) "On — on the home and lock screen" else "Off", glyph = FrostIcons.Ticket, onClick = { cardOn = !cardOn; Prefs.setCardEnabled(context, CardType.WALLET, cardOn) }, trailing = {
+            FrostSwitch(checked = cardOn, onCheckedChange = null)
         })
-        HorizontalDivider()
 
         Subheader("Account")
         SettingRow("Google account", GoogleAccount.email(context).orEmpty(), icon = Icons.Default.Person, trailing = {
@@ -311,7 +308,7 @@ private fun PassList(version: Int, onBack: () -> Unit, onOpen: (String) -> Unit,
         if (passes.isEmpty()) {
             Text("No passes yet. Sync now to fetch them from Google Wallet.", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
-            return@Column
+            return@FrostScrollPage
         }
         if (on.isNotEmpty()) {
             Subheader("Passes on the card")
@@ -346,19 +343,18 @@ private fun PassPage(id: String, version: Int, onBack: () -> Unit, onAddPlace: (
     var editingRadius by remember { mutableStateOf<Int?>(null) }
     var addingTime by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    FrostScrollPage {
         TopBar(pass.title, onBack)
         // The pass as Wallet colours it.
         Column(
-            Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(pass.colour)).padding(16.dp),
+            Modifier.frostFree().fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Color(pass.colour)).padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             pass.issuer?.let { Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp) }
             Text(pass.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             pass.subtitle?.let { Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp)) }
         }
-        SettingRow("Show on the card", trailing = { Switch(checked = rule.enabled, onCheckedChange = { save(rule.copy(enabled = it)) }) })
-        HorizontalDivider()
+        SettingRow("Show on the card", if (rule.enabled) "On" else "Off", glyph = FrostIcons.Ticket, onClick = { save(rule.copy(enabled = !rule.enabled)) }, trailing = { FrostSwitch(checked = rule.enabled, onCheckedChange = null) })
 
         if (automatic(pass)) {
             Subheader("When")
@@ -373,7 +369,7 @@ private fun PassPage(id: String, version: Int, onBack: () -> Unit, onAddPlace: (
             )
             Text("Boarding passes, event tickets and transit tickets carry their own times, so they need no places or times from you.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-            return@Column
+            return@FrostScrollPage
         }
 
         Subheader("Where")
@@ -547,10 +543,10 @@ private fun AddPlacePage(id: String, onBack: () -> Unit, onAdded: () -> Unit) {
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             shape = RoundedCornerShape(28.dp),
-            colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+            colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, focusedContainerColor = LocalFrost.current.fill, unfocusedContainerColor = LocalFrost.current.fill),
             modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth().focusRequester(focus),
         )
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        FrostScrollPage {
             SettingRow("Use where I am now", icon = Icons.Default.LocationOn, onClick = {
                 scope.launch {
                     val location = here(context) ?: return@launch
@@ -564,7 +560,6 @@ private fun AddPlacePage(id: String, onBack: () -> Unit, onAdded: () -> Unit) {
                     picked = WalletRules.Place(text, lat, lng, 150, detail = "Coordinates")
                 })
             }
-            HorizontalDivider()
             chain?.let { c ->
                 Subheader("Every branch")
                 SettingRow(

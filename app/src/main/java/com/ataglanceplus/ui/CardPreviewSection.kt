@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -76,10 +75,11 @@ import java.util.Locale
 private fun ShowCardRow(type: CardType) {
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0]
-    SwitchSettingRow("Show the ${type.label.lowercase(locale)} card", type.detail, checked = Prefs.cardEnabled(context, type)) {
+    Subheader("${type.label} card")
+    val on = Prefs.cardEnabled(context, type)
+    SwitchSettingRow("Show the ${type.label.lowercase(locale)} card", if (on) "On — ${type.detail.replaceFirstChar { it.lowercase(locale) }}" else "Off", checked = on) {
         Prefs.setCardEnabled(context, type, it)
     }
-    HorizontalDivider()
 }
 
 // --- Weather ----------------------------------------------------------------------------------
@@ -97,14 +97,29 @@ internal fun WeatherPage(version: Int, onBack: () -> Unit) {
         if (granted) scope.launch { WeatherRepository.refresh(context, force = true) }
     }
     val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    var choosingLook by remember { mutableStateOf(false) }
     val look = Prefs.weatherLook(context)
 
     SettingsPage("Weather", onBack) {
-        SettingNote("Always shown: the forecast, your chips and a summary line.")
         Subheader("Look")
-        LinkRow("Style", "Material You · ${look.label}", iconRes = R.drawable.ic_comp_sunset) { choosingLook = true }
-        SwitchSettingRow("Open weather in this app", "Hourly rain, radar, UV, air quality, sun and the week. Off: Pixel Weather", checked = Prefs.weatherOpensDashboard(context)) { Prefs.setWeatherOpensDashboard(context, it) }
+        WeatherLook.entries.forEach { option ->
+            FrostChoiceRow(
+                option.label,
+                when (option) {
+                    WeatherLook.STANDARD -> "Your wallpaper's colours (Material You), light or dark with the phone's theme"
+                    WeatherLook.SCENES -> "Tinted for the weather and time of day, with the sun, stars, clouds, fog, rain or snow drawn in"
+                    WeatherLook.ANIMATED -> "The scenes, moving gently. Uses more battery while the card is on screen"
+                },
+                look == option,
+            ) { Prefs.setWeatherLook(context, option) }
+        }
+        SettingNote("Always shown: the forecast, your chips and a summary line.")
+
+        Subheader("Tapping the card")
+        SwitchSettingRow(
+            "Open weather in this app",
+            if (Prefs.weatherOpensDashboard(context)) "On — hourly rain, radar, UV, air quality, sun and the week" else "Off — Pixel Weather",
+            glyph = FrostIcons.Weather, checked = Prefs.weatherOpensDashboard(context),
+        ) { Prefs.setWeatherOpensDashboard(context, it) }
 
         Subheader("Location")
         when {
@@ -130,19 +145,6 @@ internal fun WeatherPage(version: Int, onBack: () -> Unit) {
             icon = Icons.Default.Refresh, enabled = hasLocation,
             onClick = { scope.launch { WeatherRepository.refresh(context, force = true) } },
         )
-    }
-    if (choosingLook) {
-        ChoiceDialog(
-            "Style", WeatherLook.entries, look, label = { it.label },
-            details = {
-                when (it) {
-                    WeatherLook.STANDARD -> "Your wallpaper's colours (Material You), light or dark with the phone's theme."
-                    WeatherLook.SCENES -> "Tinted for the weather and time of day, with the sun, stars, clouds, fog, rain or snow drawn in."
-                    WeatherLook.ANIMATED -> "The scenes, moving gently. Uses more battery while the card is on screen."
-                }
-            },
-            onDismiss = { choosingLook = false },
-        ) { Prefs.setWeatherLook(context, it); choosingLook = false }
     }
 }
 
@@ -175,7 +177,7 @@ internal fun CalendarPage(version: Int, onBack: () -> Unit) {
                     cal.account.takeIf { it.isNotEmpty() && it != cal.name },
                     lead = { Box(Modifier.size(14.dp).background(Color(cal.colour), CircleShape)) },
                     onClick = { Prefs.setCalendarHidden(context, cal.id, cal.id !in hidden) },
-                    trailing = { androidx.compose.material3.Switch(checked = cal.id !in hidden, onCheckedChange = { Prefs.setCalendarHidden(context, cal.id, !it) }) },
+                    trailing = { FrostSwitch(checked = cal.id !in hidden, onCheckedChange = null) },
                 )
             }
             SettingNote("A calendar added later shows until you turn it off.")
@@ -314,10 +316,10 @@ private fun SearchPage(title: String, hint: String, query: String, onQuery: (Str
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             shape = RoundedCornerShape(28.dp),
-            colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+            colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, focusedContainerColor = LocalFrost.current.fill, unfocusedContainerColor = LocalFrost.current.fill),
             modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth().focusRequester(focus),
         )
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { content() }
+        FrostScrollPage { content() }
     }
 }
 

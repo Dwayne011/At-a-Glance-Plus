@@ -69,6 +69,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -95,10 +96,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val context = LocalContext.current
-            val scheme = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-            MaterialTheme(colorScheme = scheme) {
-                Surface(modifier = Modifier.fillMaxSize()) {
+            // Over the wallpaper (the window shows it), with the frost veil; colours follow the
+            // phone's theme, light or dark.
+            FrostTheme {
+                Box(Modifier.fillMaxSize().background(LocalFrost.current.veil)) {
                     Box(Modifier.safeDrawingPadding()) { SettingsApp() }
                 }
             }
@@ -161,19 +162,19 @@ private fun SettingsApp() {
         "backup" -> BackupPage(::up)
         "advanced" -> AdvancedPage(version, ::up, open)
         "advanced/debug" -> DebugPage(version, ::up)
+        "display" -> DisplayPage(version, ::up)
+        "about" -> AboutPage(version, ::up)
         else -> HomePage(version, open)
     }
 }
 
-/** A page: its top bar, then its rows, scrolling. */
+/** A page: its frost header, then its groups as frost cards, scrolling. */
 @Composable
-internal fun SettingsPage(title: String, onBack: (() -> Unit)?, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        TopBar(title, onBack)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            content()
-            Spacer(Modifier.height(24.dp))
-        }
+internal fun SettingsPage(title: String, onBack: (() -> Unit)?, overline: String = "Settings", content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        TopBar(title, onBack, overline)
+        FrostColumn(Modifier.fillMaxWidth()) { content() }
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -184,7 +185,7 @@ internal fun SettingsPage(title: String, onBack: (() -> Unit)?, content: @Compos
  * fixing, then the cards, the chips, the display, and the system.
  */
 @Composable
-private fun HomePage(version: Int, open: (String) -> Unit) {
+internal fun HomePage(version: Int, open: (String) -> Unit) {
     val context = LocalContext.current
     @Suppress("UNUSED_EXPRESSION") version
     val wadbStatus by Wadb.status.collectAsStateWithLifecycle()
@@ -194,9 +195,8 @@ private fun HomePage(version: Int, open: (String) -> Unit) {
         if (granted) scope.launch { com.ataglanceplus.weather.WeatherRepository.refresh(context, force = true) }
     }
     val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { Prefs.chipPermissionsChanged(context) }
-    var editingHeight by remember { mutableStateOf(false) }
 
-    SettingsPage("At a Glance Plus", null) {
+    SettingsPage("Settings", null, overline = "At a Glance Plus") {
         StatusBanner(version)
         FinishSetupCard(version)
 
@@ -219,68 +219,86 @@ private fun HomePage(version: Int, open: (String) -> Unit) {
             if (errors.isNotEmpty()) LinkRow("Errors recorded", "${errors.lines().count { it.startsWith("=== ") }.coerceAtLeast(1)} · see them in Advanced › Debug", icon = Icons.Default.Warning, error = true) { open("advanced/debug") }
         }
 
+        // A menu of sections, as in Pixel Launcher Plus's settings; each card's page has its switch.
+        fun onOff(type: CardType, summary: String) = if (Prefs.cardEnabled(context, type)) "On · $summary" else "Off"
         Subheader("Cards")
-        LinkRow("Weather", weatherSummary(context), iconRes = R.drawable.ic_comp_sunset) { open("card/weather") }
-        CardSwitchRow(CardType.CALENDAR, calendarSummary(context), icon = Icons.Default.DateRange) { open("card/calendar") }
-        CardSwitchRow(CardType.SPORTS, sportsSummary(context), icon = Icons.Default.Star) { open("card/sports") }
-        CardSwitchRow(CardType.WALLET, walletSummary(context), iconRes = R.drawable.ic_comp_ticket) {
+        MenuRow(FrostIcons.Weather, "Weather", weatherSummary(context), Tone.PRIMARY) { open("card/weather") }
+        MenuRow(FrostIcons.Calendar, "Calendar", onOff(CardType.CALENDAR, calendarSummary(context)), Tone.PRIMARY) { open("card/calendar") }
+        MenuRow(FrostIcons.Ball, "Sports", onOff(CardType.SPORTS, sportsSummary(context)), Tone.SECONDARY) { open("card/sports") }
+        MenuRow(FrostIcons.Ticket, "Wallet", onOff(CardType.WALLET, walletSummary(context)), Tone.TERTIARY) {
             if (com.ataglanceplus.wallet.GoogleAccount.isSignedIn(context)) context.startActivity(Intent(context, WalletSettingsActivity::class.java))
             else open("card/wallet")
         }
-        CardSwitchRow(CardType.MEDIA, if (Prefs.mediaWave(context)) "Equaliser · stays 5 min after pausing" else "Progress bar · stays 5 min after pausing", icon = Icons.Default.PlayArrow) { open("card/media") }
-        LinkRow("More cards", MORE_CARDS.joinToString(", ") { it.label }, icon = Icons.AutoMirrored.Filled.List) { open("more") }
+        MenuRow(FrostIcons.Play, "Media", onOff(CardType.MEDIA, if (Prefs.mediaWave(context)) "equaliser · stays 5 min after pausing" else "progress bar · stays 5 min after pausing"), Tone.TERTIARY) { open("card/media") }
+        val more = MORE_CARDS.filter { Prefs.cardEnabled(context, it) }
+        MenuRow(FrostIcons.Apps, "More cards", if (more.isEmpty()) "All off" else more.joinToString(", ") { it.label }, Tone.NEUTRAL) { open("more") }
 
         // Finance on its own: the stocks card, and the accounts the stock screens and the eToro chip read.
         Subheader("Finance")
-        CardSwitchRow(CardType.FINANCE, financeSummary(context), iconRes = R.drawable.ic_comp_trend, title = "Stocks") { open("card/finance") }
-        LinkRow("eToro", etoroSummary(context), icon = Icons.Default.AccountBox) { open("finance/etoro") }
+        MenuRow(FrostIcons.Trend, "Stocks", onOff(CardType.FINANCE, financeSummary(context)), Tone.SECONDARY) { open("card/finance") }
+        MenuRow(FrostIcons.Sliders, "eToro", etoroSummary(context), Tone.SECONDARY) { open("finance/etoro") }
 
         Subheader("Chips")
         val chips = remember(version) { Prefs.chips(context).orEmpty() }
-        LinkRow(
-            "Chips",
+        MenuRow(
+            FrostIcons.Gauge, "Chips",
             if (chips.isEmpty()) "None chosen: the cards show examples"
             else "${chips.size} chosen · " + chips.take(3).joinToString(", ") { it.kind.label } + if (chips.size > 3) "…" else "",
-            iconRes = R.drawable.ic_comp_gauge,
+            Tone.TERTIARY,
         ) { open("chips") }
 
         Subheader("Display")
-        LinkRow("Card height", "${Prefs.cardHeightDp(context)} dp", iconRes = R.drawable.ic_comp_screen) { editingHeight = true }
-        SwitchSettingRow("Show all cards", "Off: only as many as the launcher asks for", icon = Icons.AutoMirrored.Filled.List, checked = Prefs.showAllCards(context)) { Prefs.setShowAllCards(context, it) }
-        SwitchSettingRow("Always-on look on the lock screen", "The always-on display style with the screen on", icon = Icons.Default.Lock, checked = Prefs.aodPreview(context)) { Prefs.setAodPreview(context, it) }
+        MenuRow(
+            FrostIcons.Height, "Display",
+            "Card height ${Prefs.cardHeightDp(context)} dp" + (if (Prefs.showAllCards(context)) " · all cards" else "") + if (Prefs.aodPreview(context)) " · always-on look" else "",
+            Tone.PRIMARY,
+        ) { open("display") }
+
+        Subheader("About")
+        MenuRow(FrostIcons.Share, "Backup", "Back up to Google now, export or import", Tone.NEUTRAL) { open("backup") }
+        MenuRow(FrostIcons.Tool, "Advanced", "Connection, debug and history", Tone.NEUTRAL) { open("advanced") }
+        val versionName = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
+        MenuRow(FrostIcons.Info, "About", (if (Prefs.isPaired(context)) "Re-activate after a restart · " else "") + "version $versionName", Tone.NEUTRAL) { open("about") }
+    }
+}
+
+/** Display: the cards' height, how many show, and the always-on look. */
+@Composable
+private fun DisplayPage(version: Int, onBack: () -> Unit) {
+    val context = LocalContext.current
+    @Suppress("UNUSED_EXPRESSION") version
+    var editingHeight by remember { mutableStateOf(false) }
+    SettingsPage("Display", onBack) {
+        Subheader("Cards")
+        LinkRow("Card height", "${Prefs.cardHeightDp(context)} dp", glyph = FrostIcons.Height) { editingHeight = true }
+        SwitchSettingRow("Show all cards", if (Prefs.showAllCards(context)) "On — every card that has something to show" else "Off — only as many as the launcher asks for", glyph = FrostIcons.Apps, checked = Prefs.showAllCards(context)) { Prefs.setShowAllCards(context, it) }
+        SwitchSettingRow("Always-on look on the lock screen", "The always-on display style with the screen on", glyph = FrostIcons.Lock, checked = Prefs.aodPreview(context)) { Prefs.setAodPreview(context, it) }
         // Dismissed cards, and sports cards snoozed until their next start.
         val hidden = Prefs.dismissed(context).size + Prefs.sportsSnoozes(context).size
-        if (hidden > 0) SettingRow("Bring back dismissed cards", "$hidden hidden", icon = Icons.Default.Refresh, onClick = { Prefs.restoreDismissed(context) })
-
-        Subheader("System")
-        if (Prefs.isPaired(context)) {
-            SwitchSettingRow("Re-activate after a restart", "Waits for Wi-Fi, then activates", icon = Icons.Default.Refresh, checked = Prefs.activateOnBoot(context)) { Prefs.setActivateOnBoot(context, it) }
-        }
-        LinkRow("Backup and restore", "Export or import your settings", icon = Icons.Default.AccountBox) { open("backup") }
-        LinkRow("Advanced", "Connection, debug and history, wireless debugging and adb commands", icon = Icons.Default.Settings) { open("advanced") }
-        if (wadbStatus.isNotEmpty()) SettingNote(wadbStatus, MaterialTheme.colorScheme.primary)
-        SettingNote("Version ${runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()}")
+        if (hidden > 0) SettingRow("Bring back dismissed cards", "$hidden hidden", glyph = FrostIcons.Refresh, onClick = { Prefs.restoreDismissed(context) })
     }
-
     if (editingHeight) CardHeightDialog { editingHeight = false }
+}
+
+/** About: re-activating after a restart, the connection's status line and the version. */
+@Composable
+private fun AboutPage(version: Int, onBack: () -> Unit) {
+    val context = LocalContext.current
+    @Suppress("UNUSED_EXPRESSION") version
+    val wadbStatus by Wadb.status.collectAsStateWithLifecycle()
+    SettingsPage("About", onBack) {
+        if (Prefs.isPaired(context)) {
+            Subheader("After a restart")
+            SwitchSettingRow("Re-activate after a restart", "Waits for Wi-Fi, then activates", glyph = FrostIcons.Refresh, checked = Prefs.activateOnBoot(context)) { Prefs.setActivateOnBoot(context, it) }
+            if (wadbStatus.isNotEmpty()) SettingNote(wadbStatus, MaterialTheme.colorScheme.primary)
+        }
+        Subheader("About")
+        SettingRow("At a Glance Plus", "Version ${runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()}", glyph = FrostIcons.Info)
+    }
 }
 
 /** The cards with nothing to set but on or off. */
 internal val MORE_CARDS = listOf(CardType.NAV, CardType.LIVE, CardType.TIMER, CardType.MESSAGES, CardType.TORCH)
-
-@Composable
-private fun CardSwitchRow(
-    type: CardType,
-    summary: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
-    iconRes: Int? = null,
-    title: String = type.label,
-    onOpen: () -> Unit,
-) {
-    val context = LocalContext.current
-    val on = Prefs.cardEnabled(context, type)
-    SplitSwitchRow(title, if (on) summary else "Off", checked = on, onOpen = onOpen, icon = icon, iconRes = iconRes) { Prefs.setCardEnabled(context, type, it) }
-}
 
 private fun weatherSummary(context: Context): String {
     val look = Prefs.weatherLook(context).label
@@ -366,35 +384,26 @@ private fun StatusBanner(version: Int) {
         paired -> "Not showing yet" to "Activate to replace Google's At a Glance."
         else -> "Not set up yet" to "Pair once with this phone's wireless debugging; no computer needed. In the page that opens, choose \"Pair device with pairing code\" and type the code into this app's notification."
     }
-    Column(
-        Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(20.dp)).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+    Subheader("At a Glance Plus")
+    SettingRow(headline, detail + if (!wifi) " Wireless debugging needs Wi-Fi." else "", glyph = if (home && lock) FrostIcons.Check else FrostIcons.Glance, error = !wifi && !(home && lock))
+    // Pair, Activate, or Back to Google: there is always one.
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.layoutId(FROST_JOINED).padding(start = 60.dp, end = 10.dp, bottom = 6.dp),
     ) {
-        androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                if (home && lock) Icons.Default.CheckCircle else Icons.Default.Info, contentDescription = null,
-                tint = if (home && lock) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(headline, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 10.dp))
+        when {
+            !paired -> Button(onClick = {
+                if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) startPairing(context)
+                else notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }) { Text("Pair with this phone") }
+            !(home && lock) -> Button(enabled = !busy, onClick = { scope.launch { if (Activator.run(context, Activator.Mode.ACTIVATE) is Activator.Outcome.Success) FinishSetup.activated() } }) { Text("Activate") }
         }
-        Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (!wifi) Text("Wireless debugging needs Wi-Fi.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
-            when {
-                !paired -> Button(onClick = {
-                    if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) startPairing(context)
-                    else notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }) { Text("Pair with this phone") }
-                !(home && lock) -> Button(enabled = !busy, onClick = { scope.launch { if (Activator.run(context, Activator.Mode.ACTIVATE) is Activator.Outcome.Success) FinishSetup.activated() } }) { Text("Activate") }
-            }
-            if (paired) OutlinedButton(enabled = !busy && Commands.defaultProvider(context) != null, onClick = {
-                scope.launch { Activator.run(context, Activator.Mode.RESET) }
-            }) { Text("Back to Google") }
-            // Android no longer lets the app switch wireless debugging on: a way straight to it.
-            if (paired && switchBlocked && !(home && lock)) {
-                TextButton(onClick = { runCatching { context.startActivity(Wadb.wirelessDebuggingSettingsIntent()) } }) { Text("Open wireless debugging") }
-            }
+        if (paired) OutlinedButton(enabled = !busy && Commands.defaultProvider(context) != null, onClick = {
+            scope.launch { Activator.run(context, Activator.Mode.RESET) }
+        }) { Text("Back to Google") }
+        // Android no longer lets the app switch wireless debugging on: a way straight to it.
+        if (paired && switchBlocked && !(home && lock)) {
+            TextButton(onClick = { runCatching { context.startActivity(Wadb.wirelessDebuggingSettingsIntent()) } }) { Text("Open wireless debugging") }
         }
     }
 }
@@ -547,8 +556,9 @@ internal fun CheckRow(label: String, ok: Boolean, detail: String) {
 internal fun LogText(text: String, limit: Int = 4000) {
     Text(
         text.take(limit), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp)).padding(12.dp),
+        color = LocalFrost.current.textSecondary,
+        modifier = Modifier.layoutId(FROST_JOINED).padding(horizontal = 10.dp, vertical = 4.dp).fillMaxWidth()
+            .background(LocalFrost.current.tile, RoundedCornerShape(12.dp)).padding(12.dp),
     )
 }
 
@@ -557,7 +567,6 @@ internal fun CommandRow(title: String, command: String) {
     val context = LocalContext.current
     SettingRow(title, "Tap to copy", icon = Icons.Default.Build, onClick = { copy(context, "command", command) })
     LogText(command)
-    HorizontalDivider(Modifier.padding(top = 8.dp))
 }
 
 internal fun copy(context: Context, label: String, text: String) {

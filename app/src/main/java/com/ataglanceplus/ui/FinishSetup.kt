@@ -171,42 +171,32 @@ internal fun FinishSetupCard(version: Int) {
     }
 
     if (missing.isEmpty()) return
-    Column(
-        Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(20.dp)).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Text("Finish setup", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 10.dp))
-        }
-        missing.forEach { item ->
-            val (title, detail, button) = when (item) {
-                FinishSetup.Item.PRECISE ->
-                    if (FinishSetup.preciseBlocked(context)) Triple(
-                        "Precise location",
-                        "Your Wallet places need it. Android won't ask again: in the app's settings, open Permissions › Location and turn on Use precise location.",
-                        "Open settings",
-                    )
-                    else Triple("Precise location", "Your Wallet places need it. Approximate location is only good to a few kilometres.", "Allow")
-                FinishSetup.Item.BACKGROUND -> Triple(
-                    "Location all the time",
-                    "So passes show at your places while the app is closed. Choose \"Allow all the time\".",
-                    "Allow",
+    Subheader("Finish setup")
+    missing.forEach { item ->
+        val (title, detail, button) = when (item) {
+            FinishSetup.Item.PRECISE ->
+                if (FinishSetup.preciseBlocked(context)) Triple(
+                    "Precise location",
+                    "Your Wallet places need it. Android won't ask again: in the app's settings, open Permissions › Location and turn on Use precise location.",
+                    "Open settings",
                 )
-                FinishSetup.Item.BATTERY -> Triple(
-                    "Unrestricted battery use",
-                    "Makes Android less likely to close the app, which sends the cards back to Google's. It can still happen.",
-                    "Allow",
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.bodyLarge)
-                    Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                FilledTonalButton(onClick = { ask(item) }) { Text(button) }
-            }
+                else Triple("Precise location", "Your Wallet places need it. Approximate location is only good to a few kilometres.", "Allow")
+            FinishSetup.Item.BACKGROUND -> Triple(
+                "Location all the time",
+                "So passes show at your places while the app is closed. Choose \"Allow all the time\".",
+                "Allow",
+            )
+            FinishSetup.Item.BATTERY -> Triple(
+                "Unrestricted battery use",
+                "Makes Android less likely to close the app, which sends the cards back to Google's. It can still happen.",
+                "Allow",
+            )
         }
+        SettingRow(
+            title, detail,
+            glyph = when (item) { FinishSetup.Item.BATTERY -> FrostIcons.Gauge; else -> FrostIcons.Pin },
+            onClick = { ask(item) },
+            trailing = { FilledTonalButton(onClick = { ask(item) }) { Text(button) } },
+        )
     }
 }

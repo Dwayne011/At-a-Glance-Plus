@@ -3,6 +3,15 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
+    <!-- Settings: drawn over the wallpaper, as Pixel Launcher Plus's settings are (the frost look). -->
+    <style name="Theme.AtAGlancePlus.Settings" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+
     <!-- The pass code pop-up: see-through, with the screen behind blurred (frosted) and dimmed. -->
     <style name="Theme.AtAGlancePlus.Frosted" parent="android:Theme.DeviceDefault.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>

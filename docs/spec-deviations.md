@@ -1542,3 +1542,31 @@ low res".
 - Only the coordinates rounded to two decimals are sent, as for the card.
 - **Checked:** rendered with live London data at phone width (the test has no geocoder, so the
   place shows "Your location").
+
+## 0.54.0 — Settings in Pixel Launcher Plus's frost style
+
+- **The look**, after Pixel Launcher Plus's settings (its Frost kit), so the two apps match:
+  - Drawn over the wallpaper (the settings and Wallet screens' windows show it), with a light
+    veil.
+  - Each group is a see-through card (28 dp corners, a hairline edge) with its label in capitals
+    in the accent colour; rows have hairlines between them.
+  - Rows: a 38 dp icon tile with a line icon (the launcher's set; Material icons are mapped to
+    it), a bold title and a small summary, then a chevron or the launcher's switch. Problems
+    have a pink tile.
+  - Pages have a round frost back button, a capitals overline and a bold title. Google Sans
+    where the phone has it.
+  - Choices are highlighted rows with a dot, inline (the weather card's look) and in dialogs.
+- **Colours follow the phone**, unlike the launcher's fixed dark palette: the accent, icon tiles
+  and the menu's section tints come from Material You, and everything switches between light
+  and dark with the system theme. Dialogs, buttons and fields use Material You in the same mode.
+- **Home is a menu of sections**, as in the launcher: Cards (Weather, Calendar, Sports, Wallet,
+  Media, More cards), Finance (Stocks, eToro), Chips, Display, About (Backup, Advanced,
+  About). Each has a tinted tile and a summary ("On · …" or "Off"); the status ("At a Glance
+  Plus", with Pair, Activate or Back to Google), Finish setup and Needs attention stay at the
+  top.
+- **Card switches** moved from Home to the top of each card's page ("Sports card" group, and so
+  on). Display (card height, show all cards, always-on look, bring back dismissed cards) and
+  About (re-activate after a restart, the version) are pages of their own.
+- The weather card's look is picked inline on its page rather than in a dialog.
+- Dashboards (stocks, sports, health, weather) keep their own frosted look.
+- **Checked:** Home, Sports and Weather rendered in dark and light over a sample wallpaper.

@@ -128,7 +128,8 @@
 
         <activity
             android:name=".ui.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:theme="@style/Theme.AtAGlancePlus.Settings">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -179,7 +180,7 @@
             android:name=".ui.WalletSettingsActivity"
             android:exported="false"
             android:label="Wallet passes"
-            android:theme="@style/Theme.AtAGlancePlus" />
+            android:theme="@style/Theme.AtAGlancePlus.Settings" />
 
         <receiver
             android:name=".wallet.WalletGeofenceReceiver"

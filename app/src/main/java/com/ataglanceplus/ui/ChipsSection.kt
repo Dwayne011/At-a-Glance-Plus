@@ -34,7 +34,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -57,6 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -255,7 +255,7 @@ internal fun ChipsSection(onBack: () -> Unit) {
     }
 
     if (settingsFor == null) SettingsPage("Chips", onBack) {
-        Subheader("On the cards · hold ≡ and drag to reorder")
+        Subheader("On the cards")
         if (grantMessage.isNotEmpty()) SettingNote(grantMessage, MaterialTheme.colorScheme.primary)
         if (chips.isEmpty()) SettingNote("No chips chosen: the cards use examples (Steps, Gmail, Battery).")
         ReorderableChips(
@@ -281,7 +281,7 @@ internal fun ChipsSection(onBack: () -> Unit) {
         } else {
             SettingNote("Remove a chip to add another (${Chips.MAX_CHOSEN} at most).")
         }
-        SettingNote("Most important first. Tap a chip for its size, what it opens and its own options.")
+        SettingNote("Most important first. Hold ≡ and drag to reorder; tap a chip for its size, what it opens and its own options.")
     }
 
     if (adding) {
@@ -388,19 +388,19 @@ internal fun ChipsSection(onBack: () -> Unit) {
 /** One chip in the list: icon, name, its value now (or what it needs), and a way into its settings. */
 @Composable
 private fun ChipRow(icon: Int, title: String, value: String?, status: String?, onClick: () -> Unit) {
+    val frost = LocalFrost.current
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 20.dp, top = 10.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp).clip(FrostInner).clickable(onClick = onClick).padding(start = 10.dp, top = 11.dp, bottom = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(40.dp).background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-            Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
-        }
-        Column(modifier = Modifier.padding(start = 16.dp).weight(1f)) {
-            Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (status != null) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        IconTile(null, null, icon, error = false, accent = false)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, style = FrostType.body, color = frost.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (status != null) Text(status, style = FrostType.small, color = MaterialTheme.colorScheme.error, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (value != null) {
-            Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
+            Text(value, style = FrostType.small, color = frost.accent)
         }
     }
 }
@@ -429,7 +429,7 @@ private fun ReorderableChips(chips: List<ChipSpec>, onReorder: (List<ChipSpec>) 
                         .onSizeChanged { heights[spec.key] = it.height }
                         .zIndex(if (lifted) 1f else 0f)
                         .graphicsLayer { translationY = if (lifted) offset else 0f }
-                        .background(if (lifted) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent, RoundedCornerShape(12.dp))
+                        .background(if (lifted) LocalFrost.current.selected else Color.Transparent, FrostInner)
                 ) {
                     Box(modifier = Modifier.weight(1f)) { row(spec) }
                     Box(
@@ -463,7 +463,7 @@ private fun ReorderableChips(chips: List<ChipSpec>, onReorder: (List<ChipSpec>) 
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("≡", style = MaterialTheme.typography.titleLarge, color = if (lifted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("≡", style = MaterialTheme.typography.titleLarge, color = if (lifted) LocalFrost.current.accent else LocalFrost.current.textMuted)
                     }
                 }
             }
@@ -645,8 +645,8 @@ private fun ChipSettingsPage(
             Prefs.setChipApp(context, spec.key, null)
             opens = null
         })
-        HorizontalDivider(Modifier.padding(top = 8.dp))
-        SettingRow("Remove this chip", error = true, onClick = onRemove)
+        Subheader("Remove")
+        SettingRow("Remove this chip", glyph = FrostIcons.Trash, error = true, onClick = onRemove)
     }
 
     when (editing) {
