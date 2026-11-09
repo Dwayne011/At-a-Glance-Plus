@@ -136,6 +136,7 @@ private fun SettingsApp() {
             "finance/etoro" -> etoroFrom
             "sports/add" -> "card/sports"
             "advanced/debug" -> "advanced"
+            "order", "quiet" -> "display"
             else -> "home"
         }
     }
@@ -162,7 +163,9 @@ private fun SettingsApp() {
         "backup" -> BackupPage(::up)
         "advanced" -> AdvancedPage(version, ::up, open)
         "advanced/debug" -> DebugPage(version, ::up)
-        "display" -> DisplayPage(version, ::up)
+        "display" -> DisplayPage(version, ::up, open)
+        "order" -> CardOrderPage(version, ::up)
+        "quiet" -> QuietHoursPage(version, ::up)
         "about" -> AboutPage(version, ::up)
         else -> HomePage(version, open)
     }
@@ -250,7 +253,9 @@ internal fun HomePage(version: Int, open: (String) -> Unit) {
         Subheader("Display")
         MenuRow(
             FrostIcons.Height, "Display",
-            "Card height ${Prefs.cardHeightDp(context)} dp" + (if (Prefs.showAllCards(context)) " · all cards" else "") + if (Prefs.aodPreview(context)) " · always-on look" else "",
+            "Card height ${Prefs.cardHeightDp(context)} dp" + (if (Prefs.showAllCards(context)) " · all cards" else "") +
+                (if (com.ataglanceplus.cards.CardRules.orderOn(context)) " · smarter order" else "") +
+                if (com.ataglanceplus.cards.CardRules.quietRules(context).isNotEmpty()) " · quiet hours" else "",
             Tone.PRIMARY,
         ) { open("display") }
 
@@ -264,7 +269,7 @@ internal fun HomePage(version: Int, open: (String) -> Unit) {
 
 /** Display: the cards' height, how many show, and the always-on look. */
 @Composable
-private fun DisplayPage(version: Int, onBack: () -> Unit) {
+private fun DisplayPage(version: Int, onBack: () -> Unit, open: (String) -> Unit) {
     val context = LocalContext.current
     @Suppress("UNUSED_EXPRESSION") version
     var editingHeight by remember { mutableStateOf(false) }
@@ -276,6 +281,17 @@ private fun DisplayPage(version: Int, onBack: () -> Unit) {
         // Dismissed cards, and sports cards snoozed until their next start.
         val hidden = Prefs.dismissed(context).size + Prefs.sportsSnoozes(context).size
         if (hidden > 0) SettingRow("Bring back dismissed cards", "$hidden hidden", glyph = FrostIcons.Refresh, onClick = { Prefs.restoreDismissed(context) })
+
+        Subheader("Order and quiet hours")
+        val windows = com.ataglanceplus.cards.CardRules.orderWindows(context).size
+        LinkRow(
+            "Card order",
+            if (!com.ataglanceplus.cards.CardRules.orderOn(context)) "Off — the usual order"
+            else "On · built-in rules" + if (windows > 0) " · $windows window${if (windows == 1) "" else "s"} of yours" else "",
+            glyph = FrostIcons.Lines,
+        ) { open("order") }
+        val quiet = com.ataglanceplus.cards.CardRules.quietRules(context)
+        LinkRow("Quiet hours", if (quiet.isEmpty()) "None" else quiet.joinToString("; ") { com.ataglanceplus.cards.CardRules.describe(it) }, glyph = FrostIcons.Lock) { open("quiet") }
     }
     if (editingHeight) CardHeightDialog { editingHeight = false }
 }

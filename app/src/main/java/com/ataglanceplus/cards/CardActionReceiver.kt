@@ -26,6 +26,10 @@ class CardActionReceiver : BroadcastReceiver() {
             ACTION_TORCH_OFF -> TorchSource.turnOff(context)
             ACTION_TORCH_STEP -> TorchSource.setStep(context, intent.getIntExtra(EXTRA_VALUE, 1))
             ACTION_TORCH_NUDGE -> TorchSource.nudge(context, intent.getIntExtra(EXTRA_VALUE, 0))
+            // Sends the clock app's own "Dismiss" for the upcoming alarm (it ends that alarm only).
+            ACTION_ALARM_SKIP -> com.ataglanceplus.live.NotificationHub.alarmSkip.value?.let { skip ->
+                runCatching { skip.send() }.onSuccess { com.ataglanceplus.DebugLog.add(context, com.ataglanceplus.DebugLog.Kind.CONNECTION, "Alarm skipped from the card") }
+            }
             ACTION_SPORTS_STEP -> intent.getStringExtra(EXTRA_EVENT)?.let { Prefs.stepSportsRace(context, it, SportsRules.STEP_LASTS, intent.getIntExtra(EXTRA_VALUE, 1)) }
         }
     }
@@ -36,6 +40,7 @@ class CardActionReceiver : BroadcastReceiver() {
         const val ACTION_MEDIA_PREV = "com.ataglanceplus.action.MEDIA_PREV"
         const val ACTION_MEDIA_NEXT = "com.ataglanceplus.action.MEDIA_NEXT"
         const val ACTION_SPORTS_STEP = "com.ataglanceplus.action.SPORTS_STEP"
+        const val ACTION_ALARM_SKIP = "com.ataglanceplus.action.ALARM_SKIP"
         private const val EXTRA_CARD = "card"
         const val ACTION_TORCH_OFF = "com.ataglanceplus.action.TORCH_OFF"
         const val ACTION_TORCH_STEP = "com.ataglanceplus.action.TORCH_STEP"

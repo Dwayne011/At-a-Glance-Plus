@@ -169,6 +169,9 @@ class AtAGlanceService : SmartspaceService() {
         scope.launch { NotificationHub.timer.drop(1).distinctUntilChanged().collect { pushAll() } }
         scope.launch { NotificationHub.live.drop(1).distinctUntilChanged().collect { pushAll() } }
         scope.launch { NotificationHub.nav.drop(1).distinctUntilChanged().collect { pushAll() } }
+        // The clock's upcoming-alarm notification came or went: the alarm card's skip changes.
+        scope.launch { NotificationHub.alarmSkip.drop(1).distinctUntilChanged().collect { pushAll() } }
+        scope.launch { com.ataglanceplus.weather.RainSource.changed.drop(1).collect { pushAll() } }
         scope.launch { NotificationHub.messages.collect { showMessage(it) } }
         // The message was read or cleared (its notification is gone): the pop-up goes too.
         scope.launch {
@@ -221,6 +224,10 @@ class AtAGlanceService : SmartspaceService() {
         scope.launch {
             while (true) {
                 WeatherRepository.refresh(this@AtAGlanceService)
+                // Rain and snow on the way: every 10 minutes while that card is on and the screen is.
+                if (!screenOff && Prefs.cardEnabled(this@AtAGlanceService, CardType.RAIN)) {
+                    com.ataglanceplus.weather.RainSource.refresh(this@AtAGlanceService)
+                }
                 delay(WEATHER_CHECK_MS)
             }
         }
@@ -229,6 +236,7 @@ class AtAGlanceService : SmartspaceService() {
             // Also redraw at sunrise and sunset, so the weather icon and colours follow the sun.
             var shownDate = WeatherCard.dateText()
             var shownDay = WeatherRepository.weather.value?.isDayAt()
+            var shownRules = com.ataglanceplus.cards.CardRules.stateNow(this@AtAGlanceService)
             while (true) {
                 delay(DATE_CHECK_MS)
                 val now = WeatherCard.dateText()
@@ -243,9 +251,12 @@ class AtAGlanceService : SmartspaceService() {
                 // Wallet passes come and go with the time (windows and flight/event/transit times).
                 val walletOn = Prefs.cardEnabled(this@AtAGlanceService, CardType.WALLET) &&
                     com.ataglanceplus.wallet.WalletRules.rules(this@AtAGlanceService).isNotEmpty()
+                // Rain counts down ("in 20 min"); quiet hours and the card order change with the time.
+                val rules = com.ataglanceplus.cards.CardRules.stateNow(this@AtAGlanceService)
                 if (now != shownDate || day != shownDay || calendars.isNotEmpty() || finance != shownFinance || sportsOn || walletOn ||
-                    LiveCards.upcomingAlarm(this@AtAGlanceService) != null
+                    LiveCards.upcomingAlarm(this@AtAGlanceService) != null || com.ataglanceplus.weather.RainSource.soon() != null || rules != shownRules
                 ) {
+                    shownRules = rules
                     shownFinance = finance
                     shownDate = now
                     shownDay = day
@@ -405,6 +416,7 @@ class AtAGlanceService : SmartspaceService() {
         messageSince = messageSince,
         messageUntil = messageUntil,
         messageEntering = sessionId !in islandSeen,
+        rain = if (Prefs.cardEnabled(this, CardType.RAIN)) com.ataglanceplus.weather.RainSource.soon() else null,
         wallet = runCatching {
             val ids = com.ataglanceplus.wallet.WalletRules.activePassIds(
                 this, System.currentTimeMillis(), com.ataglanceplus.wallet.WalletGeofences.cachedLocation,

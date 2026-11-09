@@ -51,6 +51,7 @@ enum class CardType(val id: String, val label: String, val detail: String) {
     SPORTS("sports", "Sports", "Your teams' games: live scores, results, kick-off times and the next fixture"),
     TORCH("torch", "Torch", "While the torch is on: tap to turn it off, and set its brightness"),
     WALLET("wallet", "Wallet passes", "Your Google Wallet passes, near the places and times you set; tap to show the code"),
+    RAIN("rain", "Rain and snow", "Rain or snow coming within the hour, while it's dry"),
 }
 
 /**
@@ -123,6 +124,45 @@ object LiveCards {
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, targetId(key), views, title, detail, R.drawable.ic_card, tap, 1.6f)
+    }
+
+    // --- Rain and snow ---
+
+    /** "Rain in 20 min": rain or snow coming within the hour; the bars are the next four quarter-hours. */
+    fun rain(context: Context, aod: Boolean, rain: com.ataglanceplus.weather.RainSoon): SmartspaceTarget {
+        val key = rain.key
+        val what = if (rain.snow) "Snow" else "Rain"
+        val minutes = ((rain.startsAt - System.currentTimeMillis()) / 60_000L).coerceAtLeast(0)
+        val title = when {
+            minutes <= 2 -> "$what starting now"
+            minutes < 10 -> "$what in $minutes min"
+            else -> "$what in ${(minutes + 2) / 5 * 5} min"
+        }
+        val clock = { t: Long -> DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm a", Date(t)).toString() }
+        val detail = "${rain.intensity} ${what.lowercase()} from ${clock(rain.startsAt)}" +
+            (rain.endsAt?.let { " until ${clock(it)}" } ?: " for over an hour")
+        val views = RemoteViews(context.packageName, R.layout.card_live_update)
+        views.setImageViewResource(R.id.live_app_icon, if (rain.snow) R.drawable.ic_weather_snow else R.drawable.ic_weather_rain)
+        views.setViewVisibility(R.id.live_app_icon, View.VISIBLE)
+        views.setViewVisibility(R.id.live_app_initial, View.GONE)
+        if (aod) views.setInt(R.id.live_app_icon, "setColorFilter", Style.AOD_TEXT)
+        views.setTextViewText(R.id.live_title, title)
+        views.setTextViewText(R.id.live_detail, detail)
+        views.setViewVisibility(R.id.live_eta, View.GONE)
+        intArrayOf(R.id.live_seg_1, R.id.live_seg_2, R.id.live_seg_3, R.id.live_seg_4).forEachIndexed { i, id ->
+            val on = rain.quarters.getOrElse(i) { false }
+            views.setInt(id, "setBackgroundResource", if (aod) (if (on) R.drawable.aod_segment_on else R.drawable.aod_segment_off) else if (on) R.drawable.segment_on else R.drawable.segment_off)
+        }
+        if (aod) {
+            Style.aodBody(views, R.id.live_title, R.id.live_detail)
+            views.setInt(R.id.live_badge, "setBackgroundResource", R.drawable.aod_outline_r12)
+        }
+        dismissButton(context, views, key, aod)
+        // Tapping opens the weather screen (its next hours and the radar).
+        val tap = Style.gated(context, com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_WEATHER), REQUEST_BASE + 0x7A11)
+        Style.holdBar(views, pinned = false, aod = aod)
+        views.setOnClickPendingIntent(R.id.card_root, tap)
+        return Style.target(context, targetId(key), views, title, detail, if (rain.snow) R.drawable.ic_weather_snow else R.drawable.ic_weather_rain, tap, 1.6f)
     }
 
     // --- 8.3 Media ---
@@ -323,9 +363,23 @@ object LiveCards {
         val title = if (tomorrow) "Alarm tomorrow" else "Alarm"
         val detail = DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEdMMM"), Date(alarm.triggerTime)).toString()
         showFixed(views, readout)
-        views.setViewVisibility(R.id.timer_button, View.GONE)
+        // Skip: within the 2 hours before the alarm, the clock's own Dismiss (on its upcoming-alarm
+        // notification) ends it in one tap; earlier, Android lets no app cancel another's alarm, so
+        // the button opens the clock's alarms instead.
+        val skip = com.ataglanceplus.live.NotificationHub.alarmSkip.value
+        if (aod) views.setViewVisibility(R.id.timer_button, View.GONE)
+        else {
+            views.setViewVisibility(R.id.timer_button, View.VISIBLE)
+            views.setImageViewResource(R.id.timer_button_icon, R.drawable.ic_media_next)
+            views.setContentDescription(R.id.timer_button, "Skip this alarm")
+            views.setOnClickPendingIntent(
+                R.id.timer_button,
+                if (skip != null) CardActionReceiver.action(context, CardActionReceiver.ACTION_ALARM_SKIP)
+                else Style.gated(context, Intent(AlarmClock.ACTION_SHOW_ALARMS), REQUEST_BASE + 0x5C1F),
+            )
+        }
         views.setTextViewText(R.id.timer_title, title)
-        views.setTextViewText(R.id.timer_detail, detail)
+        views.setTextViewText(R.id.timer_detail, if (skip != null && !aod) "$detail · tap ⏭ to skip" else detail)
         if (aod) Style.aodBody(views, R.id.timer_fixed, R.id.timer_title, R.id.timer_detail)
         timerChips(context, views, aod, given)
         val tap = alarm.showIntent?.let { gate(context, it, null, key) }

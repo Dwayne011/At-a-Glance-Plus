@@ -37,6 +37,8 @@ data class CardData(
     val messageEntering: Boolean,
     /** Wallet passes whose rules say to show them right now. */
     val wallet: List<com.ataglanceplus.wallet.WalletPass>,
+    /** Rain or snow coming within the hour, while it is dry. */
+    val rain: com.ataglanceplus.weather.RainSoon? = null,
 )
 
 /** Everything shown on a surface, in order. */
@@ -45,11 +47,11 @@ object CardDeck {
 
     /**
      * Cards with something real to show, most time-sensitive first: a new message, the torch while it is on, navigation,
-     * live updates, live games, a timer or alarm, media, calendar events (one card each, soonest first), Wallet passes,
-     * finance on a big move or in a time window, other sports cards (before, after, next game),
-     * finance the rest of the time (it is always up), then the weather
-     * card, which is always there and cannot be dismissed. Switched-off types and dismissed
-     * instances are left out.
+     * live updates, live games, a timer or alarm, rain or snow on the way, media, calendar events (one card each,
+     * soonest first), Wallet passes, finance on a big move or in a time window, other sports cards (before, after,
+     * next game), finance the rest of the time (it is always up), then the weather card, which is always there and
+     * cannot be dismissed. Switched-off types, those in quiet hours and dismissed instances are left out; the
+     * smarter order ([CardRules]) can then bring some forward.
      *
      * The user's chips (those with something to report, in their order) fill the weather card
      * first, then the other cards on show that have room for chips; any left over go on extra
@@ -62,7 +64,9 @@ object CardDeck {
             return emptyList()
         }
         val dismissed = Prefs.dismissed(context)
-        fun on(type: CardType) = Prefs.cardEnabled(context, type)
+        // Quiet hours hide the cards they name for now; the weather card always stays.
+        val quiet = CardRules.quietNow(context)
+        fun on(type: CardType) = Prefs.cardEnabled(context, type) && type.id !in quiet
 
         val torch = data.torch?.takeIf { on(CardType.TORCH) && "torch" !in dismissed }
         val nav = data.nav?.takeIf { on(CardType.NAV) && "nav:${it.key}" !in dismissed }
@@ -71,6 +75,7 @@ object CardDeck {
         val alarm = if (timer == null && on(CardType.TIMER)) {
             LiveCards.upcomingAlarm(context)?.takeIf { "alarm:${it.triggerTime}" !in dismissed }
         } else null
+        val rain = data.rain?.takeIf { on(CardType.RAIN) && it.key !in dismissed }
         val media = data.media?.takeIf { on(CardType.MEDIA) && "media:${it.pkg}" !in dismissed }
         val calendars = if (on(CardType.CALENDAR)) data.calendars.filter { it.instanceKey !in dismissed } else emptyList()
         val sports = if (on(CardType.SPORTS)) data.sports.filter { it.instanceKey !in dismissed } else emptyList()
@@ -84,37 +89,53 @@ object CardDeck {
         fun take(count: Int): List<ChipSpec>? = pool?.let { p -> List(minOf(count, p.size)) { p.removeAt(0) } }
         // A chip taking 2 slots counts once, so each card takes as many as it really shows.
         fun takeForCard(): List<ChipSpec>? = take(Chips.taken(context, pool.orEmpty()))
-        // Chips go to the cards in the order they appear: every card in front of the weather
-        // card that can hold chips (navigation, timer or alarm, the first calendar card, stocks)
-        // takes its share first; the weather card then fits what it can of the rest, and the extra
-        // cards take what is left. A card the launcher has no room for takes none.
-        val limited = !(maxCards <= 0 || Prefs.showAllCards(context))
-        val order = buildList {
-            if (data.message != null && data.messageRemainingMs > 0 && on(CardType.MESSAGES)) add("message")
-            torch?.let { add("torch") }
-            nav?.let { add("nav") }
-            live.forEach { _ -> add("live") }
-            liveSports.forEach { _ -> add("sports") }
-            timer?.let { add("timer") }
-            alarm?.let { add("alarm") }
-            media?.let { add("media") }
-            calendars.forEachIndexed { i, _ -> add(if (i == 0) "calendar" else "calendar, stacked") }
-            wallet.forEach { _ -> add("wallet") }
-            finance?.takeIf { it.forward }?.let { add("finance") }
-            otherSports.forEach { _ -> add("sports") }
-            finance?.takeIf { !it.forward }?.let { add("finance") }
-        }
-        var navChips: List<ChipSpec>? = null
-        var timerChips: List<ChipSpec>? = null
-        var calendarChips: List<ChipSpec>? = null
-        var financeChips: List<ChipSpec>? = null
-        (if (limited) order.take((maxCards - 1).coerceAtLeast(0)) else order).forEach { kind ->
-            when (kind) {
-                "nav" -> navChips = takeForCard()
-                "timer", "alarm" -> timerChips = takeForCard()
-                "calendar" -> calendarChips = takeForCard()
-                "finance" -> financeChips = takeForCard()
+
+        // The cards on show in the usual order (most time-sensitive first). [chips] names the
+        // cards that hold chips; each built later with the chips it was given.
+        class Entry(val name: String, val slot: CardRules.Slot, val chips: Boolean, val build: (List<ChipSpec>?) -> SmartspaceTarget)
+        val now = System.currentTimeMillis()
+        fun aroundKickoff(s: com.ataglanceplus.live.SportsShowing): Boolean = s.phase == com.ataglanceplus.live.SportsPhase.LIVE ||
+            (s.phase == com.ataglanceplus.live.SportsPhase.BEFORE && when (s) {
+                is com.ataglanceplus.live.SportsShowing.Team -> s.game.start - now < 60 * 60_000L
+                is com.ataglanceplus.live.SportsShowing.Race -> s.session.start - now < 60 * 60_000L
+            })
+        val usual = buildList {
+            if (data.message != null && data.messageRemainingMs > 0 && on(CardType.MESSAGES)) {
+                val hideText = surface == AtAGlanceService.SURFACE_LOCKSCREEN && !LiveCards.lockScreenShowsPrivate(context)
+                add(Entry("message", CardRules.Slot(CardType.MESSAGES.id), false) {
+                    LiveCards.island(context, aod, data.message, hideText, data.messageEntering, data.messageSince, data.messageUntil)
+                })
             }
+            // The torch first: it is on now, and the card is how to turn it off.
+            torch?.let { add(Entry("torch", CardRules.Slot(CardType.TORCH.id), false) { _ -> LiveCards.torch(context, aod, it) }) }
+            nav?.let { add(Entry("navigation", CardRules.Slot(CardType.NAV.id), true) { c -> LiveCards.nav(context, aod, it, c) }) }
+            live.forEach { l -> add(Entry("live update", CardRules.Slot(CardType.LIVE.id), false) { _ -> LiveCards.live(context, aod, l) }) }
+            liveSports.forEach { sp -> add(Entry("sports", CardRules.Slot(CardType.SPORTS.id, aroundKickoff(sp)), false) { _ -> sportsCard(context, aod, sp) }) }
+            timer?.let { add(Entry("timer", CardRules.Slot(CardType.TIMER.id), true) { c -> LiveCards.timer(context, aod, it, c) }) }
+            alarm?.let { add(Entry("alarm", CardRules.Slot(CardType.TIMER.id), true) { c -> LiveCards.alarm(context, aod, it, c) }) }
+            rain?.let { add(Entry("rain", CardRules.Slot(CardType.RAIN.id), false) { _ -> LiveCards.rain(context, aod, it) }) }
+            media?.let { add(Entry("media", CardRules.Slot(CardType.MEDIA.id), false) { _ -> LiveCards.media(context, aod, it) }) }
+            // One card per event, soonest first; only the first holds chips.
+            calendars.forEachIndexed { i, event ->
+                add(Entry("calendar", CardRules.Slot(CardType.CALENDAR.id), i == 0) { c -> LiveCards.calendar(context, aod, event, if (i == 0) c else emptyList()) })
+            }
+            wallet.forEach { pass -> add(Entry("wallet", CardRules.Slot(CardType.WALLET.id), false) { _ -> LiveCards.wallet(context, aod, pass) }) }
+            // Finance is always up; a big move or a time window brings it ahead of upcoming games.
+            finance?.takeIf { it.forward }?.let { f -> add(Entry("finance", CardRules.Slot(CardType.FINANCE.id), true) { c -> LiveCards.finance(context, aod, data.quotes, f, c) }) }
+            otherSports.forEach { sp -> add(Entry("sports", CardRules.Slot(CardType.SPORTS.id, aroundKickoff(sp)), false) { _ -> sportsCard(context, aod, sp) }) }
+            finance?.takeIf { !it.forward }?.let { f -> add(Entry("finance", CardRules.Slot(CardType.FINANCE.id), true) { c -> LiveCards.finance(context, aod, data.quotes, f, c) }) }
+        }
+        // The smarter order (your windows, then the built-in rules); equal ranks keep the usual order.
+        val ranks = CardRules.ranks(context, usual.map { it.slot })
+        val ordered = usual.indices.sortedBy { ranks[it] }.map { usual[it] }
+
+        // Chips go to the cards in the order they appear: every card in front of the weather card
+        // that can hold chips takes its share first; the weather card then fits what it can of the
+        // rest, and the extra cards take what is left. A card the launcher has no room for takes none.
+        val limited = !(maxCards <= 0 || Prefs.showAllCards(context))
+        val given = HashMap<Entry, List<ChipSpec>?>()
+        (if (limited) ordered.take((maxCards - 1).coerceAtLeast(0)) else ordered).forEach { e ->
+            if (e.chips) given[e] = takeForCard()
         }
         // The weather card fits what it can of the rest, not only the first in line, so it picks its own.
         val weatherChips = pool?.let { p -> WeatherCard.chipsTaken(context, p).also { p.removeAll(it) } }
@@ -135,26 +156,7 @@ object CardDeck {
                 CrashLog.record(context, "Building the $name card for $surface", e)
             }
         }
-        val contextual = buildList {
-            if (data.message != null && data.messageRemainingMs > 0 && on(CardType.MESSAGES)) {
-                val hideText = surface == AtAGlanceService.SURFACE_LOCKSCREEN && !LiveCards.lockScreenShowsPrivate(context)
-                card("message") { LiveCards.island(context, aod, data.message, hideText, data.messageEntering, data.messageSince, data.messageUntil) }
-            }
-            // The torch first: it is on now, and the card is how to turn it off.
-            torch?.let { card("torch") { LiveCards.torch(context, aod, it) } }
-            nav?.let { card("navigation") { LiveCards.nav(context, aod, it, navChips) } }
-            live.forEach { card("live update") { LiveCards.live(context, aod, it) } }
-            liveSports.forEach { card("sports") { sportsCard(context, aod, it) } }
-            timer?.let { card("timer") { LiveCards.timer(context, aod, it, timerChips) } }
-            alarm?.let { card("alarm") { LiveCards.alarm(context, aod, it, timerChips) } }
-            media?.let { card("media") { LiveCards.media(context, aod, it) } }
-            calendars.forEachIndexed { i, event -> card("calendar") { LiveCards.calendar(context, aod, event, if (i == 0) calendarChips else emptyList()) } }
-            wallet.forEach { pass -> card("wallet") { LiveCards.wallet(context, aod, pass) } }
-            // Finance is always up; a big move or a time window brings it ahead of upcoming games.
-            finance?.takeIf { it.forward }?.let { card("finance") { LiveCards.finance(context, aod, data.quotes, it, financeChips) } }
-            otherSports.forEach { card("sports") { sportsCard(context, aod, it) } }
-            finance?.takeIf { !it.forward }?.let { card("finance") { LiveCards.finance(context, aod, data.quotes, it, financeChips) } }
-        }
+        val contextual = buildList { ordered.forEach { e -> card(e.name) { e.build(given[e]) } } }
         val weatherCard = WeatherCard.build(context, surface, aod, data.weather, data.weatherStatus, weatherChips)
         // The extra card: the chips that did not fit, or, with none, today and the next days.
         val extras = buildList {
@@ -188,6 +190,7 @@ object CardDeck {
         data.timer?.let { add("timer:${it.key}") }
         LiveCards.upcomingAlarm(context)?.let { add("alarm:${it.triggerTime}") }
         data.media?.let { add("media:${it.pkg}") }
+        data.rain?.let { add(it.key) }
         data.calendars.forEach { add(it.instanceKey) }
         addAll(FinanceRules.instanceKeys(context, data.quotes))
         data.sports.forEach { add(it.instanceKey) }

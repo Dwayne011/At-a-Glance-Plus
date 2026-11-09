@@ -1570,3 +1570,37 @@ low res".
 - The weather card's look is picked inline on its page rather than in a dialog.
 - Dashboards (stocks, sports, health, weather) keep their own frosted look.
 - **Checked:** Home, Sports and Weather rendered in dark and light over a sample wallpaper.
+
+## 0.55.0 — Rain and snow card, alarm skip, quiet hours, smarter card order
+
+- **Rain and snow card** (Settings › Weather › Rain and snow card; on by default, like other new
+  cards):
+  - Shows only while it is dry and rain or snow starts within the hour: "Rain in 20 min" (to the
+    nearest 5 minutes; "starting now" within 2), and "Light rain from 14:20 until 15:05" (or "for
+    over an hour"). Snow when the forecast has snowfall or a snow code.
+  - Intensity from the wettest quarter-hour: light under 2.5 mm/h, moderate under 7.6, else heavy.
+    Wet means at least 0.1 mm in a quarter-hour.
+  - The four bars are the next four quarter-hours, filled when wet.
+  - From Open-Meteo's 15-minute forecast for the next two hours, fetched at most every 10 minutes
+    while the card is on and the screen is on; a forecast over 40 minutes old is not used.
+  - Tap: the weather screen. Dismissing it hides it until that rain card goes.
+- **Alarm skip:** the alarm card (next alarm within 12 hours) has a skip button.
+  - In the 2 hours before the alarm, when the clock app posts its upcoming-alarm notification,
+    the button sends that notification's own Dismiss, which ends that alarm only. The card says
+    "tap ⏭ to skip" then.
+  - Earlier, Android lets no app cancel another app's alarm, so the button opens the clock's
+    alarms (after unlocking).
+  - Not on the always-on display.
+- **Quiet hours** (Settings › Display › Quiet hours): windows (they can run past midnight, on
+  chosen days) and the cards each hides. The weather card always stays.
+- **Smarter card order** (Settings › Display › Card order; on by default, one switch turns it all
+  off):
+  - Your own windows first: a window's cards come first, in the order you ticked them.
+  - Then built-in rules, each switchable: calendar first 05:00–10:00; sports first from an hour
+    before a game or session until it ends; rain and snow first when coming.
+  - Cards no rule names keep the usual order; a new message always stays first. Chips go to the
+    cards in the order shown.
+- Settings for both are backed up; the rain card's switch is in the backed-up card list.
+- **Checked:** the rain logic (dry then rain in 20 min, raining now, over an hour away, heavy snow
+  with no end, below drizzle), windows past midnight and on chosen days, quiet hours, the order
+  with and without windows and rules, and renders of the rain and snow cards and both pages.

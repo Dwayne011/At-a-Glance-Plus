@@ -32,6 +32,7 @@ object SettingsBackup {
         "sports_alerts_on", "sports_alert_goals", "sports_alert_start", "sports_alert_periods", "sports_alert_final",
         "wallet_rules", "show_all_cards", "sports_after_hours", "sports_before_hours", "sports_followed",
         "sports_hidden", "sports_next_always", "sports_open", "sports_race_step", "step_goal", "weather_look", "weather_open",
+        "card_order_on", "card_order_windows", "quiet_rules", "order_morning_calendar", "order_sports_kickoff", "order_rain",
     )
     private val PREFIXES = listOf("chip_app_", "chip_size_", "gmail_labels_")
 

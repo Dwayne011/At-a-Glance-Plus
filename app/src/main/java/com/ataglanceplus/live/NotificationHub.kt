@@ -114,6 +114,14 @@ object NotificationHub {
     private val _nav = MutableStateFlow<NavNow?>(null)
     val nav: StateFlow<NavNow?> = _nav.asStateFlow()
 
+    /**
+     * The clock app's "Dismiss" action on its upcoming-alarm notification (Google Clock posts it
+     * in the 2 hours before an alarm): the alarm card's skip button sends it. Null at other times.
+     */
+    private val _alarmSkip = MutableStateFlow<android.app.PendingIntent?>(null)
+    val alarmSkip: StateFlow<android.app.PendingIntent?> = _alarmSkip.asStateFlow()
+    private val CLOCKS = setOf("com.google.android.deskclock", "com.android.deskclock")
+
     private val _messages = MutableSharedFlow<IncomingMessage>(extraBufferCapacity = 4)
 
     /** Keys of the notifications on screen now, so a message pop-up can end when its notification goes (read or cleared). */
@@ -160,6 +168,9 @@ object NotificationHub {
         seenLive.retainAll(live.map { it.key }.toSet())
         seenLive.addAll(live.map { it.key })
         _timer.value = timer
+        _alarmSkip.value = active.filter { it.packageName in CLOCKS }.firstNotNullOfOrNull { sbn ->
+            sbn.notification.actions?.firstOrNull { a -> a.title?.toString()?.contains(Regex("dismiss|skip", RegexOption.IGNORE_CASE)) == true }?.actionIntent
+        }
         _nav.value = nav
         _live.value = live
         _activeKeys.value = active.map { it.key }.toSet()

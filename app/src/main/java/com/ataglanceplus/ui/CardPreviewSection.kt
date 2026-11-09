@@ -114,6 +114,9 @@ internal fun WeatherPage(version: Int, onBack: () -> Unit) {
         }
         SettingNote("Always shown: the forecast, your chips and a summary line.")
 
+        ShowCardRow(CardType.RAIN)
+        SettingNote("Checked every 10 minutes while the screen is on, from Open-Meteo's 15-minute forecast. Tap the card for the weather screen and its radar.")
+
         Subheader("Tapping the card")
         SwitchSettingRow(
             "Open weather in this app",
