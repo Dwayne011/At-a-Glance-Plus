@@ -72,6 +72,7 @@ object DebugLog {
         exits.forEach { add(context, Kind.PROCESS, "Stopped at ${time(it.timestamp)}: ${describe(it)}") }
         exits.maxOfOrNull { it.timestamp }?.let { prefs.edit { putLong(KEY_EXIT_SEEN, it) } }
         add(context, Kind.PROCESS, "Started (version ${version(context)})")
+        Uptime.processStarted(context, exits.lastOrNull())
         checkReconnected(context, exits.lastOrNull())
     }
 

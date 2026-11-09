@@ -1658,3 +1658,19 @@ low res".
   tomorrow", which is not delivered, and a promotion, which is not a parcel), Live Update parcels
   (a DPD one kept after its notification; Uber Eats left out), the card choice, and renders of
   the card, the inbox and the parcel list.
+
+## 0.58.0 — Weekly connection summary on the Debug page
+
+- **This week** at the top of Advanced › Debug (and first in the shared debug report): "Last 7
+  days: connected 99.9%, dropped 3 times (an update, a restart and the launcher reconnecting)",
+  or "Since Wednesday: …" while the record is younger than a week.
+- It counts the time the **home screen** had this app's cards, from a small record of each
+  connect and drop (kept 30 days, apart from the history so its trimming can't cut the week
+  short; it holds times and the phone's boot count only).
+- Each drop's cause: Android's own reason when the app was stopped within 2 minutes of it (an
+  update, low memory, a crash, a force stop, Android closing the app); else a restart (the boot
+  count changed); else "the launcher reconnecting" (back within a minute); else unknown. When the
+  app was stopped without saying so, the drop is dated by Android's stop time.
+- The record starts with this version, so the first week reads "Since …".
+- **Checked:** a week with an update, a restart and a launcher blip; a new record with no drops;
+  a day-long gap; two updates.

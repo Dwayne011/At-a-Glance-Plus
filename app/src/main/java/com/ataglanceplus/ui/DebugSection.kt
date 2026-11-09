@@ -85,6 +85,15 @@ internal fun DebugPage(version: Int, onBack: () -> Unit) {
             onClick = { share(context, report(context)) })
         SettingRow("Copy debug report", icon = Icons.AutoMirrored.Filled.List, onClick = { copy(context, "At a Glance Plus debug report", report(context)) })
 
+        // The week at a glance, so the history needn't be read.
+        Subheader("This week")
+        val week = remember(version, tick) { com.ataglanceplus.Uptime.summary(context) }
+        SettingRow(
+            week ?: "No record yet",
+            if (week == null) "The home screen's connections are counted from now on" else "How long the home screen showed this app's cards, and why it stopped when it did",
+            glyph = FrostIcons.Glance,
+        )
+
         // The one thing worth seeing at once from the rest: the cards are not showing.
         if (sessions.isEmpty()) {
             CheckRow("Not connected", false, "Neither the launcher nor the lock screen is connected: they show Google's At a Glance until you activate again")
@@ -323,6 +332,7 @@ private fun location(context: Context, status: WalletGeofences.Status?, inside: 
 internal fun report(context: Context): String = buildString {
     appendLine("At a Glance Plus debug report · ${DebugLog.time(System.currentTimeMillis())}")
     appendLine()
+    com.ataglanceplus.Uptime.summary(context)?.let { appendLine(it); appendLine() }
     appendLine("== Now")
     now(context).forEach { (l, v) -> appendLine("$l: $v") }
     val sessions = ServiceState.sessions.value.values

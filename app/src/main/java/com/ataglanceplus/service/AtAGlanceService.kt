@@ -289,6 +289,7 @@ class AtAGlanceService : SmartspaceService() {
         engine.stop()
         TorchSource.stop(this)
         scope.cancel()
+        com.ataglanceplus.Uptime.mark(this, false)
         sessions.keys.forEach { ServiceState.sessionDestroyed(it.id) }
         sessions.clear()
         ServiceState.event("Service destroyed")
@@ -303,6 +304,7 @@ class AtAGlanceService : SmartspaceService() {
     override fun onCreateSmartspaceSession(config: SmartspaceConfig, sessionId: SmartspaceSessionId) {
         Log.i(TAG, "session created: ${sessionId.id} surface=${config.uiSurface} client=${config.packageName} count=${config.smartspaceTargetCount}")
         sessions[sessionId] = config
+        if (config.uiSurface == SURFACE_HOME) com.ataglanceplus.Uptime.mark(this, true)
         com.ataglanceplus.DebugLog.add(this, com.ataglanceplus.DebugLog.Kind.CONNECTION, "${surfaceName(config.uiSurface)} connected (${config.packageName}, ${config.smartspaceTargetCount} cards)")
         // Connected again: the "disconnected" notification has done its job.
         com.ataglanceplus.wadb.UpdateReceiver.clearDisconnected(this)
@@ -361,6 +363,7 @@ class AtAGlanceService : SmartspaceService() {
         Log.i(TAG, "session destroyed: ${sessionId.id}")
         sessions[sessionId]?.let { com.ataglanceplus.DebugLog.add(this, com.ataglanceplus.DebugLog.Kind.CONNECTION, "${surfaceName(it.uiSurface)} disconnected (${it.packageName})") }
         sessions.remove(sessionId)
+        if (sessions.values.none { it.uiSurface == SURFACE_HOME }) com.ataglanceplus.Uptime.mark(this, false)
         islandSeen.remove(sessionId)
         ServiceState.sessionDestroyed(sessionId.id)
     }
