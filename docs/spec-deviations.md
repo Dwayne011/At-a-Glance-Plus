@@ -1454,3 +1454,25 @@ low res".
   readings (up to 10 minutes each), above the 7-day chart.
 - **Checked:** steps and sleep rendered at phone width with sample figures (Health Connect is
   not available in the test).
+
+## 0.51.0 — Stocks: price alerts, earnings, dividend, news
+
+- **Price alerts** (off by default; Settings › Finance › Price alerts, or "Turn on" on a stock's
+  screen, which asks for notification permission if needed):
+  - A level per stock, added on its screen ("Add a level"): above or below is taken from the price
+    entered against the current one. It alerts once, then is removed.
+  - A day's move of 3, 5 (default), 10 or 15% or more, or off: once a day per stock. The larger of
+    the regular and extended-hours move counts.
+  - Checked whenever prices arrive: the card's refresh (only stocks that updated) and the stock
+    screen's 15-second reading. So alerts are as frequent as the card's refresh setting when the
+    screen is closed; there is no separate background check.
+  - Notifications use a "Price alerts" channel and open the stock's screen.
+- **Next earnings** (Nasdaq, US listings only): date, days to go, and before the open or after the
+  close where Nasdaq says. Hidden when no date is announced.
+- **Dividend** (Nasdaq, US listings only): the latest amount, ex-date and pay date (labelled past
+  or upcoming), and yield. Hidden for stocks that pay none.
+- **News:** the 5 latest Yahoo Finance headlines for the stock, with source and age; a tap opens
+  the article in the browser.
+- Earnings and dividend are cached for 6 hours, news for 15 minutes.
+- **Checked:** NVDA rendered at phone width with live data (earnings 17 Nov after the close,
+  dividend, two levels, 5 headlines).

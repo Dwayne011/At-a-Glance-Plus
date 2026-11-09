@@ -200,6 +200,8 @@ internal fun FinancePage(version: Int, onBack: () -> Unit, open: (String) -> Uni
     var choosingThreshold by remember { mutableStateOf(false) }
     var editingVwap by remember { mutableStateOf(false) }
     var vwap by remember(version) { mutableStateOf(Prefs.financeVwap(context)) }
+    var choosingAlertMove by remember { mutableStateOf(false) }
+    val askNotifications = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
 
     SettingsPage("Finance", onBack) {
         ShowCardRow(CardType.FINANCE)
@@ -250,6 +252,18 @@ internal fun FinancePage(version: Int, onBack: () -> Unit, open: (String) -> Uni
         }
         SettingNote(com.ataglanceplus.live.FinanceRules.explain(context, quotes), MaterialTheme.colorScheme.primary)
 
+        Subheader("Price alerts")
+        SwitchSettingRow("Price alerts", "A notification when a stock crosses a level you set (on its screen), or makes a big move", checked = com.ataglanceplus.live.FinanceAlerts.enabled(context)) {
+            com.ataglanceplus.live.FinanceAlerts.setEnabled(context, it)
+            if (it && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (com.ataglanceplus.live.FinanceAlerts.enabled(context)) {
+            val move = com.ataglanceplus.live.FinanceAlerts.movePercent(context)
+            LinkRow("Alert on a day's move of", if (move > 0) "$move% or more" else "Off") { choosingAlertMove = true }
+            val levels = com.ataglanceplus.live.FinanceAlerts.levels(context)
+            SettingNote(if (levels.isEmpty()) "No price levels set. Add them on a stock's screen." else levels.joinToString(" · ") { "${it.symbol} ${if (it.above) "above" else "below"} " + String.format(locale, "%,.2f", it.price) })
+        }
+
         Subheader("Accounts")
         LinkRow(
             "eToro",
@@ -268,6 +282,11 @@ internal fun FinancePage(version: Int, onBack: () -> Unit, open: (String) -> Uni
     if (choosingThreshold) {
         ChoiceDialog("Big move", listOf(1, 2, 3, 5, 10), Prefs.financeThreshold(context), label = { "$it% or more" }, onDismiss = { choosingThreshold = false }) {
             Prefs.setFinanceThreshold(context, it); choosingThreshold = false
+        }
+    }
+    if (choosingAlertMove) {
+        ChoiceDialog("Alert on a day's move of", listOf(0, 3, 5, 10, 15), com.ataglanceplus.live.FinanceAlerts.movePercent(context), label = { if (it == 0) "Off" else "$it% or more" }, onDismiss = { choosingAlertMove = false }) {
+            com.ataglanceplus.live.FinanceAlerts.setMovePercent(context, it); choosingAlertMove = false
         }
     }
     if (editingVwap) {

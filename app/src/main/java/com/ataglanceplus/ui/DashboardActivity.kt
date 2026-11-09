@@ -1039,6 +1039,8 @@ internal fun StockDashboard(initial: String) {
                     Label("Previous close"); Figure(money(q.previousClose), size = 15.sp)
                 }
             }
+            // Earnings, dividend, price alerts and news.
+            StockExtras(q.symbol, extended?.price ?: q.price, ::money)
             // The user's other stocks: a stripe for the day's move, a small chart, price and move.
             val others = com.ataglanceplus.live.FinanceSource.quotes.collectAsStateWithLifecycle().value.filter { it.symbol != q.symbol && it.symbol in tickers }
             if (others.isNotEmpty()) Glass(Modifier.fillMaxWidth()) {

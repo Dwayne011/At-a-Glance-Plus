@@ -83,6 +83,7 @@ object FinanceSource {
         }
         refreshedAt = System.currentTimeMillis()
         _quotes.value = fresh
+        FinanceAlerts.check(context, fresh.filter { previous[it.symbol] !== it })
         _status.value = if (failed == 0) "Updated" else "Could not update $failed of ${tickers.size}; showing the last prices"
     }
 
@@ -402,6 +403,7 @@ object FinanceSource {
         val quote = fetch(symbol, context) ?: return null
         // The card shows the same price as the stock screen (see publish).
         publish(quote)
+        FinanceAlerts.check(context, listOf(quote))
         // A short gap between the two requests rather than a burst, which Yahoo is quicker to refuse.
         Thread.sleep(400)
         val prePost = settings.extendedHours && range.interval.endsWith("m")
