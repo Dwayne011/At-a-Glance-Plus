@@ -42,6 +42,7 @@ object Prefs {
     private const val KEY_SPORTS_OPEN = "sports_open"
     private const val KEY_SPORTS_HIDDEN = "sports_hidden"
     private const val KEY_FINANCE_OPEN = "finance_open"
+    private const val KEY_WEATHER_OPEN = "weather_open"
     private const val KEY_FIN_TICKERS = "finance_tickers"
     private const val KEY_FIN_REFRESH = "finance_refresh_minutes"
     private const val KEY_FIN_MOVES = "finance_show_moves"
@@ -462,6 +463,10 @@ object Prefs {
     }
 
     fun financeOpensDashboard(context: Context): Boolean = get(context).getBoolean(KEY_FINANCE_OPEN, true)
+
+    /** Whether tapping the weather card opens this app's weather screen (else Pixel Weather). */
+    fun weatherOpensDashboard(context: Context): Boolean = get(context).getBoolean(KEY_WEATHER_OPEN, true)
+    fun setWeatherOpensDashboard(context: Context, on: Boolean) = get(context).edit { putBoolean(KEY_WEATHER_OPEN, on) }
 
     fun setFinanceOpensDashboard(context: Context, on: Boolean) {
         get(context).edit().putBoolean(KEY_FINANCE_OPEN, on).apply()

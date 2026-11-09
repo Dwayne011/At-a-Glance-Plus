@@ -205,9 +205,14 @@ object WeatherCard {
         return Style.target(context, TARGET_ID, views, title, detail, R.drawable.ic_weather_location_off, tap, 2f)
     }
 
-    /** Pixel Weather if installed, otherwise this app; always behind the unlock gate. */
+    /**
+     * This app's weather screen (Settings › Weather › Open weather in this app, on by default),
+     * else Pixel Weather if installed, else this app; always behind the unlock gate.
+     */
     fun weatherIntent(context: Context): PendingIntent =
-        if (context.packageManager.getLaunchIntentForPackage(PIXEL_WEATHER) != null) {
+        if (com.ataglanceplus.Prefs.weatherOpensDashboard(context)) {
+            Style.gated(context, com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_WEATHER), REQUEST_WEATHER)
+        } else if (context.packageManager.getLaunchIntentForPackage(PIXEL_WEATHER) != null) {
             Style.gatedApp(context, PIXEL_WEATHER, REQUEST_WEATHER)
         } else {
             setupIntent(context)

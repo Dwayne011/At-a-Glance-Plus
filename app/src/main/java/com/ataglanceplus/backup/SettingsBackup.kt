@@ -31,7 +31,7 @@ object SettingsBackup {
         "finance_alerts_on", "finance_alert_move", "finance_alert_levels",
         "sports_alerts_on", "sports_alert_goals", "sports_alert_start", "sports_alert_periods", "sports_alert_final",
         "wallet_rules", "show_all_cards", "sports_after_hours", "sports_before_hours", "sports_followed",
-        "sports_hidden", "sports_next_always", "sports_open", "sports_race_step", "step_goal", "weather_look",
+        "sports_hidden", "sports_next_always", "sports_open", "sports_race_step", "step_goal", "weather_look", "weather_open",
     )
     private val PREFIXES = listOf("chip_app_", "chip_size_", "gmail_labels_")
 

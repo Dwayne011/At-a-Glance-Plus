@@ -310,6 +310,12 @@ object WeatherRepository {
         Prefs.get(context).edit().putFloat(KEY_LAT, lat.toFloat()).putFloat(KEY_LON, lon.toFloat()).apply()
     }
 
+    /** The last location weather was fetched for (latitude, longitude), or null before the first. */
+    fun lastLocation(context: Context): Pair<Double, Double>? = savedLocation(context)
+
+    /** Miles an hour or km/h, as the card uses: "mph" or "kmh" (the API's spelling). */
+    fun windApi(): String = windApiUnit()
+
     private fun savedLocation(context: Context): Pair<Double, Double>? {
         val prefs = Prefs.get(context)
         if (!prefs.contains(KEY_LAT)) return null

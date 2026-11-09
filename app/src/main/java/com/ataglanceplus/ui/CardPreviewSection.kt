@@ -104,6 +104,7 @@ internal fun WeatherPage(version: Int, onBack: () -> Unit) {
         SettingNote("Always shown: the forecast, your chips and a summary line.")
         Subheader("Look")
         LinkRow("Style", "Material You · ${look.label}", iconRes = R.drawable.ic_comp_sunset) { choosingLook = true }
+        SwitchSettingRow("Open weather in this app", "Hourly rain, radar, UV, air quality, sun and the week. Off: Pixel Weather", checked = Prefs.weatherOpensDashboard(context)) { Prefs.setWeatherOpensDashboard(context, it) }
 
         Subheader("Location")
         when {

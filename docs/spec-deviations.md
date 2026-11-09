@@ -1517,3 +1517,28 @@ low res".
 - **Backup:** price-alert and game-alert settings (and price levels) are now backed up. The
   calendar choice and the records of what was already alerted or added are not (they belong to
   this phone).
+
+## 0.53.0 — Weather screen
+
+- **Tapping the weather card** opens this app's weather screen (Settings › Weather › Open
+  weather in this app, on by default; off goes back to Pixel Weather). The weather chips
+  (sunrise/sunset and the rest) still open what they did.
+- **The screen** (frosted, tinted by the weather now), fetched when it opens and on pull to
+  refresh (which also refreshes the card), kept for 10 minutes:
+  - Now: the place (the phone's geocoder; "Your location" if it has none), temperature, condition
+    with its icon, high, low and feels-like.
+  - Next 24 hours: time, icon, temperature and the chance of rain as a bar, with a line on when
+    rain is likely (50% or more), until when, and the total in mm. A "Rain radar" button opens
+    RainViewer's radar map at the location in the browser.
+  - UV index now with its level (low to extreme) and today's highest and when.
+  - Air quality: the European index (the US one where that is the everyday scale) with its band
+    and PM2.5, from CAMS via Open-Meteo's air-quality service.
+  - Sun: the day's arc with the sun's position, sunrise, sunset (tomorrow's after dark) and the
+    hours of daylight.
+  - Wind: speed, an arrow the way it blows, where it comes from, gusts; humidity and pressure.
+  - 7 days: each day's icon, chance of rain (20% or more), low and high on a bar against the
+    week's range.
+  - "Open Pixel Weather" when it is installed.
+- Only the coordinates rounded to two decimals are sent, as for the card.
+- **Checked:** rendered with live London data at phone width (the test has no geocoder, so the
+  place shows "Your location").

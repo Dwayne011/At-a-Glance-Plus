@@ -168,6 +168,10 @@ class DashboardActivity : ComponentActivity() {
                         // Stocks and eToro share the sports dashboards' dark look.
                         kind?.startsWith(KIND_STOCK_PREFIX) == true -> FinanceScreen { StockDashboard(kind.removePrefix(KIND_STOCK_PREFIX)) }
                         kind == KIND_ETORO -> FinanceScreen { EtoroDashboard() }
+                        kind == KIND_WEATHER -> {
+                            val refresh = LocalRefresh.current
+                            WeatherDashboard(refresh.generation) { refresh.loaded = refresh.generation }
+                        }
                         // Health and phone dashboards: frosted glass, each with its own tint.
                         else -> GlassScreen(
                             when {
@@ -215,6 +219,8 @@ class DashboardActivity : ComponentActivity() {
         when {
             kind == null -> Unit
             kind == KIND_ETORO -> com.ataglanceplus.live.EtoroSource.refresh(context)
+            // The card's reading too, so it agrees with the screen.
+            kind == KIND_WEATHER -> com.ataglanceplus.weather.WeatherRepository.refresh(context, force = true)
             kind.startsWith(KIND_STOCK_PREFIX) -> com.ataglanceplus.live.FinanceSource.refresh(context)
             kind.startsWith(KIND_GAME_PREFIX) || kind.startsWith(KIND_RACE_PREFIX) -> {
                 com.ataglanceplus.live.SportsSource.refreshSchedules(context)
@@ -232,6 +238,7 @@ class DashboardActivity : ComponentActivity() {
         const val KIND_SLEEP = "sleep"
         const val KIND_SCREEN = "screen"
         const val KIND_ETORO = "etoro"
+        const val KIND_WEATHER = "weather"
         /** Followed by a [com.ataglanceplus.complications.HealthMetric] id: "health:hr". */
         const val KIND_HEALTH_PREFIX = "health:"
         /** Followed by a ticker: "stock:AAPL". */
