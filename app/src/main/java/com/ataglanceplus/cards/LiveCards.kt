@@ -54,6 +54,7 @@ enum class CardType(val id: String, val label: String, val detail: String) {
     WALLET("wallet", "Wallet passes", "Your Google Wallet passes, near the places and times you set; tap to show the code"),
     RAIN("rain", "Rain and snow", "Rain or snow coming within the hour, while it's dry"),
     COMMUTE("commute", "Commute", "Journey time to work or home at the times you set"),
+    PARCELS("parcels", "Parcels", "Deliveries from Gmail and Live Updates, until they arrive"),
 }
 
 /**
@@ -172,6 +173,40 @@ object LiveCards {
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, targetId(key), views, "$lead · $instruction", detail, R.drawable.ic_nav_flag, tap, 1.8f)
+    }
+
+    // --- Parcels ---
+
+    /** The parcel most nearly here ("Out for delivery · Amazon"), its stage as the bars, and how many more are coming. */
+    fun parcel(context: Context, aod: Boolean, parcel: com.ataglanceplus.live.GmailMail.Parcel, more: Int): SmartspaceTarget {
+        val key = "parcels"
+        val title = "${parcel.stage.label} · ${parcel.from}"
+        val detail = listOfNotNull(
+            parcel.expected,
+            if (more > 0) "$more more on the way" else null,
+            "from ${parcel.source}".takeIf { parcel.expected == null && more == 0 },
+        ).joinToString(" · ")
+        val views = RemoteViews(context.packageName, R.layout.card_live_update)
+        views.setImageViewResource(R.id.live_app_icon, R.drawable.ic_parcel)
+        views.setViewVisibility(R.id.live_app_icon, View.VISIBLE)
+        views.setViewVisibility(R.id.live_app_initial, View.GONE)
+        views.setInt(R.id.live_app_icon, "setColorFilter", if (aod) Style.AOD_TEXT else TEAL)
+        views.setTextViewText(R.id.live_title, title)
+        views.setTextViewText(R.id.live_detail, detail)
+        views.setViewVisibility(R.id.live_eta, View.GONE)
+        intArrayOf(R.id.live_seg_1, R.id.live_seg_2, R.id.live_seg_3, R.id.live_seg_4).forEachIndexed { i, id ->
+            val on = i < parcel.stage.step
+            views.setInt(id, "setBackgroundResource", if (aod) (if (on) R.drawable.aod_segment_on else R.drawable.aod_segment_off) else if (on) R.drawable.segment_on else R.drawable.segment_off)
+        }
+        if (aod) {
+            Style.aodBody(views, R.id.live_title, R.id.live_detail)
+            views.setInt(R.id.live_badge, "setBackgroundResource", R.drawable.aod_outline_r12)
+        }
+        dismissButton(context, views, key, aod)
+        val tap = Style.gated(context, com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_PARCELS), REQUEST_BASE + 0x9A2C)
+        Style.holdBar(views, pinned = false, aod = aod)
+        views.setOnClickPendingIntent(R.id.card_root, tap)
+        return Style.target(context, targetId(key), views, title, detail, R.drawable.ic_parcel, tap, 1.6f)
     }
 
     // --- Rain and snow ---

@@ -97,7 +97,9 @@ data class ChipSpec(val kind: Complication, val arg: String? = null) {
         Complication.STEPS -> com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_STEPS)
         Complication.SLEEP -> com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_SLEEP)
         Complication.SCREEN_TIME -> com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_SCREEN)
-        Complication.GMAIL -> arg?.let { gmailAccount(context, it) } ?: defaultPackage()?.let { context.packageManager.getLaunchIntentForPackage(it) }
+        // Signed in to Google: the mini inbox first (it links on to Gmail); else Gmail itself.
+        Complication.GMAIL -> if (com.ataglanceplus.wallet.GoogleAccount.isSignedIn(context)) com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_INBOX)
+            else arg?.let { gmailAccount(context, it) } ?: defaultPackage()?.let { context.packageManager.getLaunchIntentForPackage(it) }
         Complication.HEALTH -> arg?.let { com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_HEALTH_PREFIX + it) }
         Complication.ETORO -> com.ataglanceplus.ui.DashboardActivity.intent(context, com.ataglanceplus.ui.DashboardActivity.KIND_ETORO)
         Complication.SUNSET -> weatherSunScreen(context) ?: defaultPackage()?.let { context.packageManager.getLaunchIntentForPackage(it) }

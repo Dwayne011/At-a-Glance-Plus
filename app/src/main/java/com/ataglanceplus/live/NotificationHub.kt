@@ -173,6 +173,8 @@ object NotificationHub {
         }
         _nav.value = nav
         _live.value = live
+        // Parcels in Live Updates are remembered until delivered, after their notification goes.
+        runCatching { GmailMail.noteLive(context, live, TRIP_APPS) }
         _activeKeys.value = active.map { it.key }.toSet()
 
         // Notifications already on screen when we start are not new messages.

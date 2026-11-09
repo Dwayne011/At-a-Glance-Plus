@@ -172,6 +172,14 @@ class DashboardActivity : ComponentActivity() {
                             val refresh = LocalRefresh.current
                             WeatherDashboard(refresh.generation) { refresh.loaded = refresh.generation }
                         }
+                        kind == KIND_INBOX -> {
+                            val refresh = LocalRefresh.current
+                            InboxDashboard(refresh.generation) { refresh.loaded = refresh.generation }
+                        }
+                        kind == KIND_PARCELS -> {
+                            val refresh = LocalRefresh.current
+                            ParcelsDashboard(refresh.generation) { refresh.loaded = refresh.generation }
+                        }
                         // Health and phone dashboards: frosted glass, each with its own tint.
                         else -> GlassScreen(
                             when {
@@ -221,6 +229,8 @@ class DashboardActivity : ComponentActivity() {
             kind == KIND_ETORO -> com.ataglanceplus.live.EtoroSource.refresh(context)
             // The card's reading too, so it agrees with the screen.
             kind == KIND_WEATHER -> com.ataglanceplus.weather.WeatherRepository.refresh(context, force = true)
+            // The inbox and parcel screens fetch afresh themselves on a pull.
+            kind == KIND_INBOX || kind == KIND_PARCELS -> Unit
             kind.startsWith(KIND_STOCK_PREFIX) -> com.ataglanceplus.live.FinanceSource.refresh(context)
             kind.startsWith(KIND_GAME_PREFIX) || kind.startsWith(KIND_RACE_PREFIX) -> {
                 com.ataglanceplus.live.SportsSource.refreshSchedules(context)
@@ -239,6 +249,9 @@ class DashboardActivity : ComponentActivity() {
         const val KIND_SCREEN = "screen"
         const val KIND_ETORO = "etoro"
         const val KIND_WEATHER = "weather"
+        /** The Gmail chip's mini inbox. */
+        const val KIND_INBOX = "inbox"
+        const val KIND_PARCELS = "parcels"
         /** Followed by a [com.ataglanceplus.complications.HealthMetric] id: "health:hr". */
         const val KIND_HEALTH_PREFIX = "health:"
         /** Followed by a ticker: "stock:AAPL". */

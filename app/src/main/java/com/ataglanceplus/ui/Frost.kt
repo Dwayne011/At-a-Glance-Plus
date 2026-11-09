@@ -222,6 +222,7 @@ internal object FrostIcons {
     const val Cart = "M3 4h3l2 11h11l2-8H7 M9 20h.01 M18 20h.01"
     const val More = "M12 5h.01 M12 12h.01 M12 19h.01"
     const val Bug = "M8 8h8v9a4 4 0 0 1-8 0z M12 4v4 M4 12h4 M16 12h4 M5 18l3-2 M19 18l-3-2"
+    const val Parcel = "M4 8l8-4 8 4v8l-8 4-8-4z M4 8l8 4 8-4 M12 12v8"
     const val Account = "M4 4h16v16H4z M12 8a3 3 0 1 0 0 6a3 3 0 1 0 0-6z M7 20a5 5 0 0 1 10 0"
 }
 

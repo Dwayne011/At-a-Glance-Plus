@@ -173,6 +173,7 @@ class AtAGlanceService : SmartspaceService() {
         scope.launch { NotificationHub.alarmSkip.drop(1).distinctUntilChanged().collect { pushAll() } }
         scope.launch { com.ataglanceplus.weather.RainSource.changed.drop(1).collect { pushAll() } }
         scope.launch { com.ataglanceplus.live.CommuteSource.trip.drop(1).collect { pushAll() } }
+        scope.launch { com.ataglanceplus.live.GmailMail.parcels.drop(1).distinctUntilChanged().collect { pushAll() } }
         scope.launch { NotificationHub.messages.collect { showMessage(it) } }
         // The message was read or cleared (its notification is gone): the pop-up goes too.
         scope.launch {
@@ -232,6 +233,11 @@ class AtAGlanceService : SmartspaceService() {
                 // The commute: every 5 minutes in a commute window, with the screen on.
                 if (!screenOff && Prefs.cardEnabled(this@AtAGlanceService, CardType.COMMUTE)) {
                     com.ataglanceplus.live.CommuteSource.refresh(this@AtAGlanceService)
+                }
+                // Parcels from Gmail: every 15 minutes with the screen on, once signed in to Google.
+                if (!screenOff && Prefs.cardEnabled(this@AtAGlanceService, CardType.PARCELS) && com.ataglanceplus.wallet.GoogleAccount.isSignedIn(this@AtAGlanceService)) {
+                    runCatching { com.ataglanceplus.live.GmailMail.refreshParcels(this@AtAGlanceService) }
+                        .onFailure { CrashLog.record(this@AtAGlanceService, "Reading parcels from Gmail", it) }
                 }
                 delay(WEATHER_CHECK_MS)
             }
@@ -424,6 +430,7 @@ class AtAGlanceService : SmartspaceService() {
         messageEntering = sessionId !in islandSeen,
         rain = if (Prefs.cardEnabled(this, CardType.RAIN)) com.ataglanceplus.weather.RainSource.soon() else null,
         commute = if (Prefs.cardEnabled(this, CardType.COMMUTE)) com.ataglanceplus.live.CommuteSource.showing(this) else null,
+        parcel = if (Prefs.cardEnabled(this, CardType.PARCELS)) com.ataglanceplus.live.GmailMail.forCard() else null,
         wallet = runCatching {
             val ids = com.ataglanceplus.wallet.WalletRules.activePassIds(
                 this, System.currentTimeMillis(), com.ataglanceplus.wallet.WalletGeofences.cachedLocation,

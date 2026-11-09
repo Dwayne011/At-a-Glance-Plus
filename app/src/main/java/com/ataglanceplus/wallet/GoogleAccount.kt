@@ -29,6 +29,10 @@ object GoogleAccount {
     private const val GMS_SIG = "38918a453d07199354f8b19af05ec6562ced5788"
     private const val GMS_VERSION_DEFAULT = "19629032"
     private const val WALLET_SCOPE = "oauth2:https://www.googleapis.com/auth/tapandpay"
+    /** Read-only Gmail, for the mini inbox and parcels: messages can be read, never changed or sent. */
+    private const val GMAIL_SCOPE = "oauth2:https://www.googleapis.com/auth/gmail.readonly"
+    private const val KEY_GMAIL = "google_gmail_token"
+    private const val KEY_GMAIL_EXPIRY = "google_gmail_token_expiry"
 
     private const val KEY_MASTER = "google_master_token"
     private const val KEY_EMAIL = "google_email"
@@ -66,6 +70,7 @@ object GoogleAccount {
         SecureStore.putString(context, KEY_MASTER, token)
         SecureStore.putString(context, KEY_EMAIL, response["Email"])
         clearWalletToken(context)
+        clearGmailToken(context)
         return null
     }
 
@@ -116,6 +121,60 @@ object GoogleAccount {
         return auth
     }
 
+    /** Why the last Gmail token request failed; null after one succeeds. */
+    @Volatile var gmailError: String? = null
+        private set
+
+    /**
+     * A read-only Gmail token for the signed-in account (the same exchange as the Wallet token,
+     * for Gmail's read-only scope), reused until shortly before it expires. Null when signed out
+     * or refused. Blocking.
+     */
+    fun gmailToken(context: Context): String? {
+        val cached = SecureStore.getString(context, KEY_GMAIL)
+        val expiry = SecureStore.getString(context, KEY_GMAIL_EXPIRY)?.toLongOrNull() ?: 0L
+        if (cached != null && System.currentTimeMillis() / 1000 < expiry - 300) return cached
+        val master = SecureStore.getString(context, KEY_MASTER) ?: return null
+        val (code, response) = postWithCode(
+            "https://android.googleapis.com/auth",
+            mapOf(
+                "lang" to lang(),
+                "google_play_services_version" to gmsVersion(context),
+                "sdk_version" to Build.VERSION.SDK_INT.toString(),
+                "device_country" to Locale.getDefault().country.lowercase(),
+                "check_email" to "1",
+                "oauth2_foreground" to "1",
+                "token_request_options" to "CAA4AVAB",
+                "app" to GMS,
+                "service" to GMAIL_SCOPE,
+                "client_sig" to GMS_SIG,
+                "system_partition" to "1",
+                "callerPkg" to GMS,
+                "Token" to master,
+                "callerSig" to GMS_SIG,
+            ),
+            header = "app" to GMS,
+        )
+        val auth = response?.get("Auth")
+        if (auth == null) {
+            gmailError = when {
+                response == null -> "Google's sign-in service did not answer. Check the connection."
+                else -> "Google did not give a Gmail token (HTTP $code" + (response["Error"]?.let { ", $it" } ?: "") + ")."
+            }
+            Log.w(TAG, "gmail token refused: $gmailError")
+            return null
+        }
+        gmailError = null
+        SecureStore.putString(context, KEY_GMAIL, auth)
+        SecureStore.putString(context, KEY_GMAIL_EXPIRY, response["Expiry"] ?: (System.currentTimeMillis() / 1000 + 3000).toString())
+        return auth
+    }
+
+    fun clearGmailToken(context: Context) {
+        SecureStore.delete(context, KEY_GMAIL)
+        SecureStore.delete(context, KEY_GMAIL_EXPIRY)
+    }
+
     fun clearWalletToken(context: Context) {
         SecureStore.delete(context, KEY_WALLET)
         SecureStore.delete(context, KEY_WALLET_EXPIRY)
@@ -126,6 +185,7 @@ object GoogleAccount {
         SecureStore.delete(context, KEY_MASTER)
         SecureStore.delete(context, KEY_EMAIL)
         clearWalletToken(context)
+        clearGmailToken(context)
         WalletSource.clear(context)
     }
 

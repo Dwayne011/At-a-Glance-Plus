@@ -1630,3 +1630,31 @@ low res".
 - The commute's places, windows and tap choice are backed up, as Wallet places are.
 - **Checked:** a live trip Waterloo → Canary Wharf (TfL and OSRM answered), the card in both
   looks, and the settings page.
+
+## 0.57.0 — Gmail mini inbox and parcels
+
+- **Gmail, read-only, with the Wallet sign-in** (as chosen): the same Google sign-in made for
+  Wallet passes (as Play services, which Google's terms do not allow, as warned at sign-in) now
+  also asks for a read-only Gmail token. Nothing is marked read, changed or sent; mail stays in
+  memory. Signing out removes it with the rest.
+- **Mini inbox:** the Gmail chip opens it when signed in (a chip's own chosen app still wins):
+  the last 8 inbox messages, each with an unread dot, sender, time, subject and a line, then
+  "Open Gmail". Tapping a message opens Gmail. Pull to refresh.
+- **Parcels card** (Settings › Cards › Parcels; on by default):
+  - From shipping emails in the last 14 days (subjects about dispatch, delivery, "your order /
+    parcel / package"), checked every 15 minutes with the screen on, once signed in; grouped by
+    order or tracking number (else by thread), the latest email's stage winning.
+  - From Live Updates that read like a parcel (not the food and ride apps), remembered after
+    their notification goes, until delivered or 3 days without news (the shop and status only).
+  - Stages: ordered, on its way, out for delivery, delivered (the card's four bars). "Arriving
+    tomorrow"-style wording is picked up.
+  - The card shows the parcel most nearly here ("Out for delivery · DPD", "Arriving today · 1
+    more on the way"); ordered-only and delivered parcels stay off it, and "on its way" ones
+    after 7 days without news. Tap: the parcel list, where delivered ones stay a day.
+- **Not checked with a real account:** the Gmail token and the Gmail API calls could not be run
+  here (no Google account in the test). If Google refuses the token, the inbox and parcel
+  screens say so, and parcels still come from Live Updates.
+- **Checked:** the stage and arrival wording on sample subjects (including "will be delivered
+  tomorrow", which is not delivered, and a promotion, which is not a parcel), Live Update parcels
+  (a DPD one kept after its notification; Uber Eats left out), the card choice, and renders of
+  the card, the inbox and the parcel list.

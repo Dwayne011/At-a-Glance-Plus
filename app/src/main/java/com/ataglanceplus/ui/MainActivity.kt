@@ -167,6 +167,7 @@ private fun SettingsApp() {
         "display" -> DisplayPage(version, ::up, open)
         "order" -> CardOrderPage(version, ::up)
         "card/commute" -> CommutePage(version, ::up, open)
+        "card/parcels" -> ParcelsPage(version, ::up, open)
         "commute/place/home" -> CommutePlacePage(home = true, onBack = ::up)
         "commute/place/work" -> CommutePlacePage(home = false, onBack = ::up)
         "quiet" -> QuietHoursPage(version, ::up)
@@ -238,6 +239,7 @@ internal fun HomePage(version: Int, open: (String) -> Unit) {
         }
         val commuteSet = com.ataglanceplus.live.CommuteSource.home(context) != null && com.ataglanceplus.live.CommuteSource.work(context) != null
         MenuRow(FrostIcons.Home, "Commute", onOff(CardType.COMMUTE, if (commuteSet) "to work and home at your times" else "set home and work"), Tone.SECONDARY) { open("card/commute") }
+        MenuRow(FrostIcons.Parcel, "Parcels", onOff(CardType.PARCELS, if (com.ataglanceplus.wallet.GoogleAccount.isSignedIn(context)) "Gmail and Live Updates" else "Live Updates; sign in for Gmail"), Tone.TERTIARY) { open("card/parcels") }
         MenuRow(FrostIcons.Play, "Media", onOff(CardType.MEDIA, if (Prefs.mediaWave(context)) "equaliser · stays 5 min after pausing" else "progress bar · stays 5 min after pausing"), Tone.TERTIARY) { open("card/media") }
         val more = MORE_CARDS.filter { Prefs.cardEnabled(context, it) }
         MenuRow(FrostIcons.Apps, "More cards", if (more.isEmpty()) "All off" else more.joinToString(", ") { it.label }, Tone.NEUTRAL) { open("more") }

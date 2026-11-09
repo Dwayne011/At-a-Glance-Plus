@@ -41,6 +41,8 @@ data class CardData(
     val rain: com.ataglanceplus.weather.RainSoon? = null,
     /** The journey to work or home, in a commute window. */
     val commute: com.ataglanceplus.live.CommuteSource.Trip? = null,
+    /** The parcel most nearly here, and how many more are coming. */
+    val parcel: Pair<com.ataglanceplus.live.GmailMail.Parcel, Int>? = null,
 )
 
 /** Everything shown on a surface, in order. */
@@ -86,6 +88,7 @@ object CardDeck {
         val (liveSports, otherSports) = sports.partition { it.phase == com.ataglanceplus.live.SportsPhase.LIVE }
         val finance = if (on(CardType.FINANCE)) FinanceRules.showing(context, data.quotes) else null
         val wallet = if (on(CardType.WALLET)) data.wallet.filter { "wallet:${it.id}" !in dismissed } else emptyList()
+        val parcel = data.parcel?.takeIf { on(CardType.PARCELS) && "parcels" !in dismissed }
 
         // Share out the user's chips. Before the user picks any, each card keeps the spec's own.
         val pool = Prefs.chips(context)
@@ -125,6 +128,7 @@ object CardDeck {
                 add(Entry("calendar", CardRules.Slot(CardType.CALENDAR.id), i == 0) { c -> LiveCards.calendar(context, aod, event, if (i == 0) c else emptyList()) })
             }
             wallet.forEach { pass -> add(Entry("wallet", CardRules.Slot(CardType.WALLET.id), false) { _ -> LiveCards.wallet(context, aod, pass) }) }
+            parcel?.let { (p, more) -> add(Entry("parcels", CardRules.Slot(CardType.PARCELS.id), false) { _ -> LiveCards.parcel(context, aod, p, more) }) }
             // Finance is always up; a big move or a time window brings it ahead of upcoming games.
             finance?.takeIf { it.forward }?.let { f -> add(Entry("finance", CardRules.Slot(CardType.FINANCE.id), true) { c -> LiveCards.finance(context, aod, data.quotes, f, c) }) }
             otherSports.forEach { sp -> add(Entry("sports", CardRules.Slot(CardType.SPORTS.id, aroundKickoff(sp)), false) { _ -> sportsCard(context, aod, sp) }) }
@@ -197,6 +201,7 @@ object CardDeck {
         data.media?.let { add("media:${it.pkg}") }
         data.rain?.let { add(it.key) }
         data.commute?.let { add(it.key) }
+        data.parcel?.let { add("parcels") }
         data.calendars.forEach { add(it.instanceKey) }
         addAll(FinanceRules.instanceKeys(context, data.quotes))
         data.sports.forEach { add(it.instanceKey) }

@@ -683,3 +683,30 @@ internal fun CommutePlacePage(home: Boolean, onBack: () -> Unit) {
         })
     }
 }
+
+// --- Parcels --------------------------------------------------------------------------------
+
+/** The parcels card, and the Google sign-in it (and the Gmail chip's mini inbox) reads Gmail with. */
+@Composable
+internal fun ParcelsPage(version: Int, onBack: () -> Unit, open: (String) -> Unit) {
+    val context = LocalContext.current
+    @Suppress("UNUSED_EXPRESSION") version
+    val signedIn = com.ataglanceplus.wallet.GoogleAccount.isSignedIn(context)
+    SettingsPage("Parcels", onBack) {
+        ShowCardRow(CardType.PARCELS)
+        Subheader("Gmail")
+        if (signedIn) {
+            SettingRow("Reading Gmail as", com.ataglanceplus.wallet.GoogleAccount.email(context).orEmpty() + " · read-only", glyph = FrostIcons.Person)
+        } else {
+            LinkRow("Sign in to Google", "The same sign-in as Wallet passes. Until then, parcels come from Live Updates only", glyph = FrostIcons.Person, error = true) { open("card/wallet") }
+        }
+        SettingRow("Show all parcels", "The list, with each one's stage", glyph = FrostIcons.Lines, onClick = {
+            context.startActivity(DashboardActivity.intent(context, DashboardActivity.KIND_PARCELS))
+        })
+        SettingNote(
+            "From shipping emails in the last 14 days (checked every 15 minutes while the screen is on) and from Live Updates that " +
+                "read like a parcel. The card shows the one most nearly here, and stays until it's delivered. Mail is read, never changed, " +
+                "and stays on the phone. The Gmail chip opens a mini inbox with this sign-in too.",
+        )
+    }
+}
