@@ -72,6 +72,8 @@ data class Game(
     val home: Side,
     val away: Side,
     val link: String?,
+    /** The feed's status name: STATUS_HALFTIME, STATUS_END_PERIOD, STATUS_FINAL… */
+    val statusName: String = "",
 )
 
 /** One session of a race weekend (practice, qualifying, sprint, race). */
@@ -168,8 +170,10 @@ object SportsSource {
             list.filter { it.state == "in" || (it.state == "pre" && it.start - now < 15 * 60_000L && now - it.start < 6 * 3_600_000L) }
                 .forEach { game ->
                     active = true
-                    val fresh = summary(game) ?: return@forEach
+                    val (fresh, root) = summary(game) ?: return@forEach
                     if (fresh.state == "post") finishedAt.putIfAbsent(fresh.eventId, now)
+                    runCatching { SportsAlerts.check(context, key, game, fresh) { runCatching { GameDetail.parse(root) }.getOrNull() } }
+                        .onFailure { Log.w(TAG, "alerts failed", it) }
                     _games.update { all -> all + (key to all[key].orEmpty().map { if (it.eventId == fresh.eventId) fresh else it }) }
                 }
         }
@@ -189,6 +193,12 @@ object SportsSource {
             }
         }
         active
+    }
+
+    /** Whether a followed team's game is on or starts within 15 minutes (no request; from the last schedules). */
+    fun teamGameLiveOrSoon(): Boolean {
+        val now = System.currentTimeMillis()
+        return _games.value.values.flatten().any { it.state == "in" || (it.state == "pre" && it.start - now < 15 * 60_000L && now - it.start < 6 * 3_600_000L) }
     }
 
     private fun teamGames(f: Followed): List<Game>? {
@@ -220,6 +230,7 @@ object SportsSource {
             start = parseTime(e.optString("date")) ?: return null,
             state = status.optString("state"),
             status = status.optString("shortDetail"),
+            statusName = status.optString("name"),
             home = side(home),
             away = side(away),
             link = e.optJSONArray("links")?.optJSONObject(0)?.optString("href")?.ifEmpty { null },
@@ -308,7 +319,8 @@ object SportsSource {
     fun scoresHidden(context: Context, eventId: String): Boolean =
         keysFor(eventId).any { it in Prefs.sportsHidden(context) }
 
-    private fun summary(game: Game): Game? {
+    /** [game] as its summary has it now, with the summary itself (for the alerts' scorer). */
+    private fun summary(game: Game): Pair<Game, JSONObject>? {
         val root = getJson("$BASE/${game.sport}/${game.league}/summary?event=${game.eventId}") ?: return null
         val competition = root.optJSONObject("header")?.optJSONArray("competitions")?.optJSONObject(0) ?: return null
         val status = competition.optJSONObject("status")?.optJSONObject("type") ?: return null
@@ -319,9 +331,10 @@ object SportsSource {
         return game.copy(
             state = status.optString("state").ifEmpty { game.state },
             status = status.optString("shortDetail").ifEmpty { game.status },
+            statusName = status.optString("name"),
             home = side(home).let { it.copy(logoUrl = it.logoUrl ?: game.home.logoUrl) },
             away = side(away).let { it.copy(logoUrl = it.logoUrl ?: game.away.logoUrl) },
-        )
+        ) to root
     }
 
     /** The race weekend under way or next, from the series calendar. */

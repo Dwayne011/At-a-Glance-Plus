@@ -2505,6 +2505,13 @@ private fun GameMatchDashboard(eventId: String) {
                 }
             }
             val colours = GameColours(game, homeColour, awayColour)
+            // The league table: the game's competition, or the followed team's league for a cup game.
+            val table by produceState<Pair<String, List<com.ataglanceplus.live.Standings.Table>>?>(null, game.eventId, refresh.generation) {
+                value = withContext(Dispatchers.IO) {
+                    com.ataglanceplus.live.Standings.tables(game.sport, game.league)?.let { game.leagueName to it }
+                        ?: team?.takeIf { !it.isRacing && it.league != game.league }?.let { f -> com.ataglanceplus.live.Standings.tables(f.sport, f.league)?.let { f.leagueName to it } }
+                }
+            }
             GlassScreen(listOf(homeColour.dim(0.15f), awayColour.dim(0.15f), Color(0xFF1B2440)), accent = homeColour.lift(0.45f)) {
                 Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val d = detail
@@ -2515,6 +2522,8 @@ private fun GameMatchDashboard(eventId: String) {
                             if (d.lineups.isNotEmpty()) add("Line-ups")
                             if (d.events.isNotEmpty() || d.scoring.isNotEmpty()) add("Timeline")
                         } else if (d != null && d.lineups.isNotEmpty()) add("Line-ups")
+                        // Not while results are hidden: the table would give them away.
+                        if (!hidden && table != null) add("Table")
                         add("Schedule")
                     }
                     val pager = rememberPagerState(pageCount = { tabs.size })
@@ -2529,6 +2538,7 @@ private fun GameMatchDashboard(eventId: String) {
                                 "Box score" -> if (d != null) BoxScoreTab(d, colours)
                                 "Line-ups" -> if (d != null) LineupsTab(d, game, colours)
                                 "Timeline" -> if (d != null) TimelineTab(d, colours)
+                                "Table" -> table?.let { (name, tables) -> TableTab(name, tables, game, colours) }
                                 "Schedule" -> ScheduleTab(games, eventId, team, hidden)
                             }
                         }
@@ -2856,6 +2866,66 @@ internal fun TimelineTab(d: com.ataglanceplus.live.GameDetail, colours: GameColo
                     } + e.text,
                     color = GlassText, fontSize = 12.5.sp, modifier = Modifier.weight(1f),
                 )
+            }
+        }
+    }
+}
+
+/**
+ * The league table (or each conference's): rank, a stripe in the colour of the place's zone
+ * (Champions League, relegation…) where the feed gives one, and the sport's figures. The two
+ * teams in this game are picked out in their colours.
+ */
+@Composable
+internal fun TableTab(name: String, tables: List<com.ataglanceplus.live.Standings.Table>, game: com.ataglanceplus.live.Game, colours: GameColours) {
+    val ids = mapOf(game.home.id to colours.home, game.away.id to colours.away)
+    // The conference with one of this game's teams first.
+    tables.sortedByDescending { t -> t.rows.any { it.teamId in ids } }.forEach { table ->
+        Glass(Modifier.fillMaxWidth(), padding = 10.dp) {
+            Label(if (tables.size > 1) table.name else name)
+            fun width(col: String) = if (col == "PCT") 38.dp else if (col == "GD" || col == "OTL") 30.dp else 26.dp
+            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("", modifier = Modifier.width(34.dp))
+                Spacer(Modifier.weight(1f))
+                table.columns.forEach { Text(it, color = GlassSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(width(it))) }
+            }
+            table.rows.forEach { row ->
+                val mine = ids[row.teamId]
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                        .background(mine?.copy(alpha = 0.28f) ?: Color.Transparent).padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("${row.rank}", color = GlassSub, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.width(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Stripe(mine?.lift(0.3f) ?: row.zone?.let { Color(it) } ?: Color.Transparent, 14.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        row.name, color = if (mine != null) Color.White else GlassText, fontSize = 13.sp,
+                        fontWeight = if (mine != null) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                    )
+                    row.values.forEachIndexed { i, v ->
+                        val col = table.columns[i]
+                        Text(
+                            v, color = if (i == row.values.lastIndex || mine != null) Color.White else GlassText, fontSize = 12.5.sp,
+                            fontWeight = if (i == row.values.lastIndex) FontWeight.Bold else FontWeight.Normal,
+                            textAlign = TextAlign.End, maxLines = 1, modifier = Modifier.width(width(col)),
+                        )
+                    }
+                }
+            }
+            // What the stripes mean.
+            val zones = table.rows.mapNotNull { r -> r.zone?.let { z -> r.zoneName?.let { z to it } } }.distinct()
+            if (zones.isNotEmpty()) {
+                FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    zones.forEach { (z, label) ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Stripe(Color(z), 10.dp)
+                            Text(label, color = GlassSub, fontSize = 11.sp)
+                        }
+                    }
+                }
             }
         }
     }

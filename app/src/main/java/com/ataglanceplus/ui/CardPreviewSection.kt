@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -378,6 +379,12 @@ internal fun SportsPage(version: Int, onBack: () -> Unit, open: (String) -> Unit
     val followed = Prefs.sportsFollowed(context)
     var editing by remember { mutableStateOf<com.ataglanceplus.live.Followed?>(null) }
     var choosing by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val askNotifications = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+    // Calendar access, then the calendar to add games to.
+    val askCalendar = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) {
+        if (com.ataglanceplus.live.SportsCalendar.allowed(context)) choosing = "calendar"
+    }
 
     SettingsPage("Sports", onBack) {
         ShowCardRow(CardType.SPORTS)
@@ -402,6 +409,35 @@ internal fun SportsPage(version: Int, onBack: () -> Unit, open: (String) -> Unit
             Prefs.SportsOpen.ESPN -> "ESPN's page"
         }) { choosing = "open" }
         SettingNote("Scores refresh every 30 seconds during a game. Tap a team or Formula 1 to hide its results (no spoilers) or stop following it.")
+
+        Subheader("Game alerts")
+        val alerts = com.ataglanceplus.live.SportsAlerts
+        SwitchSettingRow("Game alerts", "Notifications for your teams' games, even with the screen off", checked = alerts.enabled(context)) {
+            alerts.setEnabled(context, it)
+            if (it && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (alerts.enabled(context)) {
+            com.ataglanceplus.live.SportsAlerts.Moment.entries.forEach { m ->
+                SwitchSettingRow(m.label, m.detail, checked = alerts.wants(context, m)) { alerts.setWants(context, m, it) }
+            }
+            SettingNote("While one of your teams plays, scores are checked every minute with the screen off (every 30 seconds with it on). Teams with hidden results only alert at kick-off. Formula 1 has no alerts.")
+        }
+
+        Subheader("Calendar")
+        val calendar = com.ataglanceplus.live.SportsCalendar
+        val calendarName by produceState<String?>(null, version) {
+            value = withContext(Dispatchers.IO) { calendar.calendarId(context)?.let { id -> calendar.calendars(context).firstOrNull { it.id == id } }?.let { "${it.name} · ${it.account}" } }
+        }
+        SwitchSettingRow("Add games to calendar", "Your teams' games in the next 60 days, kept up to date. Turning this off removes the upcoming ones it added", checked = calendar.enabled(context)) { on ->
+            if (on) {
+                if (calendar.allowed(context)) choosing = "calendar"
+                else askCalendar.launch(arrayOf(android.Manifest.permission.READ_CALENDAR, android.Manifest.permission.WRITE_CALENDAR))
+            } else scope.launch(Dispatchers.IO) { calendar.turnOff(context) }
+        }
+        if (calendar.enabled(context)) {
+            LinkRow("Calendar", calendarName ?: "Not found") { choosing = "calendar" }
+            SettingNote("Only games this app added are changed or removed. A game you delete from your calendar isn't added again.")
+        }
     }
 
     when (choosing) {
@@ -416,6 +452,32 @@ internal fun SportsPage(version: Int, onBack: () -> Unit, open: (String) -> Unit
             label = { when (it) { Prefs.SportsOpen.DASHBOARD -> "This app's dashboard"; Prefs.SportsOpen.GOOGLE -> "Google's results"; Prefs.SportsOpen.ESPN -> "ESPN's page" } },
             onDismiss = { choosing = null },
         ) { Prefs.setSportsOpen(context, it); choosing = null }
+    }
+    if (choosing == "calendar") {
+        val calendars by produceState<List<com.ataglanceplus.live.SportsCalendar.Calendar>?>(null) {
+            value = withContext(Dispatchers.IO) { com.ataglanceplus.live.SportsCalendar.calendars(context) }
+        }
+        AlertDialog(
+            onDismissRequest = { choosing = null },
+            title = { Text("Add games to") },
+            text = {
+                Column {
+                    when (val list = calendars) {
+                        null -> Text("Loading…")
+                        else -> if (list.isEmpty()) Text("No Google calendar on this phone can take new events.") else list.forEach { cal ->
+                            SettingRow(cal.name, cal.account, icon = Icons.Default.DateRange, onClick = {
+                                choosing = null
+                                scope.launch(Dispatchers.IO) {
+                                    if (com.ataglanceplus.live.SportsSource.games.value.isEmpty()) runCatching { com.ataglanceplus.live.SportsSource.refreshSchedules(context) }
+                                    com.ataglanceplus.live.SportsCalendar.choose(context, cal.id)
+                                }
+                            })
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { choosing = null }) { Text("Cancel") } },
+        )
     }
     editing?.let { f ->
         val hidden = f.key in Prefs.sportsHidden(context)

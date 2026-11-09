@@ -439,26 +439,40 @@ class AtAGlanceService : SmartspaceService() {
 
     /**
      * Sports: schedules now and every half hour; while a game or session is on (or about to
-     * start), live scores every 30 seconds, otherwise a check every 5 minutes.
+     * start), live scores every 30 seconds, otherwise a check every 5 minutes. Paused while the
+     * screen is off, except while a followed team plays and game alerts are on: then every minute.
      */
     private fun restartSports() {
         sportsJob?.cancel()
         if (Prefs.sportsFollowed(this).isEmpty()) return
         sportsJob = scope.launch {
+            val context = this@AtAGlanceService
             while (true) {
-                // Paused while the screen is off; scores are fetched again the moment it comes on.
-                screenOn.first { it }
-                if (Prefs.cardEnabled(this@AtAGlanceService, CardType.SPORTS)) {
+                val alerts = com.ataglanceplus.live.SportsAlerts.enabled(context)
+                if (!screenOn.value) {
+                    if (!alerts) {
+                        // Scores are fetched again the moment the screen comes on.
+                        screenOn.first { it }
+                    } else if (!SportsSource.teamGameLiveOrSoon()) {
+                        // Nothing on: look again (at the schedules already fetched) in 5 minutes,
+                        // or at once when the screen comes on.
+                        kotlinx.coroutines.withTimeoutOrNull(5 * 60_000L) { screenOn.first { it } }
+                        continue
+                    }
+                }
+                if (Prefs.cardEnabled(context, CardType.SPORTS) || alerts || com.ataglanceplus.live.SportsCalendar.enabled(context)) {
                     if (System.currentTimeMillis() - sportsScheduledAt > SPORTS_SCHEDULE_MS) {
-                        runCatching { SportsSource.refreshSchedules(this@AtAGlanceService) }
-                            .onFailure { CrashLog.record(this@AtAGlanceService, "Fetching sports schedules", it) }
+                        runCatching { SportsSource.refreshSchedules(context) }
+                            .onFailure { CrashLog.record(context, "Fetching sports schedules", it) }
                         sportsScheduledAt = System.currentTimeMillis()
+                        runCatching { com.ataglanceplus.live.SportsCalendar.sync(context) }
+                            .onFailure { CrashLog.record(context, "Adding games to the calendar", it) }
                     }
                     sportsCheckedAt = System.currentTimeMillis()
-                    val live = runCatching { SportsSource.refreshLive(this@AtAGlanceService) }
-                        .onFailure { CrashLog.record(this@AtAGlanceService, "Fetching live scores", it) }
+                    val live = runCatching { SportsSource.refreshLive(context) }
+                        .onFailure { CrashLog.record(context, "Fetching live scores", it) }
                         .getOrDefault(false)
-                    delay(if (live) 30_000L else 5 * 60_000L)
+                    delay(if (!live) 5 * 60_000L else if (screenOn.value) 30_000L else 60_000L)
                 } else {
                     delay(5 * 60_000L)
                 }

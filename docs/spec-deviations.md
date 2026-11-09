@@ -1476,3 +1476,44 @@ low res".
 - Earnings and dividend are cached for 6 hours, news for 15 minutes.
 - **Checked:** NVDA rendered at phone width with live data (earnings 17 Nov after the close,
   dividend, two levels, 5 headlines).
+
+## 0.52.0 — Sports: league table, game alerts, games in the calendar
+
+- **Table tab** on a game's screen (ESPN's standings):
+  - The game's competition, or the followed team's league for a cup game. Competitions without
+    a table (FA Cup…) have no tab.
+  - Football: P W D L GD Pts, with a stripe in each place's zone colour (Champions League,
+    relegation…) and a legend. Hockey: GP W L OTL Pts. Others: W L PCT GB.
+  - US leagues show each conference, the one with this game's team first; they are ordered by
+    points (hockey) or winning percentage.
+  - The game's two teams are picked out in their colours.
+  - Hidden while results are hidden for a team in the game (it would give them away).
+- **Game alerts** (Settings › Sports › Game alerts, off by default), each moment its own switch:
+  - Goals (football and hockey only): the scorer and the new score. On by default.
+  - Kick-off. On by default.
+  - Half-time and the end of each quarter or period, with the score. Off by default.
+  - Full time, with the final score. On by default.
+  - Each alerts once per game; one notification per game, replaced as the game goes on; a tap
+    opens the game's screen. Teams with hidden results only get the kick-off alert. No alerts
+    for Formula 1.
+  - While a followed team plays and alerts are on, scores are fetched every minute with the
+    screen off (30 seconds with it on). Otherwise nothing changes: no fetching while the screen
+    is off.
+  - Live scores are now also fetched when the Sports card is off but alerts or the calendar are on.
+- **Add games to calendar** (Settings › Sports › Calendar, off by default):
+  - Asks for calendar access, then which Google calendar (any the user can add events to).
+  - Followed teams' games in the next 60 days, titled "Home v Away" (football) or "Away @ Home",
+    lasting the sport's usual length, with the competition and "Added by At a Glance Plus".
+  - Kept up to date at each schedule fetch (every half hour while scores are checked): moved
+    games move, postponed or dropped ones are removed; a failed fetch removes nothing.
+  - Only events this app added are changed. One the user deletes is not added again.
+  - Turning it off, or choosing another calendar, removes the upcoming games it added; past
+    ones stay.
+  - The games also appear on the Calendar card like any other event.
+- **Checked:** Premier League and NBA tables rendered with live data; the alert sequence
+  (kick-off, goal with scorer, no repeat, half-time once, equaliser, full time; hidden team:
+  nothing) and the calendar sync (add, move, rename, user-deleted, postponed, dropped, failed
+  fetch, off) tested against stand-ins.
+- **Backup:** price-alert and game-alert settings (and price levels) are now backed up. The
+  calendar choice and the records of what was already alerted or added are not (they belong to
+  this phone).
