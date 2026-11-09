@@ -60,6 +60,9 @@ enum class CardType(val id: String, val label: String, val detail: String) {
 object LiveCards {
 
     const val ISLAND_TARGET_ID = "aagp_island"
+    /** On the message pop-up's header action extras: when it started and when it ends (epoch ms). */
+    const val EXTRA_ISLAND_SINCE = "aagp_island_since"
+    const val EXTRA_ISLAND_UNTIL = "aagp_island_until"
     private const val TARGET_PREFIX = "aagp_card:"
 
     fun targetId(instanceKey: String) = TARGET_PREFIX + instanceKey
@@ -1116,7 +1119,7 @@ object LiveCards {
      * avatar pops in with a ring bursting out while [entering] (not yet seen on this surface), and
      * pulses a halo in the app's colour throughout.
      */
-    fun island(context: Context, aod: Boolean, message: IncomingMessage, hideText: Boolean, entering: Boolean): SmartspaceTarget {
+    fun island(context: Context, aod: Boolean, message: IncomingMessage, hideText: Boolean, entering: Boolean, since: Long = 0L, until: Long = 0L): SmartspaceTarget {
         val views = RemoteViews(context.packageName, R.layout.include_island_message_toast)
         views.setTextViewText(R.id.island_app, message.app)
         views.setTextColor(R.id.island_app, message.colour)
@@ -1146,7 +1149,13 @@ object LiveCards {
             views.setOnClickPendingIntent(R.id.island_reply, open)
         }
         views.setOnClickPendingIntent(R.id.card_root, open)
-        return Style.target(context, ISLAND_TARGET_ID, views, message.sender, text, R.drawable.ic_chat_badge, open, 3f)
+        // Its start and end, so a host that draws its own countdown bar (Pixel Launcher Plus) can
+        // empty it smoothly; the system's At a Glance ignores them.
+        val extras = if (until > 0) android.os.Bundle().apply {
+            putLong(EXTRA_ISLAND_SINCE, since)
+            putLong(EXTRA_ISLAND_UNTIL, until)
+        } else null
+        return Style.target(context, ISLAND_TARGET_ID, views, message.sender, text, R.drawable.ic_chat_badge, open, 3f, extras)
     }
 
     /**

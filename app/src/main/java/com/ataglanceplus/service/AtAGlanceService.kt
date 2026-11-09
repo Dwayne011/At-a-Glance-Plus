@@ -108,6 +108,7 @@ class AtAGlanceService : SmartspaceService() {
      */
     private var message: IncomingMessage? = null
     private var messageUntil = 0L
+    private var messageSince = 0L
     private var islandJob: Job? = null
     private val islandSeen = mutableSetOf<SmartspaceSessionId>()
 
@@ -401,6 +402,8 @@ class AtAGlanceService : SmartspaceService() {
         sports = runCatching { SportsRules.showing(this, SportsSource.games.value, SportsSource.races.value) }.getOrDefault(emptyList()),
         message = message,
         messageRemainingMs = (messageUntil - System.currentTimeMillis()).coerceAtLeast(0L),
+        messageSince = messageSince,
+        messageUntil = messageUntil,
         messageEntering = sessionId !in islandSeen,
         wallet = runCatching {
             val ids = com.ataglanceplus.wallet.WalletRules.activePassIds(
@@ -528,7 +531,8 @@ class AtAGlanceService : SmartspaceService() {
     private fun showMessage(incoming: IncomingMessage) {
         if (!Prefs.cardEnabled(this, CardType.MESSAGES) || screenOff) return
         message = incoming
-        messageUntil = System.currentTimeMillis() + MESSAGE_MAX_MS
+        messageSince = System.currentTimeMillis()
+        messageUntil = messageSince + MESSAGE_MAX_MS
         islandSeen.clear()
         islandJob?.cancel()
         islandJob = scope.launch {
@@ -543,6 +547,7 @@ class AtAGlanceService : SmartspaceService() {
         islandSeen.clear()
         message = null
         messageUntil = 0L
+        messageSince = 0L
         pushAll()
     }
 

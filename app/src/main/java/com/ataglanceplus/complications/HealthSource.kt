@@ -167,16 +167,16 @@ object HealthSource {
     }
 
     /** Sleep for the dashboard: last night in full, and the last 7 nights (oldest first, null when none). */
-    suspend fun sleepWeek(context: Context): List<Pair<LocalDate, Night?>> {
+    suspend fun sleepWeek(context: Context, days: Int = 7): List<Pair<LocalDate, Night?>> {
         val today = LocalDate.now()
         val sessions = HealthConnectClient.getOrCreate(context).readRecords(
-            ReadRecordsRequest(SleepSessionRecord::class, TimeRangeFilter.between(startOf(today.minusDays(7)), Instant.now()))
+            ReadRecordsRequest(SleepSessionRecord::class, TimeRangeFilter.between(startOf(today.minusDays(days.toLong())), Instant.now()), pageSize = 1000)
         ).records
-        return (6 downTo 0).map { back -> today.minusDays(back.toLong()).let { it to night(sessions, it) } }
+        return (days - 1 downTo 0).map { back -> today.minusDays(back.toLong()).let { it to night(sessions, it) } }
     }
 
-    /** Steps for the dashboard: today by hour (24 values) and the last 7 days (oldest first). */
-    suspend fun stepsWeek(context: Context): Pair<List<Long>, List<Pair<LocalDate, Long>>> {
+    /** Steps for the dashboard: today by hour (24 values) and the last [count] days (oldest first). */
+    suspend fun stepsWeek(context: Context, count: Int = 7): Pair<List<Long>, List<Pair<LocalDate, Long>>> {
         val client = HealthConnectClient.getOrCreate(context)
         val today = LocalDate.now()
         val hours = LongArray(24)
@@ -193,10 +193,10 @@ object HealthSource {
         val days = client.aggregateGroupByPeriod(
             AggregateGroupByPeriodRequest(
                 metrics = setOf(StepsRecord.COUNT_TOTAL),
-                timeRangeFilter = TimeRangeFilter.between(today.minusDays(6).atStartOfDay(), LocalDateTime.now()),
+                timeRangeFilter = TimeRangeFilter.between(today.minusDays(count - 1L).atStartOfDay(), LocalDateTime.now()),
                 timeRangeSlicer = Period.ofDays(1),
             )
         ).associate { it.startTime.toLocalDate() to (it.result[StepsRecord.COUNT_TOTAL] ?: 0L) }
-        return hours.toList() to (6 downTo 0).map { back -> today.minusDays(back.toLong()).let { it to (days[it] ?: 0L) } }
+        return hours.toList() to (count - 1 downTo 0).map { back -> today.minusDays(back.toLong()).let { it to (days[it] ?: 0L) } }
     }
 }

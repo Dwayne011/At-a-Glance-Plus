@@ -30,6 +30,9 @@ data class CardData(
     val torch: com.ataglanceplus.live.TorchNow?,
     val message: IncomingMessage?,
     val messageRemainingMs: Long,
+    /** When the message pop-up appeared and when it ends at the latest (epoch ms), for a host's countdown bar. */
+    val messageSince: Long = 0L,
+    val messageUntil: Long = 0L,
     /** True until the message card has been shown on this surface: it plays its entrance. */
     val messageEntering: Boolean,
     /** Wallet passes whose rules say to show them right now. */
@@ -135,7 +138,7 @@ object CardDeck {
         val contextual = buildList {
             if (data.message != null && data.messageRemainingMs > 0 && on(CardType.MESSAGES)) {
                 val hideText = surface == AtAGlanceService.SURFACE_LOCKSCREEN && !LiveCards.lockScreenShowsPrivate(context)
-                card("message") { LiveCards.island(context, aod, data.message, hideText, data.messageEntering) }
+                card("message") { LiveCards.island(context, aod, data.message, hideText, data.messageEntering, data.messageSince, data.messageUntil) }
             }
             // The torch first: it is on now, and the card is how to turn it off.
             torch?.let { card("torch") { LiveCards.torch(context, aod, it) } }

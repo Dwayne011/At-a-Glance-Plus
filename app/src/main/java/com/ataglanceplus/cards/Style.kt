@@ -102,6 +102,8 @@ object Style {
         @DrawableRes iconRes: Int,
         tap: PendingIntent,
         score: Float,
+        /** Extra values for hosts that read them (Pixel Launcher Plus), on the header action. */
+        extras: android.os.Bundle? = null,
     ): SmartspaceTarget {
         sizeCard(context, views)
         val icon = Icon.createWithResource(context, iconRes)
@@ -109,6 +111,7 @@ object Style {
             .setSubtitle(subtitle)
             .setIcon(icon)
             .setPendingIntent(tap)
+            .apply { if (extras != null) setExtras(extras) }
             .build()
         val base = SmartspaceAction.Builder("${id}_base", "").build()
         val builder = BaseTemplateData.Builder(SmartspaceTarget.UI_TEMPLATE_DEFAULT)

@@ -101,6 +101,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.core.graphics.get
 import com.ataglanceplus.Prefs
 import com.ataglanceplus.complications.HealthMetric
 import com.ataglanceplus.complications.HealthMetrics
@@ -167,12 +168,26 @@ class DashboardActivity : ComponentActivity() {
                         // Stocks and eToro share the sports dashboards' dark look.
                         kind?.startsWith(KIND_STOCK_PREFIX) == true -> FinanceScreen { StockDashboard(kind.removePrefix(KIND_STOCK_PREFIX)) }
                         kind == KIND_ETORO -> FinanceScreen { EtoroDashboard() }
-                        else -> Column(
+                        // Health and phone dashboards: frosted glass, each with its own tint.
+                        else -> GlassScreen(
+                            when {
+                                kind == KIND_SLEEP -> Tints.Sleep
+                                kind == KIND_SCREEN -> Tints.Screen
+                                HealthMetric.fromId(kind?.removePrefix(KIND_HEALTH_PREFIX))?.group == com.ataglanceplus.complications.MetricGroup.HEART -> Tints.Heart
+                                else -> Tints.Steps
+                            },
+                            accent = when {
+                                kind == KIND_SLEEP -> Color(0xFFC3B5FF)
+                                kind == KIND_SCREEN -> Color(0xFFFFC078)
+                                HealthMetric.fromId(kind?.removePrefix(KIND_HEALTH_PREFIX))?.group == com.ataglanceplus.complications.MetricGroup.HEART -> Color(0xFFFF9C9C)
+                                else -> Color(0xFF7EE08F)
+                            },
+                        ) { Column(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             when (kind) {
                                 KIND_STEPS -> StepsDashboard()
@@ -182,7 +197,7 @@ class DashboardActivity : ComponentActivity() {
                                     else -> HealthMetric.fromId(kind?.removePrefix(KIND_HEALTH_PREFIX))?.let { MetricDashboard(it) } ?: Text("Nothing to show.")
                                 }
                             }
-                        }
+                        } }
                     }
                     }
                   }
@@ -274,22 +289,34 @@ private fun StepsDashboard() {
     val load by produceState<Load<Pair<List<Long>, List<Pair<LocalDate, Long>>>>>(Load.Loading, refresh.generation) {
         value = withContext(Dispatchers.IO) {
             if (HealthSource.STEPS !in HealthSource.granted(context)) Load.Missing("Allow Health Connect access for steps in the app's Chips tab.")
-            else runCatching { Load.Ready(HealthSource.stepsWeek(context)) }.getOrElse { Load.Missing("Health Connect did not answer: ${it.message}") }
+            else runCatching { Load.Ready(HealthSource.stepsWeek(context, 30)) }.getOrElse { Load.Missing("Health Connect did not answer: ${it.message}") }
         }
         refresh.loaded = refresh.generation
     }
     Title("Steps")
     when (val state = load) {
-        Load.Loading -> Text("Loading…")
-        is Load.Missing -> Text(state.why)
+        Load.Loading -> Text("Loading…", color = GlassSub)
+        is Load.Missing -> Text(state.why, color = GlassSub)
         is Load.Ready -> {
             val (hours, days) = state.data
             val today = days.last().second
-            val goal = Prefs.stepGoal(context)
-            Hero(numbers.format(today), "steps today")
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                LinearProgressIndicator(progress = { (today.toFloat() / goal).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-                Text("${(100 * today / goal.coerceAtLeast(1))}% of your ${numbers.format(goal)} goal", style = MaterialTheme.typography.bodyMedium)
+            val goal = Prefs.stepGoal(context).toLong()
+            Hero(numbers.format(today), "${(100 * today / goal.coerceAtLeast(1))}% of your ${numbers.format(goal)} goal", "Steps today")
+            GlassPair {
+                Glass(Modifier.weight(1f).fillMaxHeight()) {
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Ring(today.toFloat() / goal, MaterialTheme.colorScheme.primary, "${(100 * today / goal.coerceAtLeast(1))}%")
+                        Label("of today's goal")
+                    }
+                }
+                Glass(Modifier.weight(1f).fillMaxHeight()) {
+                    val run = streak(days, goal)
+                    Label("Goal streak")
+                    Figure(if (run > 0) "🔥 $run day${if (run == 1) "" else "s"}" else "Not yet", size = 19.sp)
+                    val left = (goal - today).coerceAtLeast(0)
+                    Label(if (left > 0) "To go today" else "Today")
+                    Figure(if (left > 0) numbers.format(left) else "Goal reached", size = 15.sp)
+                }
             }
             ChartCard("Today by hour") {
                 BarChart(
@@ -299,20 +326,16 @@ private fun StepsDashboard() {
                     initial = java.time.LocalTime.now().hour,
                 )
             }
-            ChartCard("Last 7 days") {
-                BarChart(
-                    values = days.map { it.second },
-                    describe = { i, v -> "${dayAndDate(days[i].first)} · ${numbers.format(v)} steps" },
-                    axis = days.mapIndexed { i, (date, _) -> i to day(date) },
-                    initial = days.lastIndex,
-                )
-            }
+            DailyTrend(days, "steps") { numbers.format(it) }
         }
     }
     OpenButton("Open Health Connect", Intent("android.health.connect.action.MANAGE_HEALTH_DATA"))
 }
 
 // --- Sleep ---
+
+/** A night's sleep that counts towards the streak: seven hours. */
+private const val SLEEP_GOAL_MIN = 7 * 60L
 
 @Composable
 private fun SleepDashboard() {
@@ -321,31 +344,44 @@ private fun SleepDashboard() {
     val load by produceState<Load<List<Pair<LocalDate, HealthSource.Night?>>>>(Load.Loading, refresh.generation) {
         value = withContext(Dispatchers.IO) {
             if (HealthSource.SLEEP !in HealthSource.granted(context)) Load.Missing("Allow Health Connect access for sleep in the app's Chips tab.")
-            else runCatching { Load.Ready(HealthSource.sleepWeek(context)) }.getOrElse { Load.Missing("Health Connect did not answer: ${it.message}") }
+            else runCatching { Load.Ready(HealthSource.sleepWeek(context, 30)) }.getOrElse { Load.Missing("Health Connect did not answer: ${it.message}") }
         }
         refresh.loaded = refresh.generation
     }
     Title("Sleep")
     when (val state = load) {
-        Load.Loading -> Text("Loading…")
-        is Load.Missing -> Text(state.why)
+        Load.Loading -> Text("Loading…", color = GlassSub)
+        is Load.Missing -> Text(state.why, color = GlassSub)
         is Load.Ready -> {
-            val week = state.data
-            val night = week.last().second
+            val nights = state.data
+            val night = nights.last().second
+            val minutes = nights.map { it.first to (it.second?.minutes ?: 0L) }
             if (night == null) {
-                Text("No sleep recorded last night.")
+                Hero("No sleep", "recorded last night", "Last night")
             } else {
-                Hero(SimpleSources.duration(night.minutes), "asleep · ${clock(context, night.start)} – ${clock(context, night.end)}")
-                ChartCard("Last night") { Hypnogram(night) }
+                Hero(SimpleSources.duration(night.minutes), "${clock(context, night.start)} – ${clock(context, night.end)}", "Last night")
+                GlassPair {
+                    Glass(Modifier.weight(1f).fillMaxHeight()) {
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Ring(night.minutes.toFloat() / SLEEP_GOAL_MIN, MaterialTheme.colorScheme.primary, "${100 * night.minutes / SLEEP_GOAL_MIN}%")
+                            Label("of 7 hours")
+                        }
+                    }
+                    Glass(Modifier.weight(1f).fillMaxHeight()) {
+                        fun stage(kind: HealthSource.StageKind) = night.stages.filter { it.kind == kind }.sumOf { java.time.Duration.between(it.start, it.end).toMinutes() }
+                        val deep = stage(HealthSource.StageKind.DEEP)
+                        val rem = stage(HealthSource.StageKind.REM)
+                        if (deep + rem > 0) {
+                            Label("Deep"); Figure(SimpleSources.duration(deep), size = 17.sp)
+                            Label("REM"); Figure(SimpleSources.duration(rem), size = 17.sp)
+                        }
+                        val run = streak(minutes, SLEEP_GOAL_MIN)
+                        Label("7-hour streak"); Figure(if (run > 0) "🌙 $run night${if (run == 1) "" else "s"}" else "Not yet", size = 15.sp)
+                    }
+                }
+                if (night.stages.isNotEmpty()) ChartCard("Stages") { Hypnogram(night) }
             }
-            ChartCard("Last 7 nights") {
-                BarChart(
-                    values = week.map { it.second?.minutes ?: 0L },
-                    describe = { i, v -> "${dayAndDate(week[i].first)} · " + if (v > 0) SimpleSources.duration(v) else "no sleep recorded" },
-                    axis = week.mapIndexed { i, (date, _) -> i to day(date) },
-                    initial = week.lastIndex,
-                )
-            }
+            DailyTrend(minutes, "asleep") { SimpleSources.duration(it) }
         }
     }
     OpenButton("Open Health Connect", Intent("android.health.connect.action.MANAGE_HEALTH_DATA"))
@@ -451,7 +487,21 @@ private fun ScreenDashboard() {
         is Load.Missing -> Text(state.why)
         is Load.Ready -> {
             val (apps, days) = state.data
-            Hero(SimpleSources.duration(days.last().second / 60_000), "on screen today")
+            val today = days.last().second / 60_000
+            val earlier = days.dropLast(1).map { it.second / 60_000 }.filter { it > 0 }
+            val average = earlier.takeIf { it.isNotEmpty() }?.average()
+            Hero(SimpleSources.duration(today), average?.let { a ->
+                val diff = (100 * (today - a) / a.coerceAtLeast(1.0)).toInt()
+                if (diff <= 0) "Down ${-diff}% on your daily average" else "Up $diff% on your daily average"
+            } ?: "on screen today", "Screen time today")
+            GlassPair {
+                Glass(Modifier.weight(1f).fillMaxHeight()) {
+                    Label("Unlocks"); Figure(SimpleSources.unlocksToday(context)?.toString() ?: "–", size = 20.sp)
+                }
+                Glass(Modifier.weight(1f).fillMaxHeight()) {
+                    Label("Notifications"); Figure(com.ataglanceplus.live.NotificationHub.notificationsToday(context)?.toString() ?: "–", size = 20.sp)
+                }
+            }
             ChartCard("Last 7 days") {
                 BarChart(
                     values = days.map { it.second / 60_000 },
@@ -464,7 +514,7 @@ private fun ScreenDashboard() {
             if (shown.isNotEmpty()) {
                 ChartCard("Apps today") {
                     val most = shown.first().second.toFloat()
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         shown.forEach { (pkg, ms) -> AppRow(pkg, ms, ms / most) }
                     }
                 }
@@ -476,23 +526,39 @@ private fun ScreenDashboard() {
     if (wellbeing != null) OpenButton("Open Digital Wellbeing", wellbeing)
 }
 
+/** An app's line: a stripe in its icon's colour, its name and time, and a bar for its share. */
 @Composable
 private fun AppRow(pkg: String, ms: Long, share: Float) {
     val context = LocalContext.current
-    val icon = remember(pkg) {
-        runCatching { context.packageManager.getApplicationIcon(pkg).toBitmap(96, 96).asImageBitmap() }.getOrNull()
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (icon != null) Image(icon, contentDescription = null, modifier = Modifier.size(32.dp)) else Spacer(Modifier.size(32.dp))
-        Column(modifier = Modifier.padding(start = 12.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    val colour = remember(pkg) { appColour(context, pkg) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Stripe(colour, 28.dp)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row {
-                Text(SimpleSources.appName(context, pkg), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Text(SimpleSources.duration(ms / 60_000), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(SimpleSources.appName(context, pkg), color = GlassText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(SimpleSources.duration(ms / 60_000), color = GlassSub, fontSize = 13.sp)
             }
-            LinearProgressIndicator(progress = { share }, modifier = Modifier.fillMaxWidth(), drawStopIndicator = {})
+            Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(GlassTrack)) {
+                Box(Modifier.fillMaxWidth(share.coerceIn(0.02f, 1f)).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.primary))
+            }
         }
     }
 }
+
+/** An app's colour: the most saturated of its icon's colours (sampled), lifted to read on dark glass. */
+private fun appColour(context: Context, pkg: String): Color = runCatching {
+    val bitmap = context.packageManager.getApplicationIcon(pkg).toBitmap(24, 24)
+    var best = Color.Gray
+    var bestScore = -1f
+    for (x in 0 until 24 step 2) for (y in 0 until 24 step 2) {
+        val c = Color(bitmap[x, y])
+        if (c.alpha < 0.8f) continue
+        val max = maxOf(c.red, c.green, c.blue)
+        val score = (max - minOf(c.red, c.green, c.blue)) * max
+        if (score > bestScore) { bestScore = score; best = c }
+    }
+    if (bestScore < 0.05f) Color(0xFFB0B6BE) else best.lift(0.15f)
+}.getOrDefault(Color(0xFFB0B6BE))
 
 // --- Health metrics ---
 
@@ -595,6 +661,29 @@ private fun ReadingsDashboard(metric: HealthMetric, readings: List<Reading>) {
                         format = { HealthMetrics.short(metric, it) },
                         markers = todays.size <= 48,
                     )
+                }
+            }
+            // Heart rate: time spent today in fixed ranges, from the gaps between readings (up to
+            // 10 minutes each, so a watch off the wrist does not count).
+            if (metric == HealthMetric.HEART_RATE && todays.size >= 2) {
+                val bands = listOf("Light · 100–129" to 100.0..129.99, "Moderate · 130–159" to 130.0..159.99, "Vigorous · 160+" to 160.0..400.0)
+                val minutes = DoubleArray(bands.size)
+                todays.zipWithNext().forEach { (a, b) ->
+                    val gap = java.time.Duration.between(a.time, b.time).toMillis().coerceAtMost(10 * 60_000L) / 60_000.0
+                    bands.indexOfFirst { a.value in it.second }.takeIf { it >= 0 }?.let { minutes[it] += gap }
+                }
+                ChartCard("Today in each range (bpm)") {
+                    val most = minutes.max().coerceAtLeast(1.0)
+                    bands.forEachIndexed { i, (label, _) ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(label, color = GlassText, fontSize = 12.5.sp, modifier = Modifier.width(130.dp), maxLines = 1)
+                            Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(GlassTrack)) {
+                                Box(Modifier.fillMaxWidth((minutes[i] / most).toFloat().coerceIn(0.02f, 1f)).fillMaxHeight().clip(RoundedCornerShape(3.dp))
+                                    .background(listOf(Color(0xFFFFD8A8), Color(0xFFFFA94D), Color(0xFFFF6B6B))[i]))
+                            }
+                            Text("${minutes[i].toInt()} min", color = GlassSub, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.width(52.dp))
+                        }
+                    }
                 }
             }
             // Each day's lowest to highest, with the average when tapped.
@@ -2068,24 +2157,63 @@ private fun FixtureRow(game: com.ataglanceplus.live.Game, team: com.ataglanceplu
 
 @Composable
 private fun Title(text: String) {
-    Text(text, style = MaterialTheme.typography.headlineMedium)
+    ScreenTitle(text)
 }
 
-/** The headline number and what it is. */
+/** The headline tile: what it is, then the number large. */
 @Composable
-private fun Hero(value: String, caption: String) {
-    Column {
-        Text(value, style = MaterialTheme.typography.displayMedium)
-        Text(caption, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+internal fun Hero(value: String, caption: String, label: String? = null) {
+    Glass(Modifier.fillMaxWidth(), padding = 14.dp) {
+        label?.let { Label(it) }
+        Figure(value, size = 34.sp)
+        Text(caption, color = GlassText, fontSize = 13.sp)
     }
 }
 
 @Composable
-private fun ChartCard(title: String, content: @Composable () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            content()
+internal fun ChartCard(title: String, content: @Composable () -> Unit) {
+    Glass(Modifier.fillMaxWidth(), padding = 14.dp) {
+        Label(title)
+        Spacer(Modifier.height(4.dp))
+        content()
+    }
+}
+
+/** Days in a row, up to today, that reached [goal]; today counts once reached, and doesn't break the run before then. */
+internal fun streak(days: List<Pair<LocalDate, Long>>, goal: Long): Int {
+    var run = 0
+    for ((i, d) in days.withIndex().reversed()) {
+        if (d.second >= goal) run++ else if (i == days.lastIndex) continue else break
+    }
+    return run
+}
+
+/**
+ * Daily totals over the last week or month: a bar chart opening on the best day, with the
+ * average and the best day written under it. [format] writes a total; [goal] draws nothing but
+ * is named in the average line when given.
+ */
+@Composable
+internal fun DailyTrend(days: List<Pair<LocalDate, Long>>, unit: String, format: (Long) -> String) {
+    var month by rememberSaveable { mutableStateOf(false) }
+    val shown = if (month) days.takeLast(30) else days.takeLast(7)
+    Glass(Modifier.fillMaxWidth(), padding = 14.dp) {
+        Label(if (month) "Last 30 days" else "Last 7 days")
+        GlassTabs(listOf("Week", "Month"), if (month) 1 else 0, MaterialTheme.colorScheme.primary) { month = it == 1 }
+        val best = shown.withIndex().filter { it.value.second > 0 }.maxByOrNull { it.value.second }
+        androidx.compose.runtime.key(month) {
+            BarChart(
+                values = shown.map { it.second },
+                describe = { i, v -> "${dayAndDate(shown[i].first)} · ${format(v)}" + if (best?.index == i) " · best day" else "" },
+                axis = if (month) shown.indices.filter { it % 7 == 0 || it == shown.lastIndex }.map { it to "${shown[it].first.dayOfMonth}" }
+                    else shown.mapIndexed { i, (date, _) -> i to day(date) },
+                initial = best?.index ?: shown.lastIndex,
+            )
+        }
+        val counted = shown.filter { it.second > 0 }
+        if (counted.isNotEmpty()) {
+            Text("Average ${format(counted.sumOf { it.second } / counted.size)} $unit a day", color = GlassText, fontSize = 12.5.sp)
+            best?.let { Text("★ Best day: ${dayAndDate(it.value.first)} · ${format(it.value.second)}", color = MaterialTheme.colorScheme.primary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold) }
         }
     }
 }

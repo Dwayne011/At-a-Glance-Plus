@@ -140,6 +140,21 @@ object SimpleSources {
         return apps to days
     }
 
+    /**
+     * Today's unlocks: the times the lock screen went away (Android's usage events), or null
+     * without usage access.
+     */
+    fun unlocksToday(context: Context): Int? = runCatching {
+        val events = context.getSystemService(UsageStatsManager::class.java).queryEvents(startOfToday(), System.currentTimeMillis())
+        val event = UsageEvents.Event()
+        var count = 0
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            if (event.eventType == UsageEvents.Event.KEYGUARD_HIDDEN) count++
+        }
+        count
+    }.getOrNull()
+
     fun appName(context: Context, pkg: String): String =
         runCatching { context.packageManager.getApplicationInfo(pkg, 0).loadLabel(context.packageManager).toString() }.getOrDefault(pkg)
 

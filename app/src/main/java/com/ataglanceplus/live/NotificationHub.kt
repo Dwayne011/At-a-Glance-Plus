@@ -1,6 +1,7 @@
 package com.ataglanceplus.live
 
 import android.app.Notification
+import androidx.core.content.edit
 import android.app.PendingIntent
 import android.content.Context
 import android.content.pm.PackageManager
@@ -166,7 +167,35 @@ object NotificationHub {
         // Notifications already on screen when we start are not new messages.
         active.forEach { if (it.key != posted?.key) lastMessageAt.putIfAbsent(it.key, it.notification.`when`) }
         if (posted != null && posted.packageName != own) messageFrom(context, posted)?.let { _messages.tryEmit(it) }
+        if (posted != null) countNotification(context, posted)
         lastMessageAt.keys.retainAll(active.map { it.key }.toSet())
+    }
+
+    private const val KEY_NOTIFICATIONS_DAY = "notifications_day"
+    private const val KEY_NOTIFICATIONS_COUNT = "notifications_count"
+    /** Notifications counted today, so an update to one is not counted again. */
+    private val countedToday = mutableSetOf<String>()
+
+    /**
+     * Counts each new notification once a day for the screen-time dashboard: not the app's own,
+     * not ongoing ones (music, navigation), not group summaries.
+     */
+    private fun countNotification(context: Context, sbn: StatusBarNotification) {
+        if (sbn.packageName == context.packageName || sbn.isOngoing || sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        val prefs = com.ataglanceplus.Prefs.get(context)
+        val today = java.time.LocalDate.now().toString()
+        if (prefs.getString(KEY_NOTIFICATIONS_DAY, null) != today) {
+            countedToday.clear()
+            prefs.edit { putString(KEY_NOTIFICATIONS_DAY, today).putInt(KEY_NOTIFICATIONS_COUNT, 0) }
+        }
+        if (!countedToday.add(sbn.key)) return
+        prefs.edit { putInt(KEY_NOTIFICATIONS_COUNT, prefs.getInt(KEY_NOTIFICATIONS_COUNT, 0) + 1) }
+    }
+
+    /** Notifications received today (counted since notification access was on), or null before any. */
+    fun notificationsToday(context: Context): Int? {
+        val prefs = com.ataglanceplus.Prefs.get(context)
+        return if (prefs.getString(KEY_NOTIFICATIONS_DAY, null) == java.time.LocalDate.now().toString()) prefs.getInt(KEY_NOTIFICATIONS_COUNT, 0) else null
     }
 
     private fun title(n: Notification) = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()

@@ -1412,3 +1412,45 @@ low res".
   - **Positions:** a green or red stripe for each position, with no logos in lists.
 - **Checked:** rendered at phone width with Yahoo's live NOK, AAPL and ONDS and eToro's NOK logo.
   The eToro screen needs the user's keys, so it was checked by building only.
+
+## 0.50.0: health dashboards in frosted Bento; the message pop-up's times for Pixel Launcher Plus
+
+**Asked for:**
+- Steps, sleep, screen time and health metrics in the Bento look, with their new tiles.
+- From Pixel Launcher Plus, with the user's yes: the message pop-up's start and end, so the
+  launcher can draw the spec's smooth countdown bar.
+
+**Changes:**
+- **Pop-up times:**
+  - The "aagp_island" target's header action carries `aagp_island_since` and
+    `aagp_island_until` (epoch ms) in its extras: when the pop-up appeared, and the 10-minute
+    cap.
+  - The pop-up is re-sent whenever a new message replaces it.
+  - The system's At a Glance ignores them. Style.target takes optional extras.
+- **Backdrop:** each health and phone dashboard has its own tint: steps green, sleep night
+  blues, screen time amber, heart metrics red, other metrics green.
+- **Shared pieces:** headline, chart and title are glass tiles. Tabs are glass pills.
+- **Week and month:**
+  - **DailyTrend:** a Week · Month switch (7 or 30 days) on steps and sleep.
+  - **Best day:** the chart opens on the best day, marked "best day" in its readout and written
+    under the chart with a star.
+  - **Average:** the daily average.
+  - Steps and sleep now read 30 days from Health Connect.
+- **Steps:**
+  - A ring for today's goal, and the goal streak (days in a row at the goal; today counts once
+    reached and doesn't break the run before then).
+  - Steps still to go, today by hour, and the week or month.
+- **Sleep:**
+  - Last night with a ring against 7 hours, deep and REM minutes, the 7-hour streak, the stages
+    chart, and the week or month.
+  - The 7-hour target is fixed for now.
+- **Screen time:**
+  - Today against the daily average of the 6 days before.
+  - Unlocks today, from Android's usage events (KEYGUARD_HIDDEN).
+  - Notifications today, counted once each by the notification listener: not the app's own,
+    ongoing or group summaries; from when it runs.
+  - Apps have a stripe in their icon's most saturated colour, not the icon.
+- **Heart rate:** time today in fixed ranges (100–129, 130–159, 160+ bpm), from the gaps between
+  readings (up to 10 minutes each), above the 7-day chart.
+- **Checked:** steps and sleep rendered at phone width with sample figures (Health Connect is
+  not available in the test).
