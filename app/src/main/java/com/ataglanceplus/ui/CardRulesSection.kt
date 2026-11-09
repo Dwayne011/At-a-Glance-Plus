@@ -73,6 +73,7 @@ internal fun CardOrderPage(version: Int, onBack: () -> Unit) {
                     CardRules.Builtin.MORNING_CALENDAR -> FrostIcons.Calendar
                     CardRules.Builtin.SPORTS_KICKOFF -> FrostIcons.Ball
                     CardRules.Builtin.RAIN_COMING -> FrostIcons.Weather
+                    CardRules.Builtin.COMMUTE -> FrostIcons.Home
                 }, checked = CardRules.builtinOn(context, b)) { CardRules.setBuiltinOn(context, b, it) }
             }
             SettingNote("A new message always shows first. Cards no rule names keep the usual order.")
@@ -169,6 +170,43 @@ private fun RuleDialog(cardsTitle: String, ordered: Boolean, onDismiss: () -> Un
         confirmButton = {
             TextButton(enabled = cards.isNotEmpty() && days.isNotEmpty() && start != end, onClick = { onSave(CardRules.Rule(start, end, days, cards)) }) { Text("Save") }
         },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** A time window's from, until and days (no cards), for the commute's windows. */
+@Composable
+internal fun WindowDialog(title: String, initial: CardRules.Rule, onDismiss: () -> Unit, onSave: (CardRules.Rule) -> Unit) {
+    val context = LocalContext.current
+    val frost = LocalFrost.current
+    val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+    var start by remember { mutableIntStateOf(initial.start) }
+    var end by remember { mutableIntStateOf(initial.end) }
+    var days by remember { mutableStateOf(initial.days) }
+    fun hm(v: Int) = String.format(Locale.ROOT, "%02d:%02d", v / 60, v % 60)
+    fun pick(at: Int, label: String, set: (Int) -> Unit) =
+        android.app.TimePickerDialog(context, { _, h, m -> set(h * 60 + m) }, at / 60, at % 60, true).apply { setTitle(label) }.show()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, fontFamily = FrostFont) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { pick(start, "From") { start = it } }) { Text("From ${hm(start)}") }
+                    TextButton(onClick = { pick(end, "Until") { end = it } }) { Text("Until ${hm(end)}") }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    (1..7).forEach { d ->
+                        val on = d in days
+                        Box(
+                            Modifier.size(36.dp).clip(CircleShape).background(if (on) frost.accent else frost.tile).clickable { days = if (on) days - d else days + d },
+                            contentAlignment = Alignment.Center,
+                        ) { Text(DayOfWeek.of(d).getDisplayName(TextStyle.NARROW, locale), color = if (on) frost.onAccent else frost.text, fontSize = 13.sp) }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(enabled = days.isNotEmpty() && start != end, onClick = { onSave(CardRules.Rule(start, end, days, emptyList())) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

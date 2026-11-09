@@ -46,6 +46,7 @@ object CardRules {
         MORNING_CALENDAR("order_morning_calendar", "Calendar first in the morning", "05:00 to 10:00"),
         SPORTS_KICKOFF("order_sports_kickoff", "Sports first around kick-off", "From an hour before a game or session until it ends"),
         RAIN_COMING("order_rain", "Rain and snow first", "When rain or snow is coming within the hour"),
+        COMMUTE("order_commute", "Commute first", "At your commute times, when the commute card shows"),
     }
 
     private const val KEY_ORDER_ON = "card_order_on"
@@ -93,6 +94,7 @@ object CardRules {
                 CardType.CALENDAR.id -> builtinOn(context, Builtin.MORNING_CALENDAR) && m in 5 * 60 until 10 * 60
                 CardType.SPORTS.id -> builtinOn(context, Builtin.SPORTS_KICKOFF) && slot.aroundKickoff
                 CardType.RAIN.id -> builtinOn(context, Builtin.RAIN_COMING)
+                CardType.COMMUTE.id -> builtinOn(context, Builtin.COMMUTE)
                 else -> false
             }
             if (boosted) -100 else 0

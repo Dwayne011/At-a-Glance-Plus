@@ -12,6 +12,7 @@ import android.os.SystemClock
 import android.provider.AlarmClock
 import android.provider.CalendarContract
 import android.text.format.DateFormat
+import androidx.core.net.toUri
 import android.text.format.DateUtils
 import android.view.View
 import android.widget.RemoteViews
@@ -52,6 +53,7 @@ enum class CardType(val id: String, val label: String, val detail: String) {
     TORCH("torch", "Torch", "While the torch is on: tap to turn it off, and set its brightness"),
     WALLET("wallet", "Wallet passes", "Your Google Wallet passes, near the places and times you set; tap to show the code"),
     RAIN("rain", "Rain and snow", "Rain or snow coming within the hour, while it's dry"),
+    COMMUTE("commute", "Commute", "Journey time to work or home at the times you set"),
 }
 
 /**
@@ -124,6 +126,52 @@ object LiveCards {
         Style.holdBar(views, pinned = false, aod = aod)
         views.setOnClickPendingIntent(R.id.card_root, tap)
         return Style.target(context, targetId(key), views, title, detail, R.drawable.ic_card, tap, 1.6f)
+    }
+
+    // --- Commute ---
+
+    /**
+     * The journey to work or home, in the navigation card's style: the time by public transport
+     * (or by car when TfL has none) in green, the first ride, then arrival, the driving estimate
+     * and any line trouble. Tap: directions by public transport, or driving navigation (Settings).
+     */
+    fun commute(context: Context, aod: Boolean, trip: com.ataglanceplus.live.CommuteSource.Trip, given: List<ChipSpec>? = null): SmartspaceTarget {
+        val key = trip.key
+        val views = RemoteViews(context.packageName, R.layout.card_navigation)
+        val clock = { t: Long -> DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", Date(t)).toString() }
+        val where = if (trip.toWork) "work" else "home"
+        val lead = trip.transitMinutes?.let { minutesText(it) } ?: trip.driveMinutes?.let { minutesText(it) + " by car" } ?: ""
+        val instruction = "To $where" + (trip.firstRide?.let { r -> " · $r" + (trip.firstRideAt?.let { " at ${clock(it)}" } ?: "") } ?: "")
+        // Both ways side by side: the car's time first on the second line.
+        val detail = listOfNotNull(
+            trip.driveMinutes?.takeIf { trip.transitMinutes != null }?.let { "By car ${minutesText(it)}" },
+            trip.arrives?.let { "arrive ${clock(it)}" },
+            trip.trouble,
+        ).joinToString(" · ").replaceFirstChar { it.uppercase() }
+        views.setTextViewText(R.id.nav_distance, lead)
+        views.setTextViewText(R.id.nav_instruction, instruction)
+        views.setTextViewText(R.id.nav_detail, detail)
+        views.setImageViewResource(R.id.nav_icon, R.drawable.ic_nav_flag)
+        views.setInt(R.id.nav_icon, "setColorFilter", if (aod) Style.AOD_TEXT else NAV_GREEN)
+        val mode = trip.mode ?: TravelMode.CAR
+        views.setViewVisibility(R.id.nav_mode, View.VISIBLE)
+        views.setImageViewResource(R.id.nav_mode, modeIcon(mode, aod))
+        views.setInt(R.id.nav_mode, "setColorFilter", if (aod) Style.AOD_TEXT else NAV_GREEN)
+        if (aod) {
+            Style.aodBody(views, R.id.nav_distance, R.id.nav_instruction, R.id.nav_detail)
+            views.setInt(R.id.nav_box, "setBackgroundResource", R.drawable.aod_outline_r12)
+        }
+        PanelCards.fillColumn(context, views, given ?: listOf(ChipSpec(Complication.BATTERY)), aod)
+        // Driving: Google Maps' navigation starts at once; public transport: its directions.
+        val d = trip.destination
+        val uri = if (com.ataglanceplus.live.CommuteSource.tapDrives(context) || trip.transitMinutes == null)
+            String.format(Locale.ROOT, "google.navigation:q=%.6f,%.6f&mode=d", d.lat, d.lon)
+        else String.format(Locale.ROOT, "https://www.google.com/maps/dir/?api=1&destination=%.6f,%.6f&travelmode=transit", d.lat, d.lon)
+        val open = Intent(Intent.ACTION_VIEW, uri.toUri()).setPackage("com.google.android.apps.maps").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val tap = Style.gated(context, open, REQUEST_BASE + 0x6C0E)
+        Style.holdBar(views, pinned = false, aod = aod)
+        views.setOnClickPendingIntent(R.id.card_root, tap)
+        return Style.target(context, targetId(key), views, "$lead · $instruction", detail, R.drawable.ic_nav_flag, tap, 1.8f)
     }
 
     // --- Rain and snow ---

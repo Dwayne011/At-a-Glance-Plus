@@ -39,6 +39,8 @@ data class CardData(
     val wallet: List<com.ataglanceplus.wallet.WalletPass>,
     /** Rain or snow coming within the hour, while it is dry. */
     val rain: com.ataglanceplus.weather.RainSoon? = null,
+    /** The journey to work or home, in a commute window. */
+    val commute: com.ataglanceplus.live.CommuteSource.Trip? = null,
 )
 
 /** Everything shown on a surface, in order. */
@@ -76,6 +78,8 @@ object CardDeck {
             LiveCards.upcomingAlarm(context)?.takeIf { "alarm:${it.triggerTime}" !in dismissed }
         } else null
         val rain = data.rain?.takeIf { on(CardType.RAIN) && it.key !in dismissed }
+        // The commute card stays away while navigating (the journey is under way).
+        val commute = data.commute?.takeIf { on(CardType.COMMUTE) && nav == null && it.key !in dismissed }
         val media = data.media?.takeIf { on(CardType.MEDIA) && "media:${it.pkg}" !in dismissed }
         val calendars = if (on(CardType.CALENDAR)) data.calendars.filter { it.instanceKey !in dismissed } else emptyList()
         val sports = if (on(CardType.SPORTS)) data.sports.filter { it.instanceKey !in dismissed } else emptyList()
@@ -113,6 +117,7 @@ object CardDeck {
             liveSports.forEach { sp -> add(Entry("sports", CardRules.Slot(CardType.SPORTS.id, aroundKickoff(sp)), false) { _ -> sportsCard(context, aod, sp) }) }
             timer?.let { add(Entry("timer", CardRules.Slot(CardType.TIMER.id), true) { c -> LiveCards.timer(context, aod, it, c) }) }
             alarm?.let { add(Entry("alarm", CardRules.Slot(CardType.TIMER.id), true) { c -> LiveCards.alarm(context, aod, it, c) }) }
+            commute?.let { add(Entry("commute", CardRules.Slot(CardType.COMMUTE.id), true) { c -> LiveCards.commute(context, aod, it, c) }) }
             rain?.let { add(Entry("rain", CardRules.Slot(CardType.RAIN.id), false) { _ -> LiveCards.rain(context, aod, it) }) }
             media?.let { add(Entry("media", CardRules.Slot(CardType.MEDIA.id), false) { _ -> LiveCards.media(context, aod, it) }) }
             // One card per event, soonest first; only the first holds chips.
@@ -191,6 +196,7 @@ object CardDeck {
         LiveCards.upcomingAlarm(context)?.let { add("alarm:${it.triggerTime}") }
         data.media?.let { add("media:${it.pkg}") }
         data.rain?.let { add(it.key) }
+        data.commute?.let { add(it.key) }
         data.calendars.forEach { add(it.instanceKey) }
         addAll(FinanceRules.instanceKeys(context, data.quotes))
         data.sports.forEach { add(it.instanceKey) }

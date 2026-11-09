@@ -1604,3 +1604,29 @@ low res".
 - **Checked:** the rain logic (dry then rain in 20 min, raining now, over an hour away, heavy snow
   with no end, below drizzle), windows past midnight and on chosen days, quiet hours, the order
   with and without windows and rules, and renders of the rain and snow cards and both pages.
+
+## 0.56.0 — Commute card
+
+- **Commute card** (Settings › Cards › Commute; on, but shows nothing until home and work are
+  set):
+  - Places: home and work, by search (the same place search as Wallet places) or "Use where I am
+    now".
+  - When: "To work" 07:00–09:30 and "To home" 16:30–19:00, Mon–Fri by default; each window and
+    its days can be changed.
+  - In a window it shows the journey from where the phone is (its last location under 30
+    minutes old), or else from the other saved place; nothing within 300 m of the destination,
+    and nothing while the navigation card is up.
+  - The navigation card's style: the time by public transport in green, "To work · N343 bus at
+    4:46" (the first ride and when it leaves), then "By car 23 min · arrive 5:23" and any line on
+    the journey not in good service ("Special Service on N550"). The mode badge shows bus, train
+    or walking.
+  - Public transport from TfL's journey planner (free, no key; London and around: elsewhere the
+    card shows the car time alone); driving from OSRM's public router, which has no live
+    traffic, hence "By car" rather than a traffic-aware time.
+  - Fetched every 5 minutes in a window while the screen is on.
+  - Tap (setting): Google Maps' public transport directions (default) or driving navigation,
+    which starts at once.
+  - A built-in order rule, "Commute first", brings it forward at commute times (switchable).
+- The commute's places, windows and tap choice are backed up, as Wallet places are.
+- **Checked:** a live trip Waterloo → Canary Wharf (TfL and OSRM answered), the card in both
+  looks, and the settings page.

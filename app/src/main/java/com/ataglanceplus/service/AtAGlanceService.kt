@@ -172,6 +172,7 @@ class AtAGlanceService : SmartspaceService() {
         // The clock's upcoming-alarm notification came or went: the alarm card's skip changes.
         scope.launch { NotificationHub.alarmSkip.drop(1).distinctUntilChanged().collect { pushAll() } }
         scope.launch { com.ataglanceplus.weather.RainSource.changed.drop(1).collect { pushAll() } }
+        scope.launch { com.ataglanceplus.live.CommuteSource.trip.drop(1).collect { pushAll() } }
         scope.launch { NotificationHub.messages.collect { showMessage(it) } }
         // The message was read or cleared (its notification is gone): the pop-up goes too.
         scope.launch {
@@ -228,6 +229,10 @@ class AtAGlanceService : SmartspaceService() {
                 if (!screenOff && Prefs.cardEnabled(this@AtAGlanceService, CardType.RAIN)) {
                     com.ataglanceplus.weather.RainSource.refresh(this@AtAGlanceService)
                 }
+                // The commute: every 5 minutes in a commute window, with the screen on.
+                if (!screenOff && Prefs.cardEnabled(this@AtAGlanceService, CardType.COMMUTE)) {
+                    com.ataglanceplus.live.CommuteSource.refresh(this@AtAGlanceService)
+                }
                 delay(WEATHER_CHECK_MS)
             }
         }
@@ -254,7 +259,8 @@ class AtAGlanceService : SmartspaceService() {
                 // Rain counts down ("in 20 min"); quiet hours and the card order change with the time.
                 val rules = com.ataglanceplus.cards.CardRules.stateNow(this@AtAGlanceService)
                 if (now != shownDate || day != shownDay || calendars.isNotEmpty() || finance != shownFinance || sportsOn || walletOn ||
-                    LiveCards.upcomingAlarm(this@AtAGlanceService) != null || com.ataglanceplus.weather.RainSource.soon() != null || rules != shownRules
+                    LiveCards.upcomingAlarm(this@AtAGlanceService) != null || com.ataglanceplus.weather.RainSource.soon() != null || rules != shownRules ||
+                    com.ataglanceplus.live.CommuteSource.direction(this@AtAGlanceService) != null
                 ) {
                     shownRules = rules
                     shownFinance = finance
@@ -417,6 +423,7 @@ class AtAGlanceService : SmartspaceService() {
         messageUntil = messageUntil,
         messageEntering = sessionId !in islandSeen,
         rain = if (Prefs.cardEnabled(this, CardType.RAIN)) com.ataglanceplus.weather.RainSource.soon() else null,
+        commute = if (Prefs.cardEnabled(this, CardType.COMMUTE)) com.ataglanceplus.live.CommuteSource.showing(this) else null,
         wallet = runCatching {
             val ids = com.ataglanceplus.wallet.WalletRules.activePassIds(
                 this, System.currentTimeMillis(), com.ataglanceplus.wallet.WalletGeofences.cachedLocation,

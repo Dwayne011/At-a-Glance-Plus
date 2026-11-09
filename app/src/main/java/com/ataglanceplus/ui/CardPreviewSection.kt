@@ -57,6 +57,7 @@ import com.ataglanceplus.live.CalendarSource
 import com.ataglanceplus.live.FinanceSource
 import com.ataglanceplus.weather.WeatherLook
 import com.ataglanceplus.weather.WeatherRepository
+import com.ataglanceplus.cards.CardRules
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -605,5 +606,80 @@ internal fun WalletSignInPage(version: Int, onBack: () -> Unit) {
             icon = Icons.Default.Info, accent = true,
             onClick = { signIn.launch(android.content.Intent(context, com.ataglanceplus.wallet.WalletSignInActivity::class.java)) },
         )
+    }
+}
+
+// --- Commute --------------------------------------------------------------------------------
+
+/** The commute card: home and work, when it shows each way, and what tapping it starts. */
+@Composable
+internal fun CommutePage(version: Int, onBack: () -> Unit, open: (String) -> Unit) {
+    val context = LocalContext.current
+    @Suppress("UNUSED_EXPRESSION") version
+    val commute = com.ataglanceplus.live.CommuteSource
+    var editing by remember { mutableStateOf<Boolean?>(null) }
+    SettingsPage("Commute", onBack) {
+        ShowCardRow(CardType.COMMUTE)
+        Subheader("Places")
+        val home = commute.home(context)
+        val work = commute.work(context)
+        LinkRow("Home", home?.label ?: "Not set", glyph = FrostIcons.Home, error = home == null) { open("commute/place/home") }
+        LinkRow("Work", work?.label ?: "Not set", glyph = FrostIcons.Pin, error = work == null) { open("commute/place/work") }
+        Subheader("When it shows")
+        LinkRow("To work", CardRules.describe(commute.toWorkWindow(context)), glyph = FrostIcons.Calendar) { editing = true }
+        LinkRow("To home", CardRules.describe(commute.toHomeWindow(context)), glyph = FrostIcons.Calendar) { editing = false }
+        SettingNote("From where you are (or the other place), every 5 minutes in these windows while the screen is on. Not shown while navigating or once you're there.")
+        Subheader("Tapping the card")
+        FrostChoiceRow("Public transport directions", "Google Maps' journeys by train, Tube and bus", !commute.tapDrives(context)) { commute.setTapDrives(context, false) }
+        FrostChoiceRow("Start driving navigation", "Google Maps' turn-by-turn, straight away", commute.tapDrives(context)) { commute.setTapDrives(context, true) }
+        SettingNote("Journeys by public transport from TfL's journey planner (London and around); driving times from OSRM, without live traffic.")
+    }
+    editing?.let { toWork ->
+        WindowDialog(
+            if (toWork) "To work" else "To home",
+            if (toWork) commute.toWorkWindow(context) else commute.toHomeWindow(context),
+            onDismiss = { editing = null },
+        ) {
+            if (toWork) commute.setToWorkWindow(context, it) else commute.setToHomeWindow(context, it)
+            editing = null
+        }
+    }
+}
+
+/** Home or work: search for a place or address, or use where the phone is now. */
+@Composable
+internal fun CommutePlacePage(home: Boolean, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<com.ataglanceplus.wallet.PlaceSearch.Suggestion>>(emptyList()) }
+    LaunchedEffect(query) {
+        if (query.isBlank()) { results = emptyList(); return@LaunchedEffect }
+        delay(350)
+        results = withContext(Dispatchers.IO) { runCatching { com.ataglanceplus.wallet.PlaceSearch.suggest(context, query, com.ataglanceplus.wallet.WalletGeofences.cachedLocation) }.getOrDefault(emptyList()) }
+    }
+    fun save(p: com.ataglanceplus.live.CommuteSource.Place) {
+        if (home) com.ataglanceplus.live.CommuteSource.setHome(context, p) else com.ataglanceplus.live.CommuteSource.setWork(context, p)
+        onBack()
+    }
+    SearchPage(if (home) "Home" else "Work", "Address or place", query, { query = it }, onBack) {
+        SettingRow("Use where I am now", glyph = FrostIcons.Pin, onClick = {
+            scope.launch {
+                val here = com.ataglanceplus.wallet.WalletGeofences.cachedLocation ?: com.ataglanceplus.weather.WeatherRepository.lastLocation(context)?.let { (a, o) ->
+                    android.location.Location("saved").apply { latitude = a; longitude = o }
+                }
+                if (here != null) save(com.ataglanceplus.live.CommuteSource.Place("Set from your location (${String.format(Locale.ROOT, "%.4f, %.4f", here.latitude, here.longitude)})", here.latitude, here.longitude))
+            }
+        })
+        results.forEach { r ->
+            SettingRow(r.name, r.detail.ifEmpty { null }, glyph = FrostIcons.Pin, onClick = {
+                save(com.ataglanceplus.live.CommuteSource.Place(listOf(r.name, r.detail).filter { it.isNotEmpty() }.joinToString(", "), r.lat, r.lng))
+            })
+        }
+        val current = if (home) com.ataglanceplus.live.CommuteSource.home(context) else com.ataglanceplus.live.CommuteSource.work(context)
+        if (current != null) SettingRow("Clear", current.label, glyph = FrostIcons.Close, error = true, onClick = {
+            if (home) com.ataglanceplus.live.CommuteSource.setHome(context, null) else com.ataglanceplus.live.CommuteSource.setWork(context, null)
+            onBack()
+        })
     }
 }
